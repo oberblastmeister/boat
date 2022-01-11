@@ -1,0 +1,125 @@
+cabal-version:      2.4
+name:               oat
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             brian
+maintainer:         littlebubu.shu@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+common common-options
+  default-language: Haskell2010
+  default-extensions:
+    FlexibleInstances,
+    FlexibleContexts,
+    InstanceSigs,
+    MultiParamTypeClasses,
+    ConstraintKinds,
+    LambdaCase,
+    EmptyCase,
+    TupleSections,
+    BangPatterns,
+    TypeApplications,
+    StandaloneDeriving,
+    OverloadedStrings,
+    RankNTypes,
+    ScopedTypeVariables,
+    NamedFieldPuns,
+    DuplicateRecordFields,
+    GeneralizedNewtypeDeriving,
+    DataKinds,
+    ConstraintKinds,
+    TypeApplications,
+    KindSignatures,
+    StandaloneKindSignatures,
+    DeriveFoldable,
+    DeriveFunctor,
+    DeriveGeneric,
+    DeriveLift,
+    DeriveTraversable ,
+    GeneralizedNewtypeDeriving,
+    GADTs,
+    PolyKinds,
+    ViewPatterns,
+    PatternSynonyms,
+    TypeFamilies,
+    FunctionalDependencies,
+    ExistentialQuantification,
+    TypeOperators
+  ghc-options:
+    -Wall
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wredundant-constraints
+  build-depends:
+    base ^>= 4.14.3.0,
+    relude ^>= 1.0.0.0,
+    lens ^>= 5.1,
+    mtl ^>= 2.2.2,
+    containers ^>= 0.6.5.1,
+    unordered-containers ^>= 0.2.16.0,
+    text ^>= 1.2.5.0,
+    filepath ^>= 1.4.2.1,
+    vector ^>= 0.12.3.1,
+    foldl ^>= 1.4.12,
+    split ^>= 0.2.3.4,
+    conduit ^>= 1.3.4.2,
+    recursion-schemes ^>= 5.2.2.2,
+    prettyprinter ^>= 1.7.1
+  build-tool-depends:
+    hspec-discover:hspec-discover,
+    alex:alex,
+    happy:happy
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude),
+    relude
+
+library
+  import: common-options
+  hs-source-dirs: src
+  exposed-modules:
+
+common rtsopts
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+executable oat
+  import: common-options, rtsopts
+  main-is: Main.hs
+
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+
+  -- LANGUAGE extensions used by modules in this package.
+  -- other-extensions:
+  build-depends:    
+  hs-source-dirs:   app
+  default-language: Haskell2010
+  
+test-suite oat-test
+  import: common-options, rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+  build-depends:
+    hspec ^>= 2.9.4,
+    QuickCheck ^>= 2.14.2,
+    quickcheck-instances ^>= 0.3.27
