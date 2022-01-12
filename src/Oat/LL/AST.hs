@@ -3,7 +3,7 @@
 module Oat.LL.AST where
 
 import qualified Control.Lens as L
-import Data.Interned.Internal.Text (InternedText)
+import Oat.Interned.Text
 
 data Ty
   = Void
@@ -13,7 +13,7 @@ data Ty
   | TyPtr Ty
   | TyStruct [Ty]
   | TyFun FunTy
-  | TyNamed InternedText
+  | TyNamed IText
 
 data FunTy = FunTy
   { _args :: [Ty],
@@ -23,8 +23,8 @@ data FunTy = FunTy
 data Operand
   = Null
   | Const Int64
-  | Gid InternedText
-  | Id InternedText
+  | Gid IText
+  | Id IText
 
 data BinOp
   = Add
@@ -100,8 +100,8 @@ data GepIns = GepIns
 
 data Terminator
   = Ret Ty (Maybe Operand)
-  | Br InternedText
-  | Cbr Operand InternedText InternedText
+  | Br IText
+  | Cbr Operand IText IText
 
 data Block = Block
   { _ins :: [Named Ins],
@@ -110,29 +110,29 @@ data Block = Block
 
 data Cfg = Cfg
   { _entry :: Block,
-    _labeled :: [(InternedText, Block)]
+    _labeled :: [(IText, Block)]
   }
 
 data FunDecl = FunDecl
   { _funTy :: FunTy,
-    _params :: [InternedText],
+    _params :: [IText],
     _cfg :: Cfg
   }
 
 data Named a
-  = Named InternedText a
+  = Named IText a
   | Do a
 
-pattern (:=) :: InternedText -> a -> Named a
+pattern (:=) :: IText -> a -> Named a
 pattern name := a = Named name a
 
 {-# COMPLETE (:=) #-}
 
 data GInit
   = GNull
-  | GGid InternedText
+  | GGid IText
   | GInt
-  | GString InternedText
+  | GString IText
   | GArray [GDecl]
   | GStruct [GDecl]
 

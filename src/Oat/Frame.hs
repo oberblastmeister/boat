@@ -4,7 +4,7 @@
 module Oat.Frame where
 
 import qualified Control.Lens as L
-import Data.Interned.Text (InternedText)
+import Oat.Interned.Text (IText)
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
 import Oat.LensOperators
@@ -14,12 +14,12 @@ data Loc
   = LVoid
   | LReg X86.Reg
   | LStack Int
-  | LLab InternedText
+  | LLab IText
 
 data Operand
   = Null
   | Const Int64
-  | Gid InternedText
+  | Gid IText
   | Loc Loc
 
 data Ins

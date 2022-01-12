@@ -1,8 +1,8 @@
 module Oat.Common where
 
-import Data.Interned (unintern)
-import Data.Interned.Internal.Text (InternedText)
+import Oat.Interned (unintern)
+import Oat.Interned.Text
 import Prettyprinter (Doc, Pretty (pretty))
 
-prettyIText :: InternedText -> Doc ann
+prettyIText :: IText -> Doc ann
 prettyIText = pretty . unintern

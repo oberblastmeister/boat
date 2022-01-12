@@ -17,17 +17,16 @@ module Oat.X86.AST
   )
 where
 
-import Data.Interned.Internal.Text (InternedText)
+import Oat.Interned.Text (IText)
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
-import Data.Interned (unintern)
 import Oat.Common (prettyIText)
 
 type Quad = Int64
 
 data Imm
   = Lit !Quad
-  | Lab !InternedText
+  | Lab !IText
   deriving (Show, Eq)
 
 data Reg
@@ -116,7 +115,7 @@ data Asm
   deriving (Show, Eq)
 
 data Elem = Elem
-  { lab :: !InternedText,
+  { lab :: !IText,
     global :: !Bool,
     asm :: !Asm
   }
@@ -272,13 +271,13 @@ instance Pretty Elem where
 instance Pretty Prog where
   pretty (Prog elems) = P.vsep (pretty <$> elems)
 
-dat :: InternedText -> [Data] -> Elem
+dat :: IText -> [Data] -> Elem
 dat lab ds = Elem {lab, global = True, asm = Data ds}
 
-text :: InternedText -> [Ins] -> Elem
+text :: IText -> [Ins] -> Elem
 text lab is = Elem {lab, global = False, asm = Text is}
 
-gText :: InternedText -> [Ins] -> Elem
+gText :: IText -> [Ins] -> Elem
 gText lab is = Elem {lab, global = True, asm = Text is}
 
 pattern (:%) :: Reg -> Operand
