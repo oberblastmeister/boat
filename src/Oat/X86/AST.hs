@@ -1,6 +1,7 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Oat.X86.AST
-  ( Quad,
-    Imm (..),
+  ( Imm (..),
     Reg (..),
     Operand (..),
     Cond (..),
@@ -10,6 +11,11 @@ module Oat.X86.AST
     Asm (..),
     Elem (..),
     Prog (..),
+    HasOpcode (..),
+    HasOperands (..),
+    HasLab (..),
+    HasGlobal (..),
+    HasAsm (..),
     operandHasLab,
     p1,
     dat,
@@ -17,16 +23,15 @@ module Oat.X86.AST
   )
 where
 
+import qualified Control.Lens as L
+import Oat.Common (prettyIText)
 import Oat.Interned.Text (IText)
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
-import Oat.Common (prettyIText)
-
-type Quad = Int64
 
 data Imm
-  = Lit !Quad
-  | Lab !IText
+  = Lit !Int64
+  | Lab !ShortByteString
   deriving (Show, Eq)
 
 data Reg
@@ -99,8 +104,8 @@ data OpCode
   deriving (Show, Eq)
 
 data Ins = Ins
-  { opcode :: !OpCode,
-    operands :: ![Operand]
+  { _opcode :: !OpCode,
+    _operands :: ![Operand]
   }
   deriving (Show, Eq, Generic)
 
@@ -115,14 +120,17 @@ data Asm
   deriving (Show, Eq)
 
 data Elem = Elem
-  { lab :: !IText,
-    global :: !Bool,
-    asm :: !Asm
+  { _lab :: !IText,
+    _global :: !Bool,
+    _asm :: !Asm
   }
   deriving (Show, Eq, Generic)
 
 newtype Prog = Prog [Elem]
   deriving (Show, Eq)
+
+L.makeFieldsNoPrefix ''Ins
+L.makeFieldsNoPrefix ''Elem
 
 instance Pretty Reg where
   pretty = \case
@@ -166,7 +174,8 @@ prettyByteReg = \case
 
 instance Pretty Imm where
   pretty (Lit l) = pretty l
-  pretty (Lab l) = prettyIText l
+  -- maybe fix this to not use show
+  pretty (Lab l) = pretty $ show @Text l
 
 prettyCond :: Cond -> Doc ann
 prettyCond = \case
@@ -226,15 +235,15 @@ prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperand' pretty
 
 instance Pretty Ins where
-  pretty Ins {opcode, operands} = case opcode of
+  pretty Ins {_opcode, _operands} = case _opcode of
     Shlq -> handleShift
     Sarq -> handleShift
     Shrq -> handleShift
-    _ -> "\t" <> pretty opcode <> "\t" <> P.hsep (P.punctuate P.comma (f <$> operands))
+    _ -> "\t" <> pretty _opcode <> "\t" <> P.hsep (P.punctuate P.comma (f <$> _operands))
     where
-      handleShift = prettyShift opcode operands
+      handleShift = prettyShift _opcode _operands
 
-      f = case opcode of
+      f = case _opcode of
         J _ -> prettyJmpOperand
         Jmp -> prettyJmpOperand
         Callq -> prettyJmpOperand
@@ -257,14 +266,14 @@ instance Pretty Asm where
   pretty (Data ds) = "\t.data\n" <> P.vsep (pretty <$> ds)
 
 instance Pretty Elem where
-  pretty Elem {lab, global, asm} =
-    sec <> glb <> prettyIText lab <> ":\n" <> body
+  pretty Elem {_lab, _global, _asm} =
+    sec <> glb <> prettyIText _lab <> ":\n" <> body
     where
       glb =
-        if global
-          then "\t.global\t" <> prettyIText lab <> "\n"
+        if _global
+          then "\t.global\t" <> prettyIText _lab <> "\n"
           else ""
-      (sec, body) = case asm of
+      (sec, body) = case _asm of
         Text is -> ("\t.text\n", P.vsep (pretty <$> is))
         Data ds -> ("\t.data\n", P.vsep (pretty <$> ds))
 
@@ -272,18 +281,18 @@ instance Pretty Prog where
   pretty (Prog elems) = P.vsep (pretty <$> elems)
 
 dat :: IText -> [Data] -> Elem
-dat lab ds = Elem {lab, global = True, asm = Data ds}
+dat _lab ds = Elem {_lab, _global = True, _asm = Data ds}
 
 text :: IText -> [Ins] -> Elem
-text lab is = Elem {lab, global = False, asm = Text is}
+text _lab is = Elem {_lab, _global = False, _asm = Text is}
 
 gText :: IText -> [Ins] -> Elem
-gText lab is = Elem {lab, global = True, asm = Text is}
+gText _lab is = Elem {_lab, _global = True, _asm = Text is}
 
 pattern (:%) :: Reg -> Operand
 pattern (:%) r = Reg r
 
-pattern (:$) :: Quad -> Operand
+pattern (:$) :: Int64 -> Operand
 pattern (:$) i = Imm (Lit i)
 
 p1 :: Prog

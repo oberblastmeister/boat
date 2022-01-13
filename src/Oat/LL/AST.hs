@@ -3,7 +3,20 @@
 module Oat.LL.AST where
 
 import qualified Control.Lens as L
-import Oat.Interned.Text
+import Oat.LL.Name (Name)
+import qualified Oat.X86.AST as X86
+
+data Loc r
+  = LVoid
+  | LReg !r
+  | LStack !Int
+  | LLab !ShortByteString
+
+data AllocStatus = Abstract | Alloc
+
+type family Alloc s r where
+  Alloc 'Alloc r = Loc r
+  Alloc 'Abstract _ = Name
 
 data Ty
   = Void
@@ -13,7 +26,7 @@ data Ty
   | TyPtr Ty
   | TyStruct [Ty]
   | TyFun FunTy
-  | TyNamed IText
+  | TyNamed !Name
 
 data FunTy = FunTy
   { _args :: [Ty],
@@ -22,9 +35,9 @@ data FunTy = FunTy
 
 data Operand
   = Null
-  | Const Int64
-  | Gid IText
-  | Id IText
+  | Const !Int64
+  | Gid !Name
+  | Temp !Name
 
 data BinOp
   = Add
@@ -47,7 +60,7 @@ data CmpOp
 
 data Ins
   = BinOp BinOpIns
-  | Alloca Ty
+  | Alloca AllocaIns
   | Load LoadIns
   | Store StoreIns
   | Icmp IcmpIns
@@ -62,6 +75,10 @@ data BinOpIns = BinOpIns
     _arg2 :: Operand
   }
 
+newtype AllocaIns = AllocaIns
+  { _ty :: Ty
+  }
+
 data LoadIns = LoadIns
   { _ty :: Ty,
     _arg :: Operand
@@ -74,7 +91,7 @@ data StoreIns = StoreIns
   }
 
 data IcmpIns = IcmpIns
-  { _op :: CmpOp,
+  { _op :: !CmpOp,
     _ty :: Ty,
     _arg1 :: Operand,
     _arg2 :: Operand
@@ -99,40 +116,56 @@ data GepIns = GepIns
   }
 
 data Terminator
-  = Ret Ty (Maybe Operand)
-  | Br IText
-  | Cbr Operand IText IText
+  = Ret RetTerm
+  | Br !Name
+  | Cbr CbrTerm
+
+data RetTerm = RetTerm
+  { _ty :: Ty,
+    _arg :: Maybe Operand
+  }
+
+data CbrTerm = CbrTerm
+  { _arg :: Operand,
+    _lab1 :: !Name,
+    _lab2 :: !Name
+  }
 
 data Block = Block
   { _ins :: [Named Ins],
     _terminator :: Named Terminator
   }
 
-data Cfg = Cfg
+data LabBlock = LabBlock
+  { _lab :: !Name,
+    _block :: Block
+  }
+
+data FunBody = FunBody
   { _entry :: Block,
-    _labeled :: [(IText, Block)]
+    _labeled :: [LabBlock]
   }
 
 data FunDecl = FunDecl
   { _funTy :: FunTy,
-    _params :: [IText],
-    _cfg :: Cfg
+    _params :: [Name],
+    _cfg :: FunBody
   }
 
 data Named a
-  = Named IText a
+  = Named !Name a
   | Do a
 
-pattern (:=) :: IText -> a -> Named a
+pattern (:=) :: Name -> a -> Named a
 pattern name := a = Named name a
 
 {-# COMPLETE (:=) #-}
 
 data GInit
   = GNull
-  | GGid IText
+  | GGid !Name
   | GInt
-  | GString IText
+  | GString !Name
   | GArray [GDecl]
   | GStruct [GDecl]
 
@@ -153,9 +186,10 @@ L.makeFieldsNoPrefix ''BitcastIns
 L.makeFieldsNoPrefix ''GepIns
 L.makeFieldsNoPrefix ''FunTy
 L.makeFieldsNoPrefix ''Block
-L.makeFieldsNoPrefix ''Cfg
+L.makeFieldsNoPrefix ''FunBody
 L.makeFieldsNoPrefix ''FunDecl
 L.makeFieldsNoPrefix ''Prog
+L.makePrisms ''Named
 
 doesInsAssign :: Ins -> Bool
 doesInsAssign (Call CallIns {_ty = Void}) = False

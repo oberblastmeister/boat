@@ -48,6 +48,7 @@ common common-options
     StandaloneKindSignatures,
     DeriveFoldable,
     DeriveFunctor,
+    DeriveDataTypeable
     DeriveGeneric,
     DeriveLift,
     DeriveTraversable ,
@@ -74,6 +75,8 @@ common common-options
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
     text ^>= 1.2.5.0,
+    -- relude bound
+    hashable >= 1.2 && <1.4,
     bytestring ^>= 0.11.2.0,
     filepath ^>= 1.4.2.1,
     vector ^>= 0.12.3.1,
@@ -103,8 +106,9 @@ library
     Oat.Common
     Oat.LensOperators
     Oat.Backend
-    Oat.Frame
+    Oat.Alloc
     Oat.LL.AST
+    Oat.LL.Name
     Oat.X86.AST
 
 common rtsopts

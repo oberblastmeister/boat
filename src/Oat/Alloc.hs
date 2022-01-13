@@ -1,7 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Oat.Frame where
+module Oat.Alloc where
 
 import qualified Control.Lens as L
 import Oat.Interned.Text (IText)
@@ -12,14 +12,14 @@ import qualified Oat.X86.AST as X86
 
 data Loc
   = LVoid
-  | LReg X86.Reg
-  | LStack Int
-  | LLab IText
+  | LReg !X86.Reg
+  | LStack !Int
+  | LLab !ShortByteString
 
 data Operand
   = Null
-  | Const Int64
-  | Gid IText
+  | Const !Int64
+  | Gid !ShortByteString
   | Loc Loc
 
 data Ins
@@ -166,4 +166,3 @@ operands = L.traversal go
         _arg <- f _arg
         pure $ Cbr ins {_arg}
       other -> pure other
-      
