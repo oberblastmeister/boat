@@ -1,8 +1,10 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Oat.LL.AST where
 
 import qualified Control.Lens as L
+import Control.Lens.Operators
 import Oat.LL.Name (Name)
 import qualified Oat.X86.AST as X86
 
@@ -14,9 +16,9 @@ data Loc r
 
 data AllocStatus = Abstract | Alloc
 
-type family Alloc s r where
-  Alloc 'Alloc r = Loc r
-  Alloc 'Abstract _ = Name
+type family TempKind s r where
+  TempKind 'Alloc r = Loc r
+  TempKind 'Abstract _ = Name
 
 data Ty
   = Void
@@ -33,11 +35,11 @@ data FunTy = FunTy
     _ret :: Ty
   }
 
-data Operand
+data Operand s r
   = Null
   | Const !Int64
   | Gid !Name
-  | Temp !Name
+  | Temp (TempKind s r)
 
 data BinOp
   = Add
@@ -58,98 +60,98 @@ data CmpOp
   | Sgt
   | Sge
 
-data Ins
-  = BinOp BinOpIns
+data Ins s r
+  = BinOp (BinOpIns s r)
   | Alloca AllocaIns
-  | Load LoadIns
-  | Store StoreIns
-  | Icmp IcmpIns
-  | Call CallIns
-  | Bitcast BitcastIns
-  | Gep GepIns
+  | Load (LoadIns s r)
+  | Store (StoreIns s r)
+  | Icmp (IcmpIns s r)
+  | Call (CallIns s r)
+  | Bitcast (BitcastIns s r)
+  | Gep (GepIns s r)
 
-data BinOpIns = BinOpIns
+data BinOpIns s r = BinOpIns
   { _op :: BinOp,
     _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: Operand s r,
+    _arg2 :: Operand s r
   }
 
 newtype AllocaIns = AllocaIns
   { _ty :: Ty
   }
 
-data LoadIns = LoadIns
+data LoadIns s r = LoadIns
   { _ty :: Ty,
-    _arg :: Operand
+    _arg :: Operand s r
   }
 
-data StoreIns = StoreIns
+data StoreIns s r = StoreIns
   { _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: Operand s r,
+    _arg2 :: Operand s r
   }
 
-data IcmpIns = IcmpIns
+data IcmpIns s r = IcmpIns
   { _op :: !CmpOp,
     _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: Operand s r,
+    _arg2 :: Operand s r
   }
 
-data CallIns = CallIns
+data CallIns s r = CallIns
   { _ty :: Ty,
-    _fn :: Operand,
-    _args :: [Operand]
+    _fn :: Operand s r,
+    _args :: [(Ty, Operand s r)]
   }
 
-data BitcastIns = BitcastIns
+data BitcastIns s r = BitcastIns
   { _from :: Ty,
-    _arg :: Operand,
+    _arg :: Operand s r,
     _to :: Ty
   }
 
-data GepIns = GepIns
+data GepIns s r = GepIns
   { _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg :: Operand s r,
+    _args :: [Operand s r]
   }
 
-data Terminator
-  = Ret RetTerm
+data Terminator s r
+  = Ret (RetTerm s r)
   | Br !Name
-  | Cbr CbrTerm
+  | Cbr (CbrTerm s r)
 
-data RetTerm = RetTerm
+data RetTerm s r = RetTerm
   { _ty :: Ty,
-    _arg :: Maybe Operand
+    _arg :: Maybe (Operand s r)
   }
 
-data CbrTerm = CbrTerm
-  { _arg :: Operand,
+data CbrTerm s r = CbrTerm
+  { _arg :: Operand s r,
     _lab1 :: !Name,
     _lab2 :: !Name
   }
 
-data Block = Block
-  { _ins :: [Named Ins],
-    _terminator :: Named Terminator
+data Block s r = Block
+  { _ins :: [Named (Ins s r)],
+    _terminator :: Named (Terminator s r)
   }
 
-data LabBlock = LabBlock
+data LabBlock s r = LabBlock
   { _lab :: !Name,
-    _block :: Block
+    _block :: Block s r
   }
 
-data FunBody = FunBody
-  { _entry :: Block,
-    _labeled :: [LabBlock]
+data FunBody s r = FunBody
+  { _entry :: Block s r,
+    _labeled :: [LabBlock s r]
   }
 
-data FunDecl = FunDecl
+data FunDecl s r = FunDecl
   { _funTy :: FunTy,
     _params :: [Name],
-    _cfg :: FunBody
+    _cfg :: FunBody s r
   }
 
 data Named a
@@ -171,10 +173,10 @@ data GInit
 
 data GDecl = GDecl Ty GInit
 
-data Prog = Prog
+data Prog s r = Prog
   { _tyDecls :: [Named Ty],
     _globalDecls :: [Named GDecl],
-    _funDecls :: [Named FunDecl],
+    _funDecls :: [Named (FunDecl s r)],
     _externalDecls :: [Named Ty]
   }
 
@@ -190,8 +192,68 @@ L.makeFieldsNoPrefix ''FunBody
 L.makeFieldsNoPrefix ''FunDecl
 L.makeFieldsNoPrefix ''Prog
 L.makePrisms ''Named
+L.makePrisms ''Operand
 
-doesInsAssign :: Ins -> Bool
+type family Test a where
+  Test 'True = Int
+  Test 'False = Bool
+
+data Thing a = Thing (Test a)
+
+test :: L.Traversal (Thing a) (Thing a') (Test a) (Test a')
+test = L.traversal go
+  where
+    go f (Thing t) = Thing <$> f t
+
+thing :: Thing 'True
+thing = Thing 1
+
+thing' :: Thing 'False
+thing' = thing & test .~ True
+
+operands :: L.Traversal (Ins s r) (Ins s' r) (Operand s r) (Operand s' r)
+operands = L.traversal go
+  where
+    go :: forall f s r s'. Applicative f => ((Operand s r) -> f (Operand s' r)) -> (Ins s r) -> f (Ins s' r)
+    go f = \case
+      BinOp ins@BinOpIns {_arg1, _arg2} -> do
+        _arg1 <- f _arg1
+        _arg2 <- f _arg2
+        pure $ BinOp ins {_arg1, _arg2}
+      Alloca ins -> pure $ Alloca ins
+      Load ins@LoadIns {_arg} -> do
+        _arg <- f _arg
+        pure $ Load ins {_arg}
+      Store ins@StoreIns {_arg1, _arg2} -> do
+        _arg1 <- f _arg1
+        _arg2 <- f _arg2
+        pure $ Store ins {_arg1, _arg2}
+      Icmp ins@IcmpIns {_arg1, _arg2} -> do
+        _arg1 <- f _arg1
+        _arg2 <- f _arg2
+        pure $ Icmp ins {_arg1, _arg2}
+      Call ins@CallIns {_fn, _args} -> do
+        _fn <- f _fn
+        _args <- traverse (\(ty, operand) -> (ty,) <$> f operand) _args
+        pure $ Call ins {_fn, _args}
+      Bitcast ins@BitcastIns {_arg} -> do
+        _arg <- f _arg
+        pure $ Bitcast ins {_arg}
+      Gep ins@GepIns {_arg, _args} -> do
+        _arg <- f _arg
+        _args <- traverse f _args
+        pure $ Gep ins {_arg, _args}
+
+-- doMatch :: Operand 'Alloc X86.Reg -> ()
+-- doMatch = \case
+
+doesInsAssign :: Ins s r -> Bool
 doesInsAssign (Call CallIns {_ty = Void}) = False
 doesInsAssign (Store _) = False
 doesInsAssign _ = True
+
+data Change a = Change {field :: [(Int, a)]}
+
+change = Change [(1, True)]
+
+change' = change {field = [(1 :: Int, 1 :: Int)]}
