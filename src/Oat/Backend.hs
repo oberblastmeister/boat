@@ -56,7 +56,7 @@ emitMov src dst = case (src, dst) of
 
 tySize' :: HashMap LL.Name LL.Ty -> LL.Ty -> Int
 tySize' tyDecls =
-  L.para go
+  L.paraOf (LL.plateTy tyDecls) go
   where
     go ty rs =
       case ty of
@@ -65,7 +65,7 @@ tySize' tyDecls =
         LL.I1 -> 8
         LL.I64 -> 8
         LL.TyFun _ -> 0
-        LL.TyNamed name -> tySize' tyDecls (tyDecls ^?! L.ix name) -- only recurse here
+        LL.TyNamed _ -> size
         LL.TyPtr _ -> 8
         LL.TyArray n _ -> n * size
         LL.TyStruct _ -> size
@@ -94,53 +94,123 @@ compileFunBody (Alloc.FunBody insns) = forM_ insns $ \ins -> do
   case ins of
     Alloc.ILab (LLab l) -> emit [L l False]
     Alloc.ILab _ -> error "Malformed ILab"
-    Alloc.PMov sms -> error "todo"
-    Alloc.Icmp ins@Alloc.IcmpIns {_loc, _cmpOp, _arg1 = Loc (LReg r), _arg2} ->
+    Alloc.PMove smoves -> compilePMove smoves
+    Alloc.Icmp Alloc.IcmpIns {_loc, _cmpOp, _arg1 = Loc (LReg r), _arg2} ->
       emitIns
         [ X86.Cmpq @@ [compileOperand _arg2, (:%) r],
-          mapCmpOp _cmpOp @@ [compileOperand (Loc _loc)],
-          X86.Andq @@ [(:$) 1, compileOperand (Loc _loc)]
+          mapCmpOp _cmpOp @@ [compileLoc _loc],
+          X86.Andq @@ [(:$) 1, compileLoc _loc]
         ]
     Alloc.Icmp Alloc.IcmpIns {_loc, _cmpOp, _arg1, _arg2} -> do
       emitMov (compileOperand _arg1) ((:%) X86.Rax)
       emitIns
         [ X86.Cmpq @@ [compileOperand _arg2, (:%) X86.Rax],
-          mapCmpOp _cmpOp @@ [compileOperand (Loc _loc)],
-          X86.Andq @@ [(:$) 1, compileOperand (Loc _loc)]
+          mapCmpOp _cmpOp @@ [compileLoc _loc],
+          X86.Andq @@ [(:$) 1, compileLoc _loc]
         ]
-    Alloc.BinOp Alloc.BinOpIns {_loc = _loc@(LReg r), _op = LL.Add, _arg1, _arg2}
-      | _arg2 == Loc _loc ->
-        emitIns
-          [ mapBinOp LL.Add @@ [compileOperand _arg1, compileOperand $ Loc _loc]
-          ]
-    Alloc.BinOp Alloc.BinOpIns {_loc = _loc@(LReg r), _op, _arg1, _arg2} ->
+    Alloc.BinOp ins -> compileBinOp ins
+    Alloc.Alloca Alloc.AllocaIns {_loc, _ty} -> do
+      sz <- tySize _ty
       emitIns
-        []
-    Alloc.Alloca Alloc.AllocaIns {_loc} -> undefined
-    Alloc.Load li -> undefined
-    Alloc.Store si -> undefined
+        [ X86.Subq @@ [(:$) $ fromIntegral sz, (:%) X86.Rsp],
+          X86.Movq @@ [(:%) X86.Rsp, compileLoc _loc]
+        ]
+    Alloc.Load Alloc.LoadIns {_loc, _arg = _arg@(Loc (LReg r))} ->
+      emitIns [X86.Movq @@ [(:%) r, compileLoc _loc]]
+    Alloc.Load Alloc.LoadIns {_loc, _arg} -> do
+      emitMov (compileOperand _arg) ((:%) X86.Rax)
+      emitIns [X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]]
+    Alloc.Store Alloc.StoreIns {_arg1 = _arg@(Loc (LReg r)), _arg2} ->
+      emitIns
+        [ X86.Movq @@ [(:%) r, compileOperand _arg2]
+        ]
+    Alloc.Store Alloc.StoreIns {_arg1, _arg2} ->
+      emitIns
+        [ X86.Movq @@ [compileOperand _arg1, (:%) X86.Rax],
+          X86.Movq @@ [(:%) X86.Rax, compileOperand _arg2]
+        ]
     Alloc.Call ci -> undefined
-    Alloc.Bitcast bi -> undefined
+    Alloc.Bitcast Alloc.BitcastIns {_loc, _arg} -> do
+      emitMov (compileOperand _arg) ((:%) X86.Rax)
+      emitIns
+        [ X86.Movq @@ [(:%) X86.Rax, compileOperand (Loc _loc)]
+        ]
     Alloc.Gep gi -> undefined
-    Alloc.Ret ri -> undefined
-    Alloc.Br loc -> undefined
-    Alloc.Cbr ci -> undefined
-  where
-    mapBinOp = \case
-      LL.Add -> X86.Addq
-      LL.Sub -> X86.Subq
-      LL.Mul -> X86.Imulq
-      LL.Shl -> X86.Shlq
-      LL.Lshr -> X86.Shrq
-      LL.Ashr -> X86.Sarq
-      LL.And -> X86.Andq
-      LL.Or -> X86.Orq
-      LL.Xor -> X86.Xorq
+    Alloc.Ret Alloc.RetIns {_arg = Just _arg} -> do
+      emitMov (compileOperand _arg) ((:%) X86.Rax)
+      emit retIns
+    Alloc.Ret Alloc.RetIns {_arg = Nothing} -> do
+      emit retIns
+    Alloc.Br _arg@(LLab lab) ->
+      emitIns [X86.Jmp @@ [compileOperand $ Loc _arg]]
+    Alloc.Br _ -> error "malformed br instruction"
+    Alloc.Cbr Alloc.CbrIns {_arg = Const i, _loc1 = (LLab l1), _loc2 = (LLab l2)} ->
+      if i == 0
+        then emitIns [X86.Jmp @@ [(:$$) l1]]
+        else emitIns [X86.Jmp @@ [(:$$) l2]]
+    Alloc.Cbr Alloc.CbrIns {_arg, _loc1 = (LLab l1), _loc2 = (LLab l2)} ->
+      emitIns
+        [ X86.Cmpq @@ [(:$) 0, compileOperand _arg],
+          X86.J X86.Neq @@ [(:$$) l1],
+          X86.Jmp @@ [(:$$) l2]
+        ]
+    Alloc.Cbr _ -> error "malformed cbr instruction"
 
-    mapCmpOp = \case
-      LL.Eq -> X86.Set X86.Eq
-      LL.Neq -> X86.Set X86.Neq
-      LL.Slt -> X86.Set X86.Lt
-      LL.Sle -> X86.Set X86.Le
-      LL.Sgt -> X86.Set X86.Gt
-      LL.Sge -> X86.Set X86.Ge
+compileBinOp :: MonadBackend m => Alloc.BinOpIns -> m ()
+compileBinOp Alloc.BinOpIns {_loc, _op, _arg1, _arg2}
+  | LL.Mul <- _op =
+    emitIns
+      [ X86.Movq @@ [compileOperand _arg2, (:%) X86.Rax],
+        X86.Imulq @@ [compileOperand _arg1],
+        X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]
+      ]
+  | (LReg r) <- _loc,
+    Loc (LReg r') <- _arg2,
+    r == r' =
+    emitIns [mapBinOp _op @@ [compileOperand _arg1, (:%) r]]
+  | Loc (LReg r) <- _arg2 =
+    emitIns
+      [ mapBinOp _op @@ [compileOperand _arg1, (:%) r],
+        X86.Movq @@ [(:%) r, compileLoc _loc]
+      ]
+  | otherwise =
+    emitIns
+      [ X86.Movq @@ [compileOperand _arg2, (:%) X86.Rax],
+        mapBinOp _op @@ [compileOperand _arg1, (:%) X86.Rax],
+        X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]
+      ]
+
+compilePMove :: MonadBackend m => [Alloc.SMove] -> m ()
+compilePMove = mapM_ compileSMove
+
+compileSMove :: MonadBackend m => Alloc.SMove -> m ()
+compileSMove Alloc.SMove {_loc, _arg} = emitMov (compileOperand _arg) (compileLoc _loc)
+
+mapBinOp :: LL.BinOp -> X86.OpCode
+mapBinOp = \case
+  LL.Add -> X86.Addq
+  LL.Sub -> X86.Subq
+  LL.Mul -> X86.Imulq
+  LL.Shl -> X86.Shlq
+  LL.Lshr -> X86.Shrq
+  LL.Ashr -> X86.Sarq
+  LL.And -> X86.Andq
+  LL.Or -> X86.Orq
+  LL.Xor -> X86.Xorq
+
+mapCmpOp :: LL.CmpOp -> X86.OpCode
+mapCmpOp = \case
+  LL.Eq -> X86.Set X86.Eq
+  LL.Neq -> X86.Set X86.Neq
+  LL.Slt -> X86.Set X86.Lt
+  LL.Sle -> X86.Set X86.Le
+  LL.Sgt -> X86.Set X86.Gt
+  LL.Sge -> X86.Set X86.Ge
+
+retIns :: X86Stream
+retIns =
+  ins
+    [ X86.Movq @@ [(:%) X86.Rbp, (:%) X86.Rsp],
+      X86.Popq @@ [(:%) X86.Rbp],
+      X86.Retq @@ []
+    ]

@@ -25,7 +25,7 @@ data Operand
 
 data Ins
   = ILab !Loc
-  | PMov [SMove] -- parallel move
+  | PMove [SMove] -- parallel move
   | BinOp BinOpIns
   | Alloca AllocaIns
   | Load LoadIns
@@ -129,7 +129,7 @@ operands :: L.Traversal' Ins Operand
 operands = L.traversal go
   where
     go f = \case
-      PMov movs -> do
+      PMove movs -> do
         res <-
           traverse
             ( \smov@SMove {_arg} -> do
@@ -137,7 +137,7 @@ operands = L.traversal go
                 pure (smov {_arg = arg} :: SMove)
             )
             movs
-        pure $ PMov res
+        pure $ PMove res
       BinOp ins@BinOpIns {_arg1, _arg2} -> do
         _arg1 <- f _arg1
         _arg2 <- f _arg2

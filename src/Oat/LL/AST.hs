@@ -3,6 +3,7 @@
 module Oat.LL.AST where
 
 import qualified Control.Lens as L
+import Control.Lens.Operators
 import Oat.LL.Name (Name)
 
 data Ty
@@ -23,12 +24,16 @@ data FunTy = FunTy
   }
   deriving (Show, Eq)
 
-instance L.Plated Ty where
-  plate f = \case
-    TyPtr ty -> TyPtr <$> f ty
-    TyStruct tys -> TyStruct <$> traverse f tys
-    TyFun FunTy {_args, _ret} -> TyFun <$> (FunTy <$> traverse f _args <*> f _ret)
-    other -> pure other
+-- note, for this to be valid, you must not change the type for TyNamed
+-- also, this will panic if the HashMap does not contain the name
+plateTy :: HashMap Name Ty -> L.Traversal' Ty Ty
+plateTy mp f = \case
+  TyPtr ty -> TyPtr <$> f ty
+  TyFun FunTy {_args, _ret} -> TyFun <$> (FunTy <$> traverse f _args <*> f _ret)
+  TyNamed name -> let ty = mp ^?! L.ix name in f ty $> TyNamed name
+  TyArray sz ty -> TyArray sz <$> f ty
+  TyStruct tys -> TyStruct <$> traverse f tys
+  other -> pure other
 
 data Operand
   = Null
