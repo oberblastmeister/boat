@@ -3,7 +3,7 @@
 module Oat.X86.AST
   ( Imm (..),
     Reg (..),
-    Operand (..),
+    Operand (.., (:%), (:$), (:$$)),
     Cond (..),
     OpCode (..),
     Ins (..),
@@ -16,6 +16,7 @@ module Oat.X86.AST
     HasLab (..),
     HasGlobal (..),
     HasAsm (..),
+    (@@),
     operandHasLab,
     p1,
     dat,
@@ -23,15 +24,16 @@ module Oat.X86.AST
   )
 where
 
+import ASCII (ASCII)
 import qualified Control.Lens as L
-import Oat.Common (prettyIText)
-import Oat.Interned.Text (IText)
+import qualified Data.Text.Encoding as T
+import Oat.Common (ascii)
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
 
 data Imm
   = Lit !Int64
-  | Lab !ShortByteString
+  | Lab !ByteString
   deriving (Show, Eq)
 
 data Reg
@@ -109,8 +111,11 @@ data Ins = Ins
   }
   deriving (Show, Eq, Generic)
 
+(@@) :: OpCode -> [Operand] -> Ins
+(@@) _opcode _operands = Ins {_opcode, _operands}
+
 data Data
-  = Asciz !ByteString
+  = Asciz !Text
   | Quad !Imm
   deriving (Show, Eq)
 
@@ -120,7 +125,7 @@ data Asm
   deriving (Show, Eq)
 
 data Elem = Elem
-  { _lab :: !IText,
+  { _lab :: !(ASCII ByteString),
     _global :: !Bool,
     _asm :: !Asm
   }
@@ -258,7 +263,8 @@ prettyShift opcode operands = case operands of
   _ -> error "Invalid operands"
 
 instance Pretty Data where
-  pretty (Asciz s) = "\t.asciz\t" <> P.dquotes (P.viaShow s)
+  -- show for ByteString includes the quotes around it
+  pretty (Asciz t) = "\t.asciz\t" <> P.viaShow (T.encodeUtf8 t)
   pretty (Quad i) = "\t.quad\t" <> pretty i
 
 instance Pretty Asm where
@@ -267,11 +273,11 @@ instance Pretty Asm where
 
 instance Pretty Elem where
   pretty Elem {_lab, _global, _asm} =
-    sec <> glb <> prettyIText _lab <> ":\n" <> body
+    sec <> glb <> P.viaShow _lab <> ":\n" <> body
     where
       glb =
         if _global
-          then "\t.global\t" <> prettyIText _lab <> "\n"
+          then "\t.global\t" <> P.viaShow _lab <> "\n"
           else ""
       (sec, body) = case _asm of
         Text is -> ("\t.text\n", P.vsep (pretty <$> is))
@@ -280,26 +286,35 @@ instance Pretty Elem where
 instance Pretty Prog where
   pretty (Prog elems) = P.vsep (pretty <$> elems)
 
-dat :: IText -> [Data] -> Elem
+dat :: ASCII ByteString -> [Data] -> Elem
 dat _lab ds = Elem {_lab, _global = True, _asm = Data ds}
 
-text :: IText -> [Ins] -> Elem
+text :: ASCII ByteString -> [Ins] -> Elem
 text _lab is = Elem {_lab, _global = False, _asm = Text is}
 
-gText :: IText -> [Ins] -> Elem
+gText :: ASCII ByteString -> [Ins] -> Elem
 gText _lab is = Elem {_lab, _global = True, _asm = Text is}
 
 pattern (:%) :: Reg -> Operand
 pattern (:%) r = Reg r
 
+{-# COMPLETE (:%) #-}
+
 pattern (:$) :: Int64 -> Operand
 pattern (:$) i = Imm (Lit i)
+
+{-# COMPLETE (:$) #-}
+
+pattern (:$$) :: ByteString -> Operand
+pattern (:$$) l = Imm (Lab l)
+
+{-# COMPLETE (:$$) #-}
 
 p1 :: Prog
 p1 =
   Prog
     [ text
-        "foo"
+        (ascii "foo")
         [ Ins Xorq [(:%) Rax, (:%) Rax],
           Ins Movq [(:$) 100, Reg Rax],
           Ins Retq []

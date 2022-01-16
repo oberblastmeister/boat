@@ -1,8 +1,24 @@
-module Oat.Common where
+module Oat.Common
+  ( (++>),
+    pattern (:>),
+    ascii,
+  )
+where
 
-import Oat.Interned (unintern)
-import Oat.Interned.Text
-import Prettyprinter (Doc, Pretty (pretty))
+import ASCII (ASCII)
+import qualified ASCII
 
-prettyIText :: IText -> Doc ann
-prettyIText = pretty . unintern
+infixl 4 :>
+
+pattern (:>) :: [a] -> a -> [a]
+pattern xs :> x <- x : xs where (:>) xs x = x : xs
+
+{-# COMPLETE (:>), [] #-}
+
+(++>) :: [a] -> [a] -> [a]
+(++>) l l' = l' ++ l
+
+ascii :: ASCII.StringSuperset s => s -> ASCII s
+ascii s = case ASCII.validateString s of
+  Nothing -> error "Oat.Common.ascii: The string was not ascii!"
+  Just s -> s

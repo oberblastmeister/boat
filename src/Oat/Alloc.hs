@@ -4,7 +4,6 @@
 module Oat.Alloc where
 
 import qualified Control.Lens as L
-import Oat.Interned.Text (IText)
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
 import Oat.LensOperators
@@ -14,16 +13,18 @@ data Loc
   = LVoid
   | LReg !X86.Reg
   | LStack !Int
-  | LLab !ShortByteString
+  | LLab !ByteString
+  deriving (Show, Eq)
 
 data Operand
   = Null
   | Const !Int64
-  | Gid !ShortByteString
-  | Loc Loc
+  | Gid !ByteString
+  | Loc !Loc
+  deriving (Show, Eq)
 
 data Ins
-  = ILab Loc
+  = ILab !Loc
   | PMov [SMove] -- parallel move
   | BinOp BinOpIns
   | Alloca AllocaIns
@@ -34,66 +35,66 @@ data Ins
   | Bitcast BitcastIns
   | Gep GepIns
   | Ret RetIns
-  | Br Loc
+  | Br !Loc
   | Cbr CbrIns
 
 data AllocaIns = AllocaIns
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _ty :: Ty
   }
 
 data LoadIns = LoadIns
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _ty :: Ty,
     _arg :: Operand
   }
 
 data BinOpIns = BinOpIns
-  { _loc :: Loc,
-    _op :: LL.AST.BinOp,
+  { _loc :: !Loc,
+    _op :: !LL.AST.BinOp,
     _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: !Operand,
+    _arg2 :: !Operand
   }
 
 data StoreIns = StoreIns
   { _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: !Operand,
+    _arg2 :: !Operand
   }
 
 data IcmpIns = IcmpIns
-  { _loc :: Loc,
-    _cmpOp :: LL.AST.CmpOp,
+  { _loc :: !Loc,
+    _cmpOp :: !LL.AST.CmpOp,
     _ty :: Ty,
-    _arg1 :: Operand,
-    _arg2 :: Operand
+    _arg1 :: !Operand,
+    _arg2 :: !Operand
   }
 
 data CallIns = CallIns
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _ty :: Ty,
     _args :: [(Ty, Operand)]
   }
 
 data BitcastIns = BitcastIns
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _from :: Ty,
-    _arg :: Operand,
+    _arg :: !Operand,
     _to :: Ty
   }
 
 data GepIns = GepIns
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _ty :: Ty,
-    _arg :: Operand,
+    _arg :: !Operand,
     _args :: [Operand]
   }
 
 data SMove = SMove
-  { _loc :: Loc,
+  { _loc :: !Loc,
     _ty :: Ty,
-    _arg :: Operand
+    _arg :: !Operand
   }
 
 data RetIns = RetIns
@@ -102,12 +103,12 @@ data RetIns = RetIns
   }
 
 data CbrIns = CbrIns
-  { _arg :: Operand,
-    _loc1 :: Loc,
-    _loc2 :: Loc
+  { _arg :: !Operand,
+    _loc1 :: !Loc,
+    _loc2 :: !Loc
   }
 
-newtype FunBody = FunBody [(Ins, HashSet Loc)]
+newtype FunBody = FunBody [Ins]
 
 L.makeFieldsNoPrefix ''AllocaIns
 L.makeFieldsNoPrefix ''LoadIns
