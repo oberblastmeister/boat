@@ -1,4 +1,11 @@
-module Oat.Span where
+module Oat.Span
+  ( Pos (..),
+    Span (..),
+    Spanned (..),
+    mkSpan,
+    unsafeMkSpan,
+  )
+where
 
 data Pos = Pos
   { line :: !Int,
@@ -21,3 +28,6 @@ instance Spanned Span where
 -- do some validation here
 mkSpan :: Pos -> Pos -> Span
 mkSpan = Span
+
+unsafeMkSpan :: Pos -> Pos -> Span
+unsafeMkSpan = Span

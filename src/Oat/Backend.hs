@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Oat.Backend where
+module Oat.Backend () where
 
 import qualified Control.Lens as L
 import Control.Lens.Operators
