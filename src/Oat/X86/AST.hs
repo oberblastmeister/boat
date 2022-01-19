@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Oat.X86.AST
   ( Imm (..),
@@ -11,11 +12,6 @@ module Oat.X86.AST
     Asm (..),
     Elem (..),
     Prog (..),
-    HasOpcode (..),
-    HasOperands (..),
-    HasLab (..),
-    HasGlobal (..),
-    HasAsm (..),
     (@@),
     operandHasLab,
     p1,
@@ -25,9 +21,9 @@ module Oat.X86.AST
 where
 
 import ASCII (ASCII)
-import qualified Control.Lens as L
 import qualified Data.Text.Encoding as T
 import Oat.Common (ascii)
+import qualified Optics as O
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
 
@@ -134,8 +130,8 @@ data Elem = Elem
 newtype Prog = Prog [Elem]
   deriving (Show, Eq)
 
-L.makeFieldsNoPrefix ''Ins
-L.makeFieldsNoPrefix ''Elem
+O.makeFieldLabelsNoPrefix ''Ins
+O.makeFieldLabelsNoPrefix ''Elem
 
 instance Pretty Reg where
   pretty = \case

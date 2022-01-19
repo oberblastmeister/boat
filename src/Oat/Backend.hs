@@ -1,21 +1,23 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module Oat.Backend () where
+module Oat.Backend where
 
-import qualified Control.Lens as L
-import Control.Lens.Operators
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
 import Oat.Common ((++>))
+import Oat.Fold (paraOf)
 import qualified Oat.LL.AST as LL
 import qualified Oat.LL.Name as LL
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
+import qualified Optics as O
+import Optics.State.Operators
 import Prelude hiding (Const)
 
 data BackendState = BackendState
-  { _insStream :: X86Stream,
-    _tyDecls :: HashMap LL.Name LL.Ty
+  { insStream :: X86Stream,
+    tyDecls :: HashMap LL.Name LL.Ty
   }
 
 type BackendM = State BackendState
@@ -28,7 +30,7 @@ data X86Elt
 
 type X86Stream = [X86Elt]
 
-L.makeFieldsNoPrefix ''BackendState
+O.makeFieldLabelsNoPrefix ''BackendState
 
 runBackend :: BackendM a -> BackendState -> a
 runBackend = evalState
@@ -37,7 +39,7 @@ ins :: [X86.Ins] -> X86Stream
 ins = fmap I
 
 emit :: MonadBackend m => X86Stream -> m ()
-emit ins = insStream %= (++> ins)
+emit ins = #insStream %= (++> ins)
 
 emitIns :: MonadBackend m => [X86.Ins] -> m ()
 emitIns = emit . ins
@@ -56,7 +58,7 @@ emitMov src dst = case (src, dst) of
 
 tySize' :: HashMap LL.Name LL.Ty -> LL.Ty -> Int
 tySize' tyDecls =
-  L.paraOf (LL.plateTy tyDecls) go
+  paraOf (LL.plateTy tyDecls) go
   where
     go ty rs =
       case ty of
@@ -74,7 +76,7 @@ tySize' tyDecls =
 
 tySize :: MonadBackend m => LL.Ty -> m Int
 tySize ty = do
-  tyDecls <- gets _tyDecls
+  tyDecls <- gets tyDecls
   pure $ tySize' tyDecls ty
 
 compileOperand :: Alloc.Operand -> X86.Operand
@@ -95,96 +97,96 @@ compileFunBody (Alloc.FunBody insns) = forM_ insns $ \ins -> do
     Alloc.ILab (LLab l) -> emit [L l False]
     Alloc.ILab _ -> error "Malformed ILab"
     Alloc.PMove smoves -> compilePMove smoves
-    Alloc.Icmp Alloc.IcmpIns {_loc, _cmpOp, _arg1 = Loc (LReg r), _arg2} ->
+    Alloc.Icmp Alloc.IcmpIns {loc, cmpOp, arg1 = Loc (LReg r), arg2} ->
       emitIns
-        [ X86.Cmpq @@ [compileOperand _arg2, (:%) r],
-          mapCmpOp _cmpOp @@ [compileLoc _loc],
-          X86.Andq @@ [(:$) 1, compileLoc _loc]
+        [ X86.Cmpq @@ [compileOperand arg2, (:%) r],
+          mapCmpOp cmpOp @@ [compileLoc loc],
+          X86.Andq @@ [(:$) 1, compileLoc loc]
         ]
-    Alloc.Icmp Alloc.IcmpIns {_loc, _cmpOp, _arg1, _arg2} -> do
-      emitMov (compileOperand _arg1) ((:%) X86.Rax)
+    Alloc.Icmp Alloc.IcmpIns {loc, cmpOp, arg1, arg2} -> do
+      emitMov (compileOperand arg1) ((:%) X86.Rax)
       emitIns
-        [ X86.Cmpq @@ [compileOperand _arg2, (:%) X86.Rax],
-          mapCmpOp _cmpOp @@ [compileLoc _loc],
-          X86.Andq @@ [(:$) 1, compileLoc _loc]
+        [ X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax],
+          mapCmpOp cmpOp @@ [compileLoc loc],
+          X86.Andq @@ [(:$) 1, compileLoc loc]
         ]
     Alloc.BinOp ins -> compileBinOp ins
-    Alloc.Alloca Alloc.AllocaIns {_loc, _ty} -> do
-      sz <- tySize _ty
+    Alloc.Alloca Alloc.AllocaIns {loc, ty} -> do
+      sz <- tySize ty
       emitIns
         [ X86.Subq @@ [(:$) $ fromIntegral sz, (:%) X86.Rsp],
-          X86.Movq @@ [(:%) X86.Rsp, compileLoc _loc]
+          X86.Movq @@ [(:%) X86.Rsp, compileLoc loc]
         ]
-    Alloc.Load Alloc.LoadIns {_loc, _arg = _arg@(Loc (LReg r))} ->
-      emitIns [X86.Movq @@ [(:%) r, compileLoc _loc]]
-    Alloc.Load Alloc.LoadIns {_loc, _arg} -> do
-      emitMov (compileOperand _arg) ((:%) X86.Rax)
-      emitIns [X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]]
-    Alloc.Store Alloc.StoreIns {_arg1 = _arg@(Loc (LReg r)), _arg2} ->
+    Alloc.Load Alloc.LoadIns {loc, arg = arg@(Loc (LReg r))} ->
+      emitIns [X86.Movq @@ [(:%) r, compileLoc loc]]
+    Alloc.Load Alloc.LoadIns {loc, arg} -> do
+      emitMov (compileOperand arg) ((:%) X86.Rax)
+      emitIns [X86.Movq @@ [(:%) X86.Rax, compileLoc loc]]
+    Alloc.Store Alloc.StoreIns {arg1 = arg@(Loc (LReg r)), arg2} ->
       emitIns
-        [ X86.Movq @@ [(:%) r, compileOperand _arg2]
+        [ X86.Movq @@ [(:%) r, compileOperand arg2]
         ]
-    Alloc.Store Alloc.StoreIns {_arg1, _arg2} ->
+    Alloc.Store Alloc.StoreIns {arg1, arg2} ->
       emitIns
-        [ X86.Movq @@ [compileOperand _arg1, (:%) X86.Rax],
-          X86.Movq @@ [(:%) X86.Rax, compileOperand _arg2]
+        [ X86.Movq @@ [compileOperand arg1, (:%) X86.Rax],
+          X86.Movq @@ [(:%) X86.Rax, compileOperand arg2]
         ]
     Alloc.Call ci -> undefined
-    Alloc.Bitcast Alloc.BitcastIns {_loc, _arg} -> do
-      emitMov (compileOperand _arg) ((:%) X86.Rax)
+    Alloc.Bitcast Alloc.BitcastIns {loc, arg} -> do
+      emitMov (compileOperand arg) ((:%) X86.Rax)
       emitIns
-        [ X86.Movq @@ [(:%) X86.Rax, compileOperand (Loc _loc)]
+        [ X86.Movq @@ [(:%) X86.Rax, compileOperand (Loc loc)]
         ]
     Alloc.Gep gi -> undefined
-    Alloc.Ret Alloc.RetIns {_arg = Just _arg} -> do
-      emitMov (compileOperand _arg) ((:%) X86.Rax)
+    Alloc.Ret Alloc.RetIns {arg = Just arg} -> do
+      emitMov (compileOperand arg) ((:%) X86.Rax)
       emit retIns
-    Alloc.Ret Alloc.RetIns {_arg = Nothing} -> do
+    Alloc.Ret Alloc.RetIns {arg = Nothing} -> do
       emit retIns
-    Alloc.Br _arg@(LLab lab) ->
-      emitIns [X86.Jmp @@ [compileOperand $ Loc _arg]]
+    Alloc.Br arg@(LLab lab) ->
+      emitIns [X86.Jmp @@ [compileOperand $ Loc arg]]
     Alloc.Br _ -> error "malformed br instruction"
-    Alloc.Cbr Alloc.CbrIns {_arg = Const i, _loc1 = (LLab l1), _loc2 = (LLab l2)} ->
+    Alloc.Cbr Alloc.CbrIns {arg = Const i, loc1 = (LLab l1), loc2 = (LLab l2)} ->
       if i == 0
         then emitIns [X86.Jmp @@ [(:$$) l1]]
         else emitIns [X86.Jmp @@ [(:$$) l2]]
-    Alloc.Cbr Alloc.CbrIns {_arg, _loc1 = (LLab l1), _loc2 = (LLab l2)} ->
+    Alloc.Cbr Alloc.CbrIns {arg, loc1 = (LLab l1), loc2 = (LLab l2)} ->
       emitIns
-        [ X86.Cmpq @@ [(:$) 0, compileOperand _arg],
+        [ X86.Cmpq @@ [(:$) 0, compileOperand arg],
           X86.J X86.Neq @@ [(:$$) l1],
           X86.Jmp @@ [(:$$) l2]
         ]
     Alloc.Cbr _ -> error "malformed cbr instruction"
 
 compileBinOp :: MonadBackend m => Alloc.BinOpIns -> m ()
-compileBinOp Alloc.BinOpIns {_loc, _op, _arg1, _arg2}
-  | LL.Mul <- _op =
+compileBinOp Alloc.BinOpIns {loc, op, arg1, arg2}
+  | LL.Mul <- op =
     emitIns
-      [ X86.Movq @@ [compileOperand _arg2, (:%) X86.Rax],
-        X86.Imulq @@ [compileOperand _arg1],
-        X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]
+      [ X86.Movq @@ [compileOperand arg2, (:%) X86.Rax],
+        X86.Imulq @@ [compileOperand arg1],
+        X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
       ]
-  | (LReg r) <- _loc,
-    Loc (LReg r') <- _arg2,
+  | (LReg r) <- loc,
+    Loc (LReg r') <- arg2,
     r == r' =
-    emitIns [mapBinOp _op @@ [compileOperand _arg1, (:%) r]]
-  | Loc (LReg r) <- _arg2 =
+    emitIns [mapBinOp op @@ [compileOperand arg1, (:%) r]]
+  | Loc (LReg r) <- arg2 =
     emitIns
-      [ mapBinOp _op @@ [compileOperand _arg1, (:%) r],
-        X86.Movq @@ [(:%) r, compileLoc _loc]
+      [ mapBinOp op @@ [compileOperand arg1, (:%) r],
+        X86.Movq @@ [(:%) r, compileLoc loc]
       ]
   | otherwise =
     emitIns
-      [ X86.Movq @@ [compileOperand _arg2, (:%) X86.Rax],
-        mapBinOp _op @@ [compileOperand _arg1, (:%) X86.Rax],
-        X86.Movq @@ [(:%) X86.Rax, compileLoc _loc]
+      [ X86.Movq @@ [compileOperand arg2, (:%) X86.Rax],
+        mapBinOp op @@ [compileOperand arg1, (:%) X86.Rax],
+        X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
       ]
 
 compilePMove :: MonadBackend m => [Alloc.SMove] -> m ()
 compilePMove = mapM_ compileSMove
 
 compileSMove :: MonadBackend m => Alloc.SMove -> m ()
-compileSMove Alloc.SMove {_loc, _arg} = emitMov (compileOperand _arg) (compileLoc _loc)
+compileSMove Alloc.SMove {loc, arg} = emitMov (compileOperand arg) (compileLoc loc)
 
 mapBinOp :: LL.BinOp -> X86.OpCode
 mapBinOp = \case

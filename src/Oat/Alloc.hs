@@ -1,13 +1,14 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Alloc where
 
-import qualified Control.Lens as L
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
-import Oat.LensOperators
 import qualified Oat.X86.AST as X86
+import qualified Optics as O
+import Optics.Operators
 
 data Loc
   = LVoid
@@ -39,131 +40,131 @@ data Ins
   | Cbr CbrIns
 
 data AllocaIns = AllocaIns
-  { _loc :: !Loc,
-    _ty :: Ty
+  { loc :: !Loc,
+    ty :: Ty
   }
 
 data LoadIns = LoadIns
-  { _loc :: !Loc,
-    _ty :: Ty,
-    _arg :: Operand
+  { loc :: !Loc,
+    ty :: Ty,
+    arg :: Operand
   }
 
 data BinOpIns = BinOpIns
-  { _loc :: !Loc,
-    _op :: !LL.AST.BinOp,
-    _ty :: Ty,
-    _arg1 :: !Operand,
-    _arg2 :: !Operand
+  { loc :: !Loc,
+    op :: !LL.AST.BinOp,
+    ty :: Ty,
+    arg1 :: !Operand,
+    arg2 :: !Operand
   }
 
 data StoreIns = StoreIns
-  { _ty :: Ty,
-    _arg1 :: !Operand,
-    _arg2 :: !Operand
+  { ty :: Ty,
+    arg1 :: !Operand,
+    arg2 :: !Operand
   }
 
 data IcmpIns = IcmpIns
-  { _loc :: !Loc,
-    _cmpOp :: !LL.AST.CmpOp,
-    _ty :: Ty,
-    _arg1 :: !Operand,
-    _arg2 :: !Operand
+  { loc :: !Loc,
+    cmpOp :: !LL.AST.CmpOp,
+    ty :: Ty,
+    arg1 :: !Operand,
+    arg2 :: !Operand
   }
 
 data CallIns = CallIns
-  { _loc :: !Loc,
-    _ty :: Ty,
-    _args :: [(Ty, Operand)]
+  { loc :: !Loc,
+    ty :: Ty,
+    args :: [(Ty, Operand)]
   }
 
 data BitcastIns = BitcastIns
-  { _loc :: !Loc,
-    _from :: Ty,
-    _arg :: !Operand,
-    _to :: Ty
+  { loc :: !Loc,
+    from :: Ty,
+    arg :: !Operand,
+    to :: Ty
   }
 
 data GepIns = GepIns
-  { _loc :: !Loc,
-    _ty :: Ty,
-    _arg :: !Operand,
-    _args :: [Operand]
+  { loc :: !Loc,
+    ty :: Ty,
+    arg :: !Operand,
+    args :: [Operand]
   }
 
 data SMove = SMove
-  { _loc :: !Loc,
-    _ty :: Ty,
-    _arg :: !Operand
+  { loc :: !Loc,
+    ty :: Ty,
+    arg :: !Operand
   }
 
 data RetIns = RetIns
-  { _ty :: Ty,
-    _arg :: Maybe Operand
+  { ty :: Ty,
+    arg :: Maybe Operand
   }
 
 data CbrIns = CbrIns
-  { _arg :: !Operand,
-    _loc1 :: !Loc,
-    _loc2 :: !Loc
+  { arg :: !Operand,
+    loc1 :: !Loc,
+    loc2 :: !Loc
   }
 
 newtype FunBody = FunBody [Ins]
 
-L.makeFieldsNoPrefix ''AllocaIns
-L.makeFieldsNoPrefix ''LoadIns
-L.makeFieldsNoPrefix ''BinOpIns
-L.makeFieldsNoPrefix ''StoreIns
-L.makeFieldsNoPrefix ''IcmpIns
-L.makeFieldsNoPrefix ''CallIns
-L.makeFieldsNoPrefix ''BitcastIns
-L.makeFieldsNoPrefix ''GepIns
-L.makeFieldsNoPrefix ''SMove
-L.makeFieldsNoPrefix ''CbrIns
-L.makeFieldsNoPrefix ''RetIns
+O.makeFieldLabelsNoPrefix ''AllocaIns
+O.makeFieldLabelsNoPrefix ''LoadIns
+O.makeFieldLabelsNoPrefix ''BinOpIns
+O.makeFieldLabelsNoPrefix ''StoreIns
+O.makeFieldLabelsNoPrefix ''IcmpIns
+O.makeFieldLabelsNoPrefix ''CallIns
+O.makeFieldLabelsNoPrefix ''BitcastIns
+O.makeFieldLabelsNoPrefix ''GepIns
+O.makeFieldLabelsNoPrefix ''SMove
+O.makeFieldLabelsNoPrefix ''CbrIns
+O.makeFieldLabelsNoPrefix ''RetIns
 
 test :: LoadIns -> Operand
-test ins = ins ^. arg
+test ins = ins ^. #arg
 
-operands :: L.Traversal' Ins Operand
-operands = L.traversal go
+operands :: O.Traversal' Ins Operand
+operands = O.traversalVL go
   where
     go f = \case
       PMove movs -> do
         res <-
           traverse
-            ( \smov@SMove {_arg} -> do
-                arg <- f _arg
-                pure (smov {_arg = arg} :: SMove)
+            ( \smov@SMove {arg} -> do
+                arg <- f arg
+                pure (smov {arg} :: SMove)
             )
             movs
         pure $ PMove res
-      BinOp ins@BinOpIns {_arg1, _arg2} -> do
-        _arg1 <- f _arg1
-        _arg2 <- f _arg2
-        pure $ BinOp ins {_arg1, _arg2}
-      Load ins@LoadIns {_arg} -> do
-        _arg <- f _arg
-        pure $ Load ins {_arg}
-      Store ins@StoreIns {_arg1, _arg2} -> do
-        _arg1 <- f _arg1
-        _arg2 <- f _arg2
-        pure $ Store ins {_arg1, _arg2}
-      Icmp ins@IcmpIns {_arg1, _arg2} -> do
-        _arg1 <- f _arg1
-        _arg2 <- f _arg2
-        pure $ Icmp ins {_arg1, _arg2}
-      Call ins@CallIns {_args} -> do
-        _args <- traverse (\(ty, operand) -> (ty,) <$> f operand) _args
-        pure $ Call ins {_args}
-      Bitcast ins@BitcastIns {_arg} -> do
-        _arg <- f _arg
-        pure $ Bitcast ins {_arg}
-      Gep ins@GepIns {_arg, _args} -> do
-        _arg <- f _arg
-        _args <- traverse f _args
-        pure $ Gep ins {_arg, _args}
-      Cbr ins@CbrIns {_arg} -> do
-        _arg <- f _arg
-        pure $ Cbr ins {_arg}
+      BinOp ins@BinOpIns {arg1, arg2} -> do
+        arg1 <- f arg1
+        arg2 <- f arg2
+        pure $ BinOp ins {arg1, arg2}
+      Load ins@LoadIns {arg} -> do
+        arg <- f arg
+        pure $ Load ins {arg}
+      Store ins@StoreIns {arg1, arg2} -> do
+        arg1 <- f arg1
+        arg2 <- f arg2
+        pure $ Store ins {arg1, arg2}
+      Icmp ins@IcmpIns {arg1, arg2} -> do
+        arg1 <- f arg1
+        arg2 <- f arg2
+        pure $ Icmp ins {arg1, arg2}
+      Call ins@CallIns {args} -> do
+        _args <- traverse (\(ty, operand) -> (ty,) <$> f operand) args
+        pure $ Call ins {args}
+      Bitcast ins@BitcastIns {arg} -> do
+        arg <- f arg
+        pure $ Bitcast ins {arg}
+      Gep ins@GepIns {arg, args} -> do
+        _arg <- f arg
+        _args <- traverse f args
+        pure $ Gep ins {arg, args}
+      Cbr ins@CbrIns {arg} -> do
+        _arg <- f arg
+        pure $ Cbr ins {arg}
       other -> pure other

@@ -1,12 +1,12 @@
 -- you need to define alexEOF and also import this wrapper
 module Oat.Wrappers.Lexer where
 
-import Control.Lens (pattern (:<))
-import qualified Control.Lens as L
 import qualified Data.ByteString as ByteString
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as Text.Encoding
 import Oat.Span
+import Optics (pattern (:<))
+import qualified Optics as O
 import qualified Relude.Unsafe as Unsafe
 
 data AlexInput = AlexInput
@@ -52,7 +52,7 @@ runAlex text alex =
 defaultAlexState :: Text -> AlexState
 defaultAlexState text =
   AlexState
-    { bytes = L.Empty,
+    { bytes = O.Empty,
       pos = alexStartPos,
       text,
       ch = '\n',
@@ -63,7 +63,7 @@ defaultAlexState text =
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte AlexInput {pos, prev, bytes = b :< bs, text} =
   Just (b, AlexInput {pos, prev, bytes = bs, text})
-alexGetByte AlexInput {text = L.Empty} = Nothing
+alexGetByte AlexInput {text = O.Empty} = Nothing
 alexGetByte AlexInput {pos, text} =
   Just (b, AlexInput {pos = pos', prev = c, bytes = bs, text = text'})
   where
@@ -94,4 +94,4 @@ eofSpan :: Span
 eofSpan = Span (Pos (-1) (-1)) (Pos (-1) (-1))
 
 ignorePendingBytes :: AlexInput -> AlexInput
-ignorePendingBytes inp = inp {bytes = L.Empty}
+ignorePendingBytes inp = inp {bytes = O.Empty}

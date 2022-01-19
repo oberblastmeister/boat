@@ -61,7 +61,8 @@ common common-options
     TypeFamilies,
     FunctionalDependencies,
     ExistentialQuantification,
-    TypeOperators
+    TypeOperators,
+    OverloadedLabels
   ghc-options:
     -Wall
     -Wincomplete-record-updates
@@ -71,7 +72,8 @@ common common-options
   build-depends:
     base ^>= 4.14.3.0,
     relude ^>= 1.0.0.0,
-    lens ^>= 5.1,
+    optics ^>= 0.4,
+    optics-extra ^>= 0.4,
     mtl ^>= 2.2.2,
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
@@ -115,7 +117,6 @@ library
     Oat.Wrappers.Lexer
     Oat.Wrappers.Parser
     Oat.Common
-    Oat.LensOperators
     Oat.Backend
     Oat.Alloc
     Oat.LL.Token

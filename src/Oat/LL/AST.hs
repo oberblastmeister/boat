@@ -1,10 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Oat.LL.AST where
 
-import qualified Control.Lens as L
-import Control.Lens.Operators
 import Oat.LL.Name (Name)
+import qualified Optics as O
+import Optics.Operators.Unsafe ((^?!))
 
 data Ty
   = Void
@@ -26,11 +27,11 @@ data FunTy = FunTy
 
 -- note, for this to be valid, you must not change the type for TyNamed
 -- also, this will panic if the HashMap does not contain the name
-plateTy :: HashMap Name Ty -> L.Traversal' Ty Ty
-plateTy mp f = \case
+plateTy :: HashMap Name Ty -> O.Traversal' Ty Ty
+plateTy mp = O.traversalVL $ \f -> \case
   TyPtr ty -> TyPtr <$> f ty
   TyFun FunTy {_args, _ret} -> TyFun <$> (FunTy <$> traverse f _args <*> f _ret)
-  TyNamed name -> let ty = mp ^?! L.ix name in f ty $> TyNamed name
+  TyNamed name -> let ty = mp ^?! O.ix name in f ty $> TyNamed name
   TyArray sz ty -> TyArray sz <$> f ty
   TyStruct tys -> TyStruct <$> traverse f tys
   other -> pure other
@@ -205,18 +206,17 @@ data Prog = Prog
   }
   deriving (Show, Eq)
 
-L.makeFieldsNoPrefix ''LoadIns
-L.makeFieldsNoPrefix ''StoreIns
-L.makeFieldsNoPrefix ''IcmpIns
-L.makeFieldsNoPrefix ''CallIns
-L.makeFieldsNoPrefix ''BitcastIns
-L.makeFieldsNoPrefix ''GepIns
-L.makeFieldsNoPrefix ''FunTy
-L.makeFieldsNoPrefix ''Block
-L.makeFieldsNoPrefix ''FunBody
-L.makeFieldsNoPrefix ''FunDecl
-L.makeFieldsNoPrefix ''Prog
-L.makePrisms ''Named
+O.makeFieldLabelsNoPrefix ''LoadIns
+O.makeFieldLabelsNoPrefix ''StoreIns
+O.makeFieldLabelsNoPrefix ''IcmpIns
+O.makeFieldLabelsNoPrefix ''CallIns
+O.makeFieldLabelsNoPrefix ''BitcastIns
+O.makeFieldLabelsNoPrefix ''GepIns
+O.makeFieldLabelsNoPrefix ''FunTy
+O.makeFieldLabelsNoPrefix ''Block
+O.makeFieldLabelsNoPrefix ''FunBody
+O.makeFieldLabelsNoPrefix ''FunDecl
+O.makeFieldLabelsNoPrefix ''Prog
 
 doesInsAssign :: Ins -> Bool
 doesInsAssign (Call CallIns {_ty = Void}) = False
