@@ -1,30 +1,53 @@
 module Oat.LL.Token.Kind where
 
 data Kind
-  = Let
-  | Rec
-  | Forall
-  | True
-  | False
-  | In
-  | If
-  | Else
-  | Then
-  | Lambda
-  | Num Int
-  | Ident Text
-  | ConIdent Text
-  | Arrow
-  | Assign
+  = Star
+  | Comma
+  | Colon
+  | Equals
+  | LParen
+  | RParen
+  | RBrace
+  | LBrace
+  | LBracket
+  | RBracket
+  | Cross
+  | I1
+  | I8
+  | I32
+  | I64
+  | To
+  | Br
+  | Eq
+  | NEq
+  | Or
+  | And
   | Add
   | Sub
   | Mul
-  | Div
-  | Eq
-  | NEq
-  | LParen
-  | RParen
-  | Dot
-  | Error
-  | EOF
+  | Xor
+  | Slt
+  | Sle
+  | Sgt
+  | Sge
+  | Shl
+  | Ret
+  | Type
+  | Null
+  | Lshr
+  | Ashr
+  | Icmp
+  | Void
+  | Load
+  | Store
+  | Label
+  | Entry
+  | Global
+  | Define
+  | Declare
+  | External
+  | Alloca
+  | Bitcast
+  | Gep
+  | Eof
   deriving (Show, Eq)

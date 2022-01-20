@@ -17,6 +17,7 @@ module Oat.X86.AST
     p1,
     dat,
     gText,
+    argReg,
   )
 where
 
@@ -316,3 +317,13 @@ p1 =
           Ins Retq []
         ]
     ]
+
+argReg :: Int -> Maybe Reg
+argReg = \case
+  0 -> Just Rdi
+  1 -> Just Rsi
+  2 -> Just Rdx
+  3 -> Just Rcx
+  4 -> Just R08
+  5 -> Just R09
+  _ -> Nothing

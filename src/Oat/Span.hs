@@ -1,11 +1,16 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Oat.Span
   ( Pos (..),
-    Span (..),
+    Span,
     Spanned (..),
     mkSpan,
     unsafeMkSpan,
   )
 where
+
+import Optics
 
 data Pos = Pos
   { line :: !Int,
@@ -14,10 +19,17 @@ data Pos = Pos
   deriving (Show, Eq, Ord)
 
 data Span = Span
-  { posStart :: !Pos,
-    posEnd :: !Pos
+  { start :: !Pos,
+    end :: !Pos
   }
   deriving (Show, Eq, Ord)
+
+makeFieldLabelsNoPrefix ''Pos
+makeFieldLabelsWith
+  ( noPrefixFieldLabels
+      & generateUpdateableOptics .~ False
+  )
+  ''Span
 
 class Spanned a where
   spanOf :: a -> Span

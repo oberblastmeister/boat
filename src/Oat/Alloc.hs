@@ -7,7 +7,7 @@ module Oat.Alloc where
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
 import qualified Oat.X86.AST as X86
-import qualified Optics as O
+import Optics
 import Optics.Operators
 
 data Loc
@@ -75,6 +75,7 @@ data IcmpIns = IcmpIns
 data CallIns = CallIns
   { loc :: !Loc,
     ty :: Ty,
+    arg :: Operand,
     args :: [(Ty, Operand)]
   }
 
@@ -111,23 +112,20 @@ data CbrIns = CbrIns
 
 newtype FunBody = FunBody [Ins]
 
-O.makeFieldLabelsNoPrefix ''AllocaIns
-O.makeFieldLabelsNoPrefix ''LoadIns
-O.makeFieldLabelsNoPrefix ''BinOpIns
-O.makeFieldLabelsNoPrefix ''StoreIns
-O.makeFieldLabelsNoPrefix ''IcmpIns
-O.makeFieldLabelsNoPrefix ''CallIns
-O.makeFieldLabelsNoPrefix ''BitcastIns
-O.makeFieldLabelsNoPrefix ''GepIns
-O.makeFieldLabelsNoPrefix ''SMove
-O.makeFieldLabelsNoPrefix ''CbrIns
-O.makeFieldLabelsNoPrefix ''RetIns
+makeFieldLabelsNoPrefix ''AllocaIns
+makeFieldLabelsNoPrefix ''LoadIns
+makeFieldLabelsNoPrefix ''BinOpIns
+makeFieldLabelsNoPrefix ''StoreIns
+makeFieldLabelsNoPrefix ''IcmpIns
+makeFieldLabelsNoPrefix ''CallIns
+makeFieldLabelsNoPrefix ''BitcastIns
+makeFieldLabelsNoPrefix ''GepIns
+makeFieldLabelsNoPrefix ''SMove
+makeFieldLabelsNoPrefix ''CbrIns
+makeFieldLabelsNoPrefix ''RetIns
 
-test :: LoadIns -> Operand
-test ins = ins ^. #arg
-
-operands :: O.Traversal' Ins Operand
-operands = O.traversalVL go
+operands :: Traversal' Ins Operand
+operands = traversalVL go
   where
     go f = \case
       PMove movs -> do
@@ -155,16 +153,16 @@ operands = O.traversalVL go
         arg2 <- f arg2
         pure $ Icmp ins {arg1, arg2}
       Call ins@CallIns {args} -> do
-        _args <- traverse (\(ty, operand) -> (ty,) <$> f operand) args
+        args <- traverse (\(ty, operand) -> (ty,) <$> f operand) args
         pure $ Call ins {args}
       Bitcast ins@BitcastIns {arg} -> do
         arg <- f arg
         pure $ Bitcast ins {arg}
       Gep ins@GepIns {arg, args} -> do
-        _arg <- f arg
-        _args <- traverse f args
+        arg <- f arg
+        args <- traverse f args
         pure $ Gep ins {arg, args}
       Cbr ins@CbrIns {arg} -> do
-        _arg <- f arg
+        arg <- f arg
         pure $ Cbr ins {arg}
       other -> pure other

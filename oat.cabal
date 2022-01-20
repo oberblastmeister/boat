@@ -72,6 +72,7 @@ common common-options
   build-depends:
     base ^>= 4.14.3.0,
     relude ^>= 1.0.0.0,
+    template-haskell >= 2.16.0.0 && <= 2.18.0.0,
     optics ^>= 0.4,
     optics-extra ^>= 0.4,
     mtl ^>= 2.2.2,

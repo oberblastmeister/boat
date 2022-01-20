@@ -3,15 +3,19 @@
 
 module Oat.Backend where
 
+import Control.Exception (assert)
+import qualified Control.Monad as Monad
+import Data.List ((!!))
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
-import Oat.Common ((++>))
+import Oat.Common (internalError, (++>))
 import Oat.Fold (paraOf)
 import qualified Oat.LL.AST as LL
 import qualified Oat.LL.Name as LL
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
-import qualified Optics as O
+import Optics
+import Optics.Operators
 import Optics.State.Operators
 import Prelude hiding (Const)
 
@@ -30,7 +34,7 @@ data X86Elt
 
 type X86Stream = [X86Elt]
 
-O.makeFieldLabelsNoPrefix ''BackendState
+makeFieldLabelsNoPrefix ''BackendState
 
 runBackend :: BackendM a -> BackendState -> a
 runBackend = evalState
@@ -76,8 +80,13 @@ tySize' tyDecls =
 
 tySize :: MonadBackend m => LL.Ty -> m Int
 tySize ty = do
-  tyDecls <- gets tyDecls
+  tyDecls <- use #tyDecls
   pure $ tySize' tyDecls ty
+
+lookupTy :: MonadBackend m => LL.Name -> m LL.Ty
+lookupTy name = do
+  mp <- use #tyDecls
+  pure $ LL.lookupTy name mp
 
 compileOperand :: Alloc.Operand -> X86.Operand
 compileOperand Null = (:$) 0
@@ -92,24 +101,12 @@ compileLoc (LStack i) = X86.Ind3 (X86.Lit (fromIntegral i * 8)) X86.Rbp
 compileLoc (LLab l) = X86.Ind1 (X86.Lab l)
 
 compileFunBody :: MonadBackend m => Alloc.FunBody -> m ()
-compileFunBody (Alloc.FunBody insns) = forM_ insns $ \ins -> do
+compileFunBody (Alloc.FunBody insns) = for_ insns $ \ins -> do
   case ins of
     Alloc.ILab (LLab l) -> emit [L l False]
     Alloc.ILab _ -> error "Malformed ILab"
     Alloc.PMove smoves -> compilePMove smoves
-    Alloc.Icmp Alloc.IcmpIns {loc, cmpOp, arg1 = Loc (LReg r), arg2} ->
-      emitIns
-        [ X86.Cmpq @@ [compileOperand arg2, (:%) r],
-          mapCmpOp cmpOp @@ [compileLoc loc],
-          X86.Andq @@ [(:$) 1, compileLoc loc]
-        ]
-    Alloc.Icmp Alloc.IcmpIns {loc, cmpOp, arg1, arg2} -> do
-      emitMov (compileOperand arg1) ((:%) X86.Rax)
-      emitIns
-        [ X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax],
-          mapCmpOp cmpOp @@ [compileLoc loc],
-          X86.Andq @@ [(:$) 1, compileLoc loc]
-        ]
+    Alloc.Icmp ins -> compileIcmp ins
     Alloc.BinOp ins -> compileBinOp ins
     Alloc.Alloca Alloc.AllocaIns {loc, ty} -> do
       sz <- tySize ty
@@ -117,46 +114,100 @@ compileFunBody (Alloc.FunBody insns) = forM_ insns $ \ins -> do
         [ X86.Subq @@ [(:$) $ fromIntegral sz, (:%) X86.Rsp],
           X86.Movq @@ [(:%) X86.Rsp, compileLoc loc]
         ]
-    Alloc.Load Alloc.LoadIns {loc, arg = arg@(Loc (LReg r))} ->
+    Alloc.Load Alloc.LoadIns {loc, arg = (Loc (LReg r))} ->
       emitIns [X86.Movq @@ [(:%) r, compileLoc loc]]
     Alloc.Load Alloc.LoadIns {loc, arg} -> do
       emitMov (compileOperand arg) ((:%) X86.Rax)
       emitIns [X86.Movq @@ [(:%) X86.Rax, compileLoc loc]]
-    Alloc.Store Alloc.StoreIns {arg1 = arg@(Loc (LReg r)), arg2} ->
-      emitIns
-        [ X86.Movq @@ [(:%) r, compileOperand arg2]
-        ]
+    Alloc.Store Alloc.StoreIns {arg1 = (Loc (LReg r)), arg2} ->
+      emitIns [X86.Movq @@ [(:%) r, compileOperand arg2]]
     Alloc.Store Alloc.StoreIns {arg1, arg2} ->
       emitIns
         [ X86.Movq @@ [compileOperand arg1, (:%) X86.Rax],
           X86.Movq @@ [(:%) X86.Rax, compileOperand arg2]
         ]
-    Alloc.Call ci -> undefined
+    Alloc.Call ins -> compileCall ins
     Alloc.Bitcast Alloc.BitcastIns {loc, arg} -> do
       emitMov (compileOperand arg) ((:%) X86.Rax)
-      emitIns
-        [ X86.Movq @@ [(:%) X86.Rax, compileOperand (Loc loc)]
-        ]
-    Alloc.Gep gi -> undefined
+      emitIns [X86.Movq @@ [(:%) X86.Rax, compileOperand (Loc loc)]]
+    Alloc.Gep ins -> compileGep ins
     Alloc.Ret Alloc.RetIns {arg = Just arg} -> do
       emitMov (compileOperand arg) ((:%) X86.Rax)
       emit retIns
     Alloc.Ret Alloc.RetIns {arg = Nothing} -> do
       emit retIns
-    Alloc.Br arg@(LLab lab) ->
+    Alloc.Br arg@(LLab _) ->
       emitIns [X86.Jmp @@ [compileOperand $ Loc arg]]
     Alloc.Br _ -> error "malformed br instruction"
-    Alloc.Cbr Alloc.CbrIns {arg = Const i, loc1 = (LLab l1), loc2 = (LLab l2)} ->
-      if i == 0
-        then emitIns [X86.Jmp @@ [(:$$) l1]]
-        else emitIns [X86.Jmp @@ [(:$$) l2]]
-    Alloc.Cbr Alloc.CbrIns {arg, loc1 = (LLab l1), loc2 = (LLab l2)} ->
-      emitIns
-        [ X86.Cmpq @@ [(:$) 0, compileOperand arg],
-          X86.J X86.Neq @@ [(:$$) l1],
-          X86.Jmp @@ [(:$$) l2]
-        ]
-    Alloc.Cbr _ -> error "malformed cbr instruction"
+    Alloc.Cbr ins -> compileCbr ins
+
+compileCall :: MonadBackend m => Alloc.CallIns -> m ()
+compileCall Alloc.CallIns {loc, ty, arg, args} = do
+  for_ (reverse $ zip [1 :: Int ..] args) $ \(i, (_, arg)) -> case X86.argReg i of
+    Nothing -> emitIns [X86.Pushq @@ [compileOperand arg]]
+    Just r -> emitMov (compileOperand arg) ((:%) r)
+  let nStack = length args - 6
+  emitIns $
+    [X86.Callq @@ [compileOperand arg]]
+      ++> [X86.Addq @@ [(:$) $ fromIntegral nStack, (:%) X86.Rsp] | nStack > 0]
+      ++> [X86.Movq @@ [(:%) X86.Rax, compileLoc loc] | ty /= LL.Void]
+
+compileGep :: MonadBackend m => Alloc.GepIns -> m ()
+compileGep Alloc.GepIns {loc, ty, arg, args} = do
+  let !_ = assert (arg == Const 0) ()
+      !at = case ty of
+        LL.TyPtr ty -> ty
+        _ -> internalError "gep of non-pointer"
+  emitMov (compileOperand arg) ((:%) X86.Rax)
+  Monad.foldM_
+    ( \at arg -> do
+        case (at, arg) of
+          (LL.TyNamed name, _) -> lookupTy name
+          (LL.TyStruct tys, Alloc.Const i) -> do
+            offset <- structOffset (fromIntegral i) tys
+            emitIns [X86.Addq @@ [(:$) $ fromIntegral offset, (:%) X86.Rax]]
+            pure (tys !! fromIntegral i)
+          (LL.TyArray _ ty, Alloc.Const 0) -> pure ty
+          (LL.TyArray _ ty, _) -> do
+            emitMov ((:%) X86.Rax) ((:%) X86.Rcx)
+            emitMov (compileOperand arg) ((:%) X86.Rax)
+            size <- tySize ty
+            emitIns
+              [ X86.Imulq @@ [(:$) $ fromIntegral size],
+                X86.Addq @@ [(:%) X86.Rcx, (:%) X86.Rax]
+              ]
+            pure ty
+          _ -> internalError "malformed gep instruction"
+    )
+    (LL.TyArray 0 at)
+    args
+  emitMov ((:%) X86.Rax) (compileLoc loc)
+
+structOffset :: MonadBackend m => Int -> [LL.Ty] -> m Int
+structOffset i tys =
+  take i tys
+    & Monad.foldM
+      ( \offset ty -> do
+          size <- tySize ty
+          pure $! offset + size
+      )
+      0
+
+compileIcmp :: MonadBackend m => Alloc.IcmpIns -> m ()
+compileIcmp Alloc.IcmpIns {loc, cmpOp, arg1, arg2}
+  | Loc (LReg r) <- arg1 =
+    emitIns
+      [ X86.Cmpq @@ [compileOperand arg2, (:%) r],
+        mapCmpOp cmpOp @@ [compileLoc loc],
+        X86.Andq @@ [(:$) 1, compileLoc loc]
+      ]
+  | otherwise = do
+    emitMov (compileOperand arg1) ((:%) X86.Rax)
+    emitIns
+      [ X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax],
+        mapCmpOp cmpOp @@ [compileLoc loc],
+        X86.Andq @@ [(:$) 1, compileLoc loc]
+      ]
 
 compileBinOp :: MonadBackend m => Alloc.BinOpIns -> m ()
 compileBinOp Alloc.BinOpIns {loc, op, arg1, arg2}
@@ -208,6 +259,19 @@ mapCmpOp = \case
   LL.Sle -> X86.Set X86.Le
   LL.Sgt -> X86.Set X86.Gt
   LL.Sge -> X86.Set X86.Ge
+
+compileCbr :: MonadBackend m => Alloc.CbrIns -> m ()
+compileCbr Alloc.CbrIns {arg = Const i, loc1 = (LLab l1), loc2 = (LLab l2)} =
+  if i == 0
+    then emitIns [X86.Jmp @@ [(:$$) l1]]
+    else emitIns [X86.Jmp @@ [(:$$) l2]]
+compileCbr Alloc.CbrIns {arg, loc1 = (LLab l1), loc2 = (LLab l2)} =
+  emitIns
+    [ X86.Cmpq @@ [(:$) 0, compileOperand arg],
+      X86.J X86.Neq @@ [(:$$) l1],
+      X86.Jmp @@ [(:$$) l2]
+    ]
+compileCbr _ = error "malformed cbr instruction"
 
 retIns :: X86Stream
 retIns =

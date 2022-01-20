@@ -7,7 +7,7 @@ import OldPrelude
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Data.Function ((&))
-import Oat.Wrappers.Lexer
+import Oat.LL.LexerWrapper
 import qualified Oat.LL.Token.Kind as TK
 import Oat.LL.Token (Token(..))
 import qualified Data.Text as T
@@ -17,6 +17,7 @@ import GHC.Records
 import Debug.Trace
 import qualified Oat.Span as Span
 import Oat.LL.Token.Kind (Kind)
+import Optics
 }
 
 $digit = 0-9
@@ -31,40 +32,41 @@ $lam = [\\]
 tokens :-
   <0> $eol { skip }
   <0> $white+ { skip }
-  <0> "--".* { skip }
+  -- <0> "c\"" { start string }
+  -- <0> "--".* { skip }
 
-  <0> "forall" { tk TK.Forall }
-  <0> "let" { tk TK.Let }
-  <0> "rec" { tk TK.Rec }
-  <0> "in" { tk TK.In }
-  <0> "if" { tk TK.If }
-  <0> "then" { tk TK.Then }
-  <0> "else" { tk TK.Else }
-  <0> "True" { tk TK.True }
-  <0> "False" { tk TK.False }
-  <0> $digit+ { string $ TK.Num . read . T.unpack }
-  <0> "->" { tk TK.Arrow }
-  <0> "=" { tk TK.Assign }
-  <0> "==" { tk TK.Eq }
-  <0> "!=" { tk TK.NEq }
-  <0> $lam { tk TK.Lambda }
-  <0> "+" { tk TK.Add }
-  <0> "-" { tk TK.Sub }
-  <0> "*" { tk TK.Mul }
-  <0> "/" { tk TK.Div }
-  <0> "(" { tk TK.LParen }
-  <0> ")" { tk TK.RParen }
-  <0> "." { tk TK.Dot }
+  -- <0> "forall" { tk TK.Forall }
+  -- <0> "let" { tk TK.Let }
+  -- <0> "rec" { tk TK.Rec }
+  -- <0> "in" { tk TK.In }
+  -- <0> "if" { tk TK.If }
+  -- <0> "then" { tk TK.Then }
+  -- <0> "else" { tk TK.Else }
+  -- <0> "True" { tk TK.True }
+  -- <0> "False" { tk TK.False }
+  -- <0> $digit+ { stringTok $ TK.Num . read . T.unpack }
+  -- <0> "->" { tk TK.Arrow }
+  -- <0> "=" { tk TK.Assign }
+  -- <0> "==" { tk TK.Eq }
+  -- <0> "!=" { tk TK.NEq }
+  -- <0> $lam { tk TK.Lambda }
+  -- <0> "+" { tk TK.Add }
+  -- <0> "-" { tk TK.Sub }
+  -- <0> "*" { tk TK.Mul }
+  -- <0> "/" { tk TK.Div }
+  -- <0> "(" { tk TK.LParen }
+  -- <0> ")" { tk TK.RParen }
+  -- <0> "." { tk TK.Dot }
 
-  <0> $lower $ident* { string $ TK.Ident }
-  <0> $upper $ident* { string $ TK.ConIdent }
+  -- <0> $lower $ident* { stringTok $ TK.Ident }
+  -- <0> $upper $ident* { stringTok $ TK.ConIdent }
   
   <0> .
     { do
         tokText <- asks tokText
         pure $ Left $ "Unkown token: " <> tokText
     }
-
+    
 {
   
 type Lexeme = Either Text Token
@@ -72,13 +74,13 @@ type Lexeme = Either Text Token
 tk :: Kind -> AlexAction Lexeme
 tk = pure . Right . Token
 
-string :: (Text -> Kind) -> AlexAction Lexeme
-string f = do
+stringTok :: (Text -> Kind) -> AlexAction Lexeme
+stringTok f = do
   tokText <- asks tokText
   pure $ Right $ Token $ f tokText
 
 alexEOF :: Token
-alexEOF = Token TK.EOF
+alexEOF = Token TK.Eof
 
 dbg :: Show a => a -> a
 dbg x = trace ("DBG: " ++ show x) x
@@ -86,8 +88,8 @@ dbg x = trace ("DBG: " ++ show x) x
 skip :: AlexAction Lexeme
 skip = lift $ alexMonadScan
 
-begin :: Int -> AlexAction Lexeme
-begin sc = lift $ do
+start :: Int -> AlexAction Lexeme
+start sc = lift $ do
   alexSetStartCode sc
   alexMonadScan
 
@@ -104,9 +106,9 @@ alexMonadScan = do
       alexMonadScan
     AlexToken inp' len action -> do
       alexSetInput inp'
-      let tokText = T.take len $ getField @"text" inp
-          pos1 = getField @"pos" inp
-          pos2 = getField @"pos" inp'
+      let tokText = T.take len $ inpText inp
+          pos1 = inpPos inp
+          pos2 = inpPos inp'
           span = Span.mkSpan pos1 pos2
           env = AlexEnv { tokText, span }
       runReaderT action env
