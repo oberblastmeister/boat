@@ -36,6 +36,7 @@ data Kind
   | Null
   | Lshr
   | Ashr
+  | Call
   | Icmp
   | Void
   | Load
@@ -49,5 +50,10 @@ data Kind
   | Alloca
   | Bitcast
   | Gep
+  | Int !Int
+  | Lab !Text
+  | Gid !Text
+  | Uid !Text
+  | String !Text
   | Eof
   deriving (Show, Eq)

@@ -20,47 +20,76 @@ import Oat.LL.Token.Kind (Kind)
 import Optics
 }
 
-$digit = 0-9
+$digit = [0-9]
 $lower = [a-z]
 $upper = [A-Z]
-$ident = [$digit $upper $lower '_' '\'']
-$eol = [\n]
--- we put this separate because alex doesn't do string escapes like haskell
--- inside literal strings which is confusing but it does in regex
-$lam = [\\]
+$char = [$lower $upper]
+$identStart = [$char $digit '_']
+$identRest = [$identStart '.']
+@ident = $identStart $identRest*
+$newline = [\n]
 
 tokens :-
-  <0> $eol { skip }
+  <0> $newline { skip }
   <0> $white+ { skip }
   -- <0> "c\"" { start string }
-  -- <0> "--".* { skip }
+  <0> "*" { tk TK.Star }
+  <0> "," { tk TK.Comma }
+  <0> ":" { tk TK.Colon }
+  <0> "=" { tk TK.Equals }
+  <0> "(" { tk TK.LParen }
+  <0> ")" { tk TK.RParen }
+  <0> "{" { tk TK.LBrace }
+  <0> "}" { tk TK.RBrace }
+  <0> "[" { tk TK.LBracket }
+  <0> "]" { tk TK.RBracket }
+  <0> "i1" { tk TK.I1 }
+  <0> "i8" { tk TK.I8 }
+  <0> "i32" { tk TK.I32 }
+  <0> "i64" { tk TK.I64 }
+  <0> "to" { tk TK.To }
+  <0> "br" { tk TK.Br }
+  <0> "eq" { tk TK.Eq }
+  <0> "ne" { tk TK.NEq }
+  <0> "or" { tk TK.Or }
+  <0> "and" { tk TK.And }
+  <0> "add" { tk TK.Add }
+  <0> "sub" { tk TK.Sub }
+  <0> "mul" { tk TK.Mul }
+  <0> "xor" { tk TK.Xor }
+  <0> "slt" { tk TK.Slt }
+  <0> "sle" { tk TK.Sle }
+  <0> "sgt" { tk TK.Sgt }
+  <0> "sge" { tk TK.Sge }
+  <0> "shl" { tk TK.Shl }
+  <0> "ret" { tk TK.Ret }
+  <0> "getelementptr" { tk TK.Gep }
+  <0> "type" { tk TK.Type }
+  <0> "null" { tk TK.Null }
+  <0> "lshr" { tk TK.Lshr }
+  <0> "ashr" { tk TK.Ashr }
+  <0> "call" { tk TK.Call }
+  <0> "icmp" { tk TK.Icmp }
+  <0> "void" { tk TK.Void }
+  <0> "load" { tk TK.Load }
+  <0> "entry" { tk TK.Entry }
+  <0> "store" { tk TK.Store }
+  <0> "label" { tk TK.Label }
+  <0> "global" { tk TK.Global }
+  <0> "define" { tk TK.Define }
+  <0> "declare" { tk TK.Declare }
+  <0> "external" { tk TK.External }
+  <0> "alloca" { tk TK.Alloca }
+  <0> "bitcast" { tk TK.Bitcast }
+  <0> "%" "."? @ident { stringTK TK.Uid }
+  <0> "@" "."? @ident { stringTK TK.Gid }
+  <0> "x" { tk TK.Cross }
+  -- TODO: fix this
+  <0> "-"? $digit+ { stringTK $ TK.Int . undefined }
+  <0> @ident { stringTK $ TK.Lab }
+  <0> ";" [^ \n \r]* $newline { skip }
+  <0> "declare" [^ \n \r]* $newline { skip }
 
-  -- <0> "forall" { tk TK.Forall }
-  -- <0> "let" { tk TK.Let }
-  -- <0> "rec" { tk TK.Rec }
-  -- <0> "in" { tk TK.In }
-  -- <0> "if" { tk TK.If }
-  -- <0> "then" { tk TK.Then }
-  -- <0> "else" { tk TK.Else }
-  -- <0> "True" { tk TK.True }
-  -- <0> "False" { tk TK.False }
-  -- <0> $digit+ { stringTok $ TK.Num . read . T.unpack }
-  -- <0> "->" { tk TK.Arrow }
-  -- <0> "=" { tk TK.Assign }
-  -- <0> "==" { tk TK.Eq }
-  -- <0> "!=" { tk TK.NEq }
-  -- <0> $lam { tk TK.Lambda }
-  -- <0> "+" { tk TK.Add }
-  -- <0> "-" { tk TK.Sub }
-  -- <0> "*" { tk TK.Mul }
-  -- <0> "/" { tk TK.Div }
-  -- <0> "(" { tk TK.LParen }
-  -- <0> ")" { tk TK.RParen }
-  -- <0> "." { tk TK.Dot }
-
-  -- <0> $lower $ident* { stringTok $ TK.Ident }
-  -- <0> $upper $ident* { stringTok $ TK.ConIdent }
-  
   <0> .
     { do
         tokText <- asks tokText
@@ -74,8 +103,8 @@ type Lexeme = Either Text Token
 tk :: Kind -> AlexAction Lexeme
 tk = pure . Right . Token
 
-stringTok :: (Text -> Kind) -> AlexAction Lexeme
-stringTok f = do
+stringTK :: (Text -> Kind) -> AlexAction Lexeme
+stringTK f = do
   tokText <- asks tokText
   pure $ Right $ Token $ f tokText
 
