@@ -3,7 +3,10 @@
 {-# LANGUAGE NoDuplicateRecordFields #-}
 
 -- you need to define alexEOF and also import this wrapper
-module Oat.Wrappers.Lexer where
+module Oat.Wrappers.Lexer
+  ( makeLexer,
+  )
+where
 
 import qualified Data.ByteString as ByteString
 import qualified Data.Text as T

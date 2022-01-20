@@ -72,13 +72,14 @@ common common-options
   build-depends:
     base ^>= 4.14.3.0,
     relude ^>= 1.0.0.0,
-    template-haskell >= 2.16.0.0 && <= 2.18.0.0,
+    template-haskell >= 2.16.0.0 && < 2.19.0.0,
     optics ^>= 0.4,
     optics-extra ^>= 0.4,
     mtl ^>= 2.2.2,
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
     text ^>= 1.2.5.0,
+    text-builder ^>= 0.6.6.3,
     -- relude bound
     hashable >= 1.2 && <1.4,
     bytestring ^>= 0.11.2.0,
@@ -111,6 +112,7 @@ library
   exposed-modules:
     Oat
     Oat.Span
+    Oat.Fold
     Oat.Interned
     Oat.Interned.Internal
     Oat.Interned.Text
@@ -125,6 +127,7 @@ library
     Oat.LL.Lexer
     Oat.LL.AST
     Oat.LL.Name
+    Oat.LL.LexerWrapper
     Oat.X86.AST
 
 common rtsopts
