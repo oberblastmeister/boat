@@ -15,7 +15,7 @@ import Optics hiding ((:>))
 infixl 4 :>
 
 pattern (:>) :: [a] -> a -> [a]
-pattern xs :> x <- x : xs where (:>) xs x = x : xs
+pattern xs :> x <- x : xs where xs :> x = x : xs
 
 {-# COMPLETE (:>), [] #-}
 

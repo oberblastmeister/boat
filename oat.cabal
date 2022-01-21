@@ -128,6 +128,7 @@ library
     Oat.LL.AST
     Oat.LL.Name
     Oat.LL.LexerWrapper
+    Oat.LL.ParserWrapper
     Oat.X86.AST
 
 common rtsopts

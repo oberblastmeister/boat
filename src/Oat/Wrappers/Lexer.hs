@@ -33,18 +33,24 @@ makeLexer name defName = do
         stateCh :: !Char,
         stateBytes :: !ByteString,
         stateScd :: !Int, -- the current startcode
-        user :: $(TH.conT name)
+        user :: $(con)
       }
 
     newtype Alex a = Alex {unAlex :: (StateT AlexState Identity) a}
       deriving (Functor, Applicative, Monad, MonadState AlexState)
 
     data AlexEnv = AlexEnv
-      { tokText :: !Text,
+      { text :: !Text,
         span :: !Span
       }
 
     type AlexAction a = ReaderT AlexEnv Alex a
+
+    instance LabelOptic "user" A_Lens AlexState AlexState $(con) $(con) where
+      labelOptic = lens user (\s user -> s {user})
+
+    instance LabelOptic "text" A_Lens AlexEnv AlexEnv Text Text where
+      labelOptic = lensVL $ \f (AlexEnv text span) -> fmap (`AlexEnv` span) (f text)
 
     alexStartPos :: Pos
     alexStartPos = Pos 1 1
@@ -53,11 +59,11 @@ makeLexer name defName = do
     alexMove (Pos line _) '\n' = Pos (line + 1) 1
     alexMove (Pos line col) _ = Pos line (col + 1)
 
-    runAlex :: Text -> Alex a -> a
-    runAlex text alex =
+    runAlex :: AlexState -> Alex a -> a
+    runAlex alexState alex =
       alex
         & coerce
-        & (`evalStateT` defaultAlexState text)
+        & (`evalStateT` alexState)
         & runIdentity
 
     defaultAlexState :: Text -> AlexState
@@ -102,9 +108,8 @@ makeLexer name defName = do
     alexSetInput AlexInput {inpPos, inpText, inpPrev, inpBytes} =
       modify $ \st -> (st {statePos = inpPos, stateText = inpText, stateCh = inpPrev, stateBytes = inpBytes})
 
-    eofSpan :: Span
-    eofSpan = unsafeMkSpan (Pos (-1) (-1)) (Pos (-1) (-1))
-
     ignorePendingBytes :: AlexInput -> AlexInput
     ignorePendingBytes inp = inp {inpBytes = Empty}
     |]
+  where
+    con = TH.conT name

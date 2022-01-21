@@ -8,17 +8,20 @@ import qualified Control.Monad as Monad
 import Data.List ((!!))
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
-import Oat.Common (internalError, (++>))
+import Oat.Common (internalError, (++>), pattern (:>))
 import Oat.Fold (paraOf)
 import qualified Oat.LL.AST as LL
 import qualified Oat.LL.Name as LL
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
-import Optics
-import Optics.Operators
+import Optics hiding ((:>))
 import Optics.State.Operators
 import Prelude hiding (Const)
 
+-- emit instructions using conduit?
+-- probably for now emit instructions using snoc list
+-- is it better to use lazy state because we are building up a lazy snoclist?
+-- the instructions that come in should probably be a Seq
 data BackendState = BackendState
   { insStream :: X86Stream,
     tyDecls :: HashMap LL.Name LL.Ty
@@ -56,7 +59,7 @@ emitMov src dst = case (src, dst) of
   (_, X86.Imm _) -> mov
   (X86.Reg _, _) -> mov
   (_, X86.Reg _) -> mov
-  (_, _) -> emitIns [X86.Movq @@ [src, (:%) X86.Rax], X86.Movq @@ [(:%) X86.Rax, dst]]
+  (_, _) -> emitIns $ [X86.Movq @@ [src, (:%) X86.Rax]] :> X86.Movq @@ [(:%) X86.Rax, dst]
   where
     mov = emitIns [X86.Movq @@ [src, dst]]
 
@@ -110,10 +113,9 @@ compileFunBody (Alloc.FunBody insns) = for_ insns $ \ins -> do
     Alloc.BinOp ins -> compileBinOp ins
     Alloc.Alloca Alloc.AllocaIns {loc, ty} -> do
       sz <- tySize ty
-      emitIns
-        [ X86.Subq @@ [(:$) $ fromIntegral sz, (:%) X86.Rsp],
-          X86.Movq @@ [(:%) X86.Rsp, compileLoc loc]
-        ]
+      emitIns $
+        [X86.Subq @@ [(:$) $ fromIntegral sz, (:%) X86.Rsp]]
+          :> X86.Movq @@ [(:%) X86.Rsp, compileLoc loc]
     Alloc.Load Alloc.LoadIns {loc, arg = (Loc (LReg r))} ->
       emitIns [X86.Movq @@ [(:%) r, compileLoc loc]]
     Alloc.Load Alloc.LoadIns {loc, arg} -> do
@@ -122,10 +124,9 @@ compileFunBody (Alloc.FunBody insns) = for_ insns $ \ins -> do
     Alloc.Store Alloc.StoreIns {arg1 = (Loc (LReg r)), arg2} ->
       emitIns [X86.Movq @@ [(:%) r, compileOperand arg2]]
     Alloc.Store Alloc.StoreIns {arg1, arg2} ->
-      emitIns
-        [ X86.Movq @@ [compileOperand arg1, (:%) X86.Rax],
-          X86.Movq @@ [(:%) X86.Rax, compileOperand arg2]
-        ]
+      emitIns $
+        [X86.Movq @@ [compileOperand arg1, (:%) X86.Rax]]
+          :> X86.Movq @@ [(:%) X86.Rax, compileOperand arg2]
     Alloc.Call ins -> compileCall ins
     Alloc.Bitcast Alloc.BitcastIns {loc, arg} -> do
       emitMov (compileOperand arg) ((:%) X86.Rax)
@@ -172,10 +173,10 @@ compileGep Alloc.GepIns {loc, ty, arg, args} = do
             emitMov ((:%) X86.Rax) ((:%) X86.Rcx)
             emitMov (compileOperand arg) ((:%) X86.Rax)
             size <- tySize ty
-            emitIns
-              [ X86.Imulq @@ [(:$) $ fromIntegral size],
-                X86.Addq @@ [(:%) X86.Rcx, (:%) X86.Rax]
-              ]
+            emitIns $
+              [X86.Imulq @@ [(:$) $ fromIntegral size]]
+                :> X86.Addq @@ [(:%) X86.Rcx, (:%) X86.Rax]
+
             pure ty
           _ -> internalError "malformed gep instruction"
     )
@@ -196,42 +197,37 @@ structOffset i tys =
 compileIcmp :: MonadBackend m => Alloc.IcmpIns -> m ()
 compileIcmp Alloc.IcmpIns {loc, cmpOp, arg1, arg2}
   | Loc (LReg r) <- arg1 =
-    emitIns
-      [ X86.Cmpq @@ [compileOperand arg2, (:%) r],
-        mapCmpOp cmpOp @@ [compileLoc loc],
-        X86.Andq @@ [(:$) 1, compileLoc loc]
-      ]
+    emitIns $
+      [X86.Cmpq @@ [compileOperand arg2, (:%) r]]
+        :> mapCmpOp cmpOp @@ [compileLoc loc]
+        :> X86.Andq @@ [(:$) 1, compileLoc loc]
   | otherwise = do
     emitMov (compileOperand arg1) ((:%) X86.Rax)
-    emitIns
-      [ X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax],
-        mapCmpOp cmpOp @@ [compileLoc loc],
-        X86.Andq @@ [(:$) 1, compileLoc loc]
-      ]
+    emitIns $
+      [X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax]]
+        :> mapCmpOp cmpOp @@ [compileLoc loc]
+        :> X86.Andq @@ [(:$) 1, compileLoc loc]
 
 compileBinOp :: MonadBackend m => Alloc.BinOpIns -> m ()
 compileBinOp Alloc.BinOpIns {loc, op, arg1, arg2}
   | LL.Mul <- op =
-    emitIns
-      [ X86.Movq @@ [compileOperand arg2, (:%) X86.Rax],
-        X86.Imulq @@ [compileOperand arg1],
-        X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
-      ]
+    emitIns $
+      [X86.Movq @@ [compileOperand arg2, (:%) X86.Rax]]
+        :> X86.Imulq @@ [compileOperand arg1]
+        :> X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
   | (LReg r) <- loc,
     Loc (LReg r') <- arg2,
     r == r' =
     emitIns [mapBinOp op @@ [compileOperand arg1, (:%) r]]
   | Loc (LReg r) <- arg2 =
-    emitIns
-      [ mapBinOp op @@ [compileOperand arg1, (:%) r],
-        X86.Movq @@ [(:%) r, compileLoc loc]
-      ]
+    emitIns $
+      [mapBinOp op @@ [compileOperand arg1, (:%) r]]
+        :> X86.Movq @@ [(:%) r, compileLoc loc]
   | otherwise =
-    emitIns
-      [ X86.Movq @@ [compileOperand arg2, (:%) X86.Rax],
-        mapBinOp op @@ [compileOperand arg1, (:%) X86.Rax],
-        X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
-      ]
+    emitIns $
+      [X86.Movq @@ [compileOperand arg2, (:%) X86.Rax]]
+        :> mapBinOp op @@ [compileOperand arg1, (:%) X86.Rax]
+        :> X86.Movq @@ [(:%) X86.Rax, compileLoc loc]
 
 compilePMove :: MonadBackend m => [Alloc.SMove] -> m ()
 compilePMove = mapM_ compileSMove
@@ -266,17 +262,15 @@ compileCbr Alloc.CbrIns {arg = Const i, loc1 = (LLab l1), loc2 = (LLab l2)} =
     then emitIns [X86.Jmp @@ [(:$$) l1]]
     else emitIns [X86.Jmp @@ [(:$$) l2]]
 compileCbr Alloc.CbrIns {arg, loc1 = (LLab l1), loc2 = (LLab l2)} =
-  emitIns
-    [ X86.Cmpq @@ [(:$) 0, compileOperand arg],
-      X86.J X86.Neq @@ [(:$$) l1],
-      X86.Jmp @@ [(:$$) l2]
-    ]
+  emitIns $
+    [X86.Cmpq @@ [(:$) 0, compileOperand arg]]
+      :> X86.J X86.Neq @@ [(:$$) l1]
+      :> X86.Jmp @@ [(:$$) l2]
 compileCbr _ = error "malformed cbr instruction"
 
 retIns :: X86Stream
 retIns =
-  ins
-    [ X86.Movq @@ [(:%) X86.Rbp, (:%) X86.Rsp],
-      X86.Popq @@ [(:%) X86.Rbp],
-      X86.Retq @@ []
-    ]
+  ins $
+    [X86.Movq @@ [(:%) X86.Rbp, (:%) X86.Rsp]]
+      :> X86.Popq @@ [(:%) X86.Rbp]
+      :> X86.Retq @@ []

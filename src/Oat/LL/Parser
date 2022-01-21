@@ -1,0 +1,10 @@
+{
+module Oat.LL.Parser where
+
+import Oat.LL.Token
+import qualified Oat.LL.Token.Kind as Kind
+}
+
+%name ll
+%tokentype { Token }
+%error othisthi

@@ -3,6 +3,7 @@
 
 module Oat.LL.AST where
 
+import Oat.LL.LexerWrapper
 import Oat.Common
 import Oat.LL.Name (Name)
 import Optics

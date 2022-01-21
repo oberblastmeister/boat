@@ -111,6 +111,8 @@ data Ins = Ins
 (@@) :: OpCode -> [Operand] -> Ins
 (@@) _opcode _operands = Ins {_opcode, _operands}
 
+infix 9 @@
+
 data Data
   = Asciz !Text
   | Quad !Imm

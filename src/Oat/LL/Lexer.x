@@ -1,23 +1,29 @@
 {
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Oat.LL.Lexer where
+module Oat.LL.Lexer (alexMonadScan) where
 
 import OldPrelude
+import Data.Void (Void)
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Data.Function ((&))
 import Oat.LL.LexerWrapper
-import qualified Oat.LL.Token.Kind as TK
+import qualified Oat.LL.Token.Kind as Kind
 import Oat.LL.Token (Token(..))
 import qualified Data.Text as T
 import Data.Text (Text)
+import qualified Data.Text.Read as Text.Read
 import Data.Maybe (fromJust)
 import GHC.Records
 import Debug.Trace
 import qualified Oat.Span as Span
 import Oat.LL.Token.Kind (Kind)
 import Optics
+import Optics.Operators
+import Optics.Operators.Unsafe ((^?!))
+import qualified Text.Builder
+import Optics.State.Operators
 }
 
 $digit = [0-9]
@@ -32,87 +38,76 @@ $newline = [\n]
 tokens :-
   <0> $newline { skip }
   <0> $white+ { skip }
-  -- <0> "c\"" { start string }
-  <0> "*" { tk TK.Star }
-  <0> "," { tk TK.Comma }
-  <0> ":" { tk TK.Colon }
-  <0> "=" { tk TK.Equals }
-  <0> "(" { tk TK.LParen }
-  <0> ")" { tk TK.RParen }
-  <0> "{" { tk TK.LBrace }
-  <0> "}" { tk TK.RBrace }
-  <0> "[" { tk TK.LBracket }
-  <0> "]" { tk TK.RBracket }
-  <0> "i1" { tk TK.I1 }
-  <0> "i8" { tk TK.I8 }
-  <0> "i32" { tk TK.I32 }
-  <0> "i64" { tk TK.I64 }
-  <0> "to" { tk TK.To }
-  <0> "br" { tk TK.Br }
-  <0> "eq" { tk TK.Eq }
-  <0> "ne" { tk TK.NEq }
-  <0> "or" { tk TK.Or }
-  <0> "and" { tk TK.And }
-  <0> "add" { tk TK.Add }
-  <0> "sub" { tk TK.Sub }
-  <0> "mul" { tk TK.Mul }
-  <0> "xor" { tk TK.Xor }
-  <0> "slt" { tk TK.Slt }
-  <0> "sle" { tk TK.Sle }
-  <0> "sgt" { tk TK.Sgt }
-  <0> "sge" { tk TK.Sge }
-  <0> "shl" { tk TK.Shl }
-  <0> "ret" { tk TK.Ret }
-  <0> "getelementptr" { tk TK.Gep }
-  <0> "type" { tk TK.Type }
-  <0> "null" { tk TK.Null }
-  <0> "lshr" { tk TK.Lshr }
-  <0> "ashr" { tk TK.Ashr }
-  <0> "call" { tk TK.Call }
-  <0> "icmp" { tk TK.Icmp }
-  <0> "void" { tk TK.Void }
-  <0> "load" { tk TK.Load }
-  <0> "entry" { tk TK.Entry }
-  <0> "store" { tk TK.Store }
-  <0> "label" { tk TK.Label }
-  <0> "global" { tk TK.Global }
-  <0> "define" { tk TK.Define }
-  <0> "declare" { tk TK.Declare }
-  <0> "external" { tk TK.External }
-  <0> "alloca" { tk TK.Alloca }
-  <0> "bitcast" { tk TK.Bitcast }
-  <0> "%" "."? @ident { stringTK TK.Uid }
-  <0> "@" "."? @ident { stringTK TK.Gid }
-  <0> "x" { tk TK.Cross }
-  -- TODO: fix this
-  <0> "-"? $digit+ { stringTK $ TK.Int . undefined }
-  <0> @ident { stringTK $ TK.Lab }
+  <0> c \"  { start string } -- "
+  <0> "*" { kind Kind.Star }
+  <0> "," { kind Kind.Comma }
+  <0> ":" { kind Kind.Colon }
+  <0> "=" { kind Kind.Equals }
+  <0> "(" { kind Kind.LParen }
+  <0> ")" { kind Kind.RParen }
+  <0> "{" { kind Kind.LBrace }
+  <0> "}" { kind Kind.RBrace }
+  <0> "[" { kind Kind.LBracket }
+  <0> "]" { kind Kind.RBracket }
+  <0> "i1" { kind Kind.I1 }
+  <0> "i8" { kind Kind.I8 }
+  <0> "i32" { kind Kind.I32 }
+  <0> "i64" { kind Kind.I64 }
+  <0> "to" { kind Kind.To }
+  <0> "br" { kind Kind.Br }
+  <0> "eq" { kind Kind.Eq }
+  <0> "ne" { kind Kind.NEq }
+  <0> "or" { kind Kind.Or }
+  <0> "and" { kind Kind.And }
+  <0> "add" { kind Kind.Add }
+  <0> "sub" { kind Kind.Sub }
+  <0> "mul" { kind Kind.Mul }
+  <0> "xor" { kind Kind.Xor }
+  <0> "slt" { kind Kind.Slt }
+  <0> "sle" { kind Kind.Sle }
+  <0> "sgt" { kind Kind.Sgt }
+  <0> "sge" { kind Kind.Sge }
+  <0> "shl" { kind Kind.Shl }
+  <0> "ret" { kind Kind.Ret }
+  <0> "getelementptr" { kind Kind.Gep }
+  <0> "type" { kind Kind.Type }
+  <0> "null" { kind Kind.Null }
+  <0> "lshr" { kind Kind.Lshr }
+  <0> "ashr" { kind Kind.Ashr }
+  <0> "call" { kind Kind.Call }
+  <0> "icmp" { kind Kind.Icmp }
+  <0> "void" { kind Kind.Void }
+  <0> "load" { kind Kind.Load }
+  <0> "entry" { kind Kind.Entry }
+  <0> "store" { kind Kind.Store }
+  <0> "label" { kind Kind.Label }
+  <0> "global" { kind Kind.Global }
+  <0> "define" { kind Kind.Define }
+  <0> "declare" { kind Kind.Declare }
+  <0> "external" { kind Kind.External }
+  <0> "alloca" { kind Kind.Alloca }
+  <0> "bitcast" { kind Kind.Bitcast }
+  <0> "%" "."? @ident { stringKind Kind.Uid }
+  <0> "@" "."? @ident { stringKind Kind.Gid }
+  <0> "x" { kind Kind.Cross }
+  <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
+  <0> @ident { stringKind $ Kind.Lab }
   <0> ";" [^ \n \r]* $newline { skip }
   <0> "declare" [^ \n \r]* $newline { skip }
-
-  <0> .
+  <string> \\ { do #user % #stringBuilder %= (<> Text.Builder.char '\\'); skip }
+  <string> [^ \" \\]+ -- "
     { do
-        tokText <- asks tokText
-        pure $ Left $ "Unkown token: " <> tokText
+        text <- asks (^. #text)
+        #user % #stringBuilder %= (<> Text.Builder.text text)
+        skip
     }
+  <string> \\ 00 \" { endString } -- "
+  <string> . { do text <- asks (^. #text); pure $ Left $ "Unknown string character " <> text }
+  <0> . { do text <- asks (^. #text); pure $ Left $ "Unkown token: " <> text }
     
 {
   
-type Lexeme = Either Text Token
-
-tk :: Kind -> AlexAction Lexeme
-tk = pure . Right . Token
-
-stringTK :: (Text -> Kind) -> AlexAction Lexeme
-stringTK f = do
-  tokText <- asks tokText
-  pure $ Right $ Token $ f tokText
-
-alexEOF :: Token
-alexEOF = Token TK.Eof
-
-dbg :: Show a => a -> a
-dbg x = trace ("DBG: " ++ show x) x
+type Dummy = Void
 
 skip :: AlexAction Lexeme
 skip = lift $ alexMonadScan
@@ -121,6 +116,12 @@ start :: Int -> AlexAction Lexeme
 start sc = lift $ do
   alexSetStartCode sc
   alexMonadScan
+
+endString :: AlexAction Lexeme
+endString = do
+  str <- #user % #stringBuilder <<.= ""
+  lift $ alexSetStartCode 0
+  pure $ Right $ Token $ Kind.String $ Text.Builder.run str
 
 alexMonadScan :: Alex Lexeme
 alexMonadScan = do
@@ -135,10 +136,10 @@ alexMonadScan = do
       alexMonadScan
     AlexToken inp' len action -> do
       alexSetInput inp'
-      let tokText = T.take len $ inpText inp
+      let text = T.take len $ inpText inp
           pos1 = inpPos inp
           pos2 = inpPos inp'
           span = Span.mkSpan pos1 pos2
-          env = AlexEnv { tokText, span }
+          env = AlexEnv text span
       runReaderT action env
 }
