@@ -3,14 +3,14 @@
 
 module Oat.LL.Lexer (alexMonadScan) where
 
-import OldPrelude
+import OldPrelude as Prelude
 import Data.Void (Void)
 import Control.Monad.Writer
 import Control.Monad.Reader
 import Data.Function ((&))
 import Oat.LL.LexerWrapper
 import qualified Oat.LL.Token.Kind as Kind
-import Oat.LL.Token (Token(..))
+import Oat.LL.Token (Token(Token))
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified Data.Text.Read as Text.Read

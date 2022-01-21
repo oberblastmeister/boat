@@ -70,7 +70,7 @@ common common-options
     -Wredundant-constraints
     -Wno-name-shadowing
   build-depends:
-    base ^>= 4.14.3.0,
+    base >=4.12 && <5,
     relude ^>= 1.0.0.0,
     template-haskell >= 2.16.0.0 && < 2.19.0.0,
     optics ^>= 0.4,
@@ -125,6 +125,7 @@ library
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer
+    Oat.LL.Parser
     Oat.LL.AST
     Oat.LL.Name
     Oat.LL.LexerWrapper

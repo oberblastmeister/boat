@@ -33,7 +33,7 @@ makeLexer name defName = do
         stateCh :: !Char,
         stateBytes :: !ByteString,
         stateScd :: !Int, -- the current startcode
-        user :: $(con)
+        user :: $con
       }
 
     newtype Alex a = Alex {unAlex :: (StateT AlexState Identity) a}
@@ -46,12 +46,12 @@ makeLexer name defName = do
 
     type AlexAction a = ReaderT AlexEnv Alex a
 
-    instance LabelOptic "user" A_Lens AlexState AlexState $(con) $(con) where
+    instance LabelOptic "user" A_Lens AlexState AlexState $con $con where
       labelOptic = lens user (\s user -> s {user})
 
     instance LabelOptic "text" A_Lens AlexEnv AlexEnv Text Text where
       labelOptic = lensVL $ \f (AlexEnv text span) -> fmap (`AlexEnv` span) (f text)
-
+    
     alexStartPos :: Pos
     alexStartPos = Pos 1 1
 

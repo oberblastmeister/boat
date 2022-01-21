@@ -201,7 +201,7 @@ data GInit
   | GStruct [GDecl]
   deriving (Show, Eq)
 
-data GDecl = GDecl Ty GInit
+data GDecl = GDecl {ty :: Ty, gInit :: GInit}
   deriving (Show, Eq)
 
 data Prog = Prog

@@ -27,7 +27,7 @@ module Oat.LL.LexerWrapper
   )
 where
 
-import Oat.LL.Token (Token (..))
+import Oat.LL.Token (Token (Token))
 import Oat.LL.Token.Kind (Kind)
 import qualified Oat.LL.Token.Kind as TK
 import Oat.Wrappers.Lexer (makeLexer)
