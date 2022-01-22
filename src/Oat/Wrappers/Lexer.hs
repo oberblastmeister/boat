@@ -17,7 +17,7 @@ import Optics
 import qualified Relude.Unsafe as Unsafe
 
 makeLexer :: TH.Name -> TH.Name -> TH.DecsQ
-makeLexer name defName = do
+makeLexer name defUserState = do
   [d|
     data AlexInput = AlexInput
       { inpPos :: !Pos,
@@ -51,7 +51,7 @@ makeLexer name defName = do
 
     instance LabelOptic "text" A_Lens AlexEnv AlexEnv Text Text where
       labelOptic = lensVL $ \f (AlexEnv text span) -> fmap (`AlexEnv` span) (f text)
-    
+
     alexStartPos :: Pos
     alexStartPos = Pos 1 1
 
@@ -74,7 +74,7 @@ makeLexer name defName = do
           stateText,
           stateCh = '\n',
           stateScd = 0,
-          user = $(TH.varE defName)
+          user = $(TH.varE defUserState)
         }
 
     -- These two functions are needed for alex to work

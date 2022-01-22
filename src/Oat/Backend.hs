@@ -5,7 +5,7 @@ module Oat.Backend where
 
 import Control.Exception (assert)
 import qualified Control.Monad as Monad
-import Data.List ((!!))
+import qualified Data.List.NonEmpty as NE
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
 import Oat.Common (internalError, (++>), pattern (:>))
@@ -167,7 +167,7 @@ compileGep Alloc.GepIns {loc, ty, arg, args} = do
           (LL.TyStruct tys, Alloc.Const i) -> do
             offset <- structOffset (fromIntegral i) tys
             emitIns [X86.Addq @@ [(:$) $ fromIntegral offset, (:%) X86.Rax]]
-            pure (tys !! fromIntegral i)
+            pure (tys NE.!! fromIntegral i)
           (LL.TyArray _ ty, Alloc.Const 0) -> pure ty
           (LL.TyArray _ ty, _) -> do
             emitMov ((:%) X86.Rax) ((:%) X86.Rcx)
@@ -184,9 +184,9 @@ compileGep Alloc.GepIns {loc, ty, arg, args} = do
     args
   emitMov ((:%) X86.Rax) (compileLoc loc)
 
-structOffset :: MonadBackend m => Int -> [LL.Ty] -> m Int
+structOffset :: MonadBackend m => Int -> NonEmpty LL.Ty -> m Int
 structOffset i tys =
-  take i tys
+  NE.take i tys
     & Monad.foldM
       ( \offset ty -> do
           size <- tySize ty

@@ -9,6 +9,7 @@ import qualified Oat.LL.AST as LL.AST
 import qualified Oat.X86.AST as X86
 import Optics
 import Optics.Operators
+import Oat.Wrappers.Lexer
 
 data Loc
   = LVoid

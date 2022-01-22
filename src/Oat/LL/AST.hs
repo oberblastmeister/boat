@@ -3,8 +3,8 @@
 
 module Oat.LL.AST where
 
-import Oat.LL.LexerWrapper
 import Oat.Common
+import Oat.LL.LexerWrapper
 import Oat.LL.Name (Name)
 import Optics
 
@@ -17,11 +17,11 @@ data Ty
   | TyFun FunTy
   | TyNamed !Name
   | TyArray !Int Ty
-  | TyStruct [Ty]
+  | TyStruct (NonEmpty Ty)
   deriving (Show, Eq)
 
 data FunTy = FunTy
-  { args :: [Ty],
+  { args :: NonEmpty Ty,
     ret :: Ty
   }
   deriving (Show, Eq)
