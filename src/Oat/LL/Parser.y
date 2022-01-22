@@ -2,8 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Oat.LL.Parser
-  (
-    prog,
+  ( prog,
   )
 where
 
@@ -93,9 +92,20 @@ Decl :: { Decl }
   : GlobalDecl { $1 }
   | TyDecl { $1 }
   | ExternDecl { $1 }
+  | FunDecl { $1 }
   
--- FunDecl :: { Decl }
---     : define Ty gid '(' ParamList ')' '{' EntryBlock List(Block) '}' { FunDecl {funTy = FunTy {args = map fst $5, ret = $2}, params = map snd $5, cfg = } }
+FunDecl :: { Decl }
+  : define Ty gid '(' ParamList ')' '{' EntryBlock List(LabBlock) '}'
+    { DeclFun
+        { name = $3,
+          funDecl = 
+            FunDecl
+              { funTy = FunTy {args = map fst $5, ret = $2},
+                params = map snd $5,
+                cfg = FunBody {entry = $8, labeled = $9}
+              }
+        }
+    }
 
 ParamList :: { [(Ty, Name)] }
   : ListSep(Param, ',') { $1 }
@@ -104,11 +114,16 @@ Param :: { (Ty, Name) }
   : Ty uid { ($1, $2) }
 
 ExternDecl :: { Decl }
-  : declare Ty gid '(' TyList ')' { Decl {kind = DeclExtern, name = $3, ty = TyFun FunTy {args = $5, ret = $2}}}
-  | gid '=' external global Ty { Decl {kind = DeclExtern, name = $1, ty = $5} }
+  : declare Ty gid '(' TyList ')' { DeclExtern {name = $3, ty = TyFun FunTy {args = $5, ret = $2}}}
+  | gid '=' external global Ty { DeclExtern {name = $1, ty = $5} }
 
 GlobalDecl :: { Decl }
-  : gid '=' global Ty GlobalInit { Decl {kind = DeclGlobal, name = $1, ty = $4} }
+  : gid '=' global Ty GlobalInit
+    { DeclGlobal
+        { name = $1,
+          globalDecl = GlobalDecl {ty = $4, globalInit = $5}
+        }
+    }
   
 GlobalInit :: { GlobalInit }
   : null { GlobalNull }
@@ -118,14 +133,14 @@ GlobalInit :: { GlobalInit }
   | '[' GlobalDeclList ']' { GlobalArray $2 }
   | '{' GlobalDeclList '}' { GlobalStruct $2 }
   
-GlobalDeclList :: { [GDecl] }
+GlobalDeclList :: { [GlobalDecl] }
   : ListSep(InsideArrayGlobalDecl, ',') { $1 }
 
-InsideArrayGlobalDecl :: { GDecl }
-  : Ty GlobalInit { GDecl {ty = $1, gInit = $2} }
+InsideArrayGlobalDecl :: { GlobalDecl }
+  : Ty GlobalInit { GlobalDecl {ty = $1, globalInit = $2} }
 
 TyDecl :: { Decl }
-  : uid '=' type Ty { Decl {kind = DeclTy, name = $1, ty = $4} }
+  : uid '=' type Ty { DeclTy {name = $1, ty = $4} }
 
 Ty :: { Ty }
   : Ty '*' { TyPtr $1 }

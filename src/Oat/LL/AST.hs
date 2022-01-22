@@ -187,6 +187,8 @@ data Named a
   | Do a
   deriving (Show, Eq, Data, Typeable, Generic)
 
+type WithName a = (Name, a)
+
 instance Hashable a => Hashable (Named a)
 
 data GlobalInit
@@ -194,20 +196,25 @@ data GlobalInit
   | GlobalGid !(ASCII ByteString)
   | GlobalInt !Int64
   | GlobalString !ByteString
-  | GlobalArray [GDecl]
-  | GlobalStruct [GDecl]
+  | GlobalArray [GlobalDecl]
+  | GlobalStruct [GlobalDecl]
   deriving (Show, Eq)
 
-data GDecl = GDecl {ty :: Ty, gInit :: GlobalInit}
+data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
   deriving (Show, Eq)
 
-data DeclKind
-  = DeclTy
-  | DeclGlobal
-  | DeclFun
-  | DeclExtern
+-- data FunDecl = FunDecl {name :: Name, FunDecl}
+-- data DeclKind
+--   = DeclTy
+--   | DeclGlobal
+--   | DeclFun
+--   | DeclExtern
 
-data Decl = Decl {kind :: DeclKind, name :: Name, ty :: Ty}
+data Decl
+  = DeclTy {name :: Name, ty :: Ty}
+  | DeclGlobal {name :: Name, globalDecl :: GlobalDecl}
+  | DeclFun {name :: Name, funDecl :: FunDecl}
+  | DeclExtern {name :: Name, ty :: Ty}
 
 data Prog = Prog
   { decls :: [Decl]

@@ -33,9 +33,3 @@ unwrap def =
 
 unreachable :: forall a. a
 unreachable = error "Unreachable!"
-
-assert :: Bool -> Text -> ()
-assert cond text =
-  if cond
-    then ()
-    else internalError text

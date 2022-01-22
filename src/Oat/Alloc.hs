@@ -4,13 +4,11 @@
 
 module Oat.Alloc where
 
+import Data.ASCII (ASCII)
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
-import Oat.Wrappers.Lexer
 import qualified Oat.X86.AST as X86
 import Optics
-import Optics.Operators
-import Data.ASCII (ASCII)
 
 data Loc
   = LVoid
@@ -111,8 +109,6 @@ data CbrIns = CbrIns
     loc1 :: !Loc,
     loc2 :: !Loc
   }
-
-newtype FunBody = FunBody [Ins]
 
 makeFieldLabelsNoPrefix ''AllocaIns
 makeFieldLabelsNoPrefix ''LoadIns

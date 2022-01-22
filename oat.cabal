@@ -69,6 +69,7 @@ common common-options
     -Wincomplete-uni-patterns
     -Wredundant-constraints
     -Wno-name-shadowing
+    -Werror=incomplete-patterns
   build-depends:
     base >=4.12 && <5,
     relude ^>= 1.0.0.0,

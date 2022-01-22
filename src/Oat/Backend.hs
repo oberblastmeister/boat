@@ -103,8 +103,8 @@ compileLoc (LReg r) = (:%) r
 compileLoc (LStack i) = X86.Ind3 (X86.Lit (fromIntegral i * 8)) X86.Rbp
 compileLoc (LLab l) = X86.Ind1 (X86.Lab l)
 
-compileFunBody :: MonadBackend m => Alloc.FunBody -> m ()
-compileFunBody (Alloc.FunBody insns) = for_ insns $ \ins -> do
+compileAlloc :: MonadBackend m => [Alloc.Ins] -> m ()
+compileAlloc insns = for_ insns $ \ins -> do
   case ins of
     Alloc.ILab (LLab l) -> emit [L l False]
     Alloc.ILab _ -> error "Malformed ILab"
