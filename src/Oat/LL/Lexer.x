@@ -23,6 +23,7 @@ import Optics
 import Optics.Operators
 import Optics.Operators.Unsafe ((^?!))
 import qualified Text.Builder
+import qualified Data.Text.Encoding as Text.Encoding
 import Optics.State.Operators
 }
 
@@ -56,7 +57,7 @@ tokens :-
   <0> "to" { kind Kind.To }
   <0> "br" { kind Kind.Br }
   <0> "eq" { kind Kind.Eq }
-  <0> "ne" { kind Kind.NEq }
+  <0> "ne" { kind Kind.Neq }
   <0> "or" { kind Kind.Or }
   <0> "and" { kind Kind.And }
   <0> "add" { kind Kind.Add }
@@ -87,11 +88,11 @@ tokens :-
   <0> "external" { kind Kind.External }
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
-  <0> "%" "."? @ident { stringKind Kind.Uid }
-  <0> "@" "."? @ident { stringKind Kind.Gid }
+  <0> "%" "."? @ident { unsafeASCIIKind Kind.Uid }
+  <0> "@" "."? @ident { unsafeASCIIKind Kind.Gid }
   <0> "x" { kind Kind.Cross }
   <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
-  <0> @ident { stringKind $ Kind.Lab }
+  <0> @ident { unsafeASCIIKind $ Kind.Lab }
   <0> ";" [^ \n \r]* $newline { skip }
   <0> "declare" [^ \n \r]* $newline { skip }
   <string> \\ { do #user % #stringBuilder %= (<> Text.Builder.char '\\'); skip }
@@ -121,7 +122,7 @@ endString :: AlexAction Lexeme
 endString = do
   str <- #user % #stringBuilder <<.= ""
   lift $ alexSetStartCode 0
-  pure $ Right $ Token $ Kind.String $ Text.Builder.run str
+  pure $ Right $ Token $ Kind.String $ Text.Encoding.encodeUtf8 $ Text.Builder.run str
 
 alexMonadScan :: Alex Lexeme
 alexMonadScan = do

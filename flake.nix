@@ -21,6 +21,7 @@
             haskell.compiler.ghc902
             ormolu
             haskell-language-server
+            clang_13
           ];
         };
       }

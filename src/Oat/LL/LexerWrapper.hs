@@ -23,10 +23,14 @@ module Oat.LL.LexerWrapper
     User (..),
     kind,
     stringKind,
+    unsafeASCIIKind,
     alexEOF,
   )
 where
 
+import Data.ASCII (ASCII)
+import qualified Data.ASCII as ASCII
+import qualified Data.Text.Encoding as Text.Encoding
 import Oat.LL.Token (Token (Token))
 import Oat.LL.Token.Kind (Kind)
 import qualified Oat.LL.Token.Kind as TK
@@ -52,8 +56,13 @@ kind = pure . Right . Token
 
 stringKind :: (Text -> Kind) -> AlexAction Lexeme
 stringKind f = do
-  text <- asks (^. #text)
+  text <- gview #text
   pure $ Right $ Token $ f text
+
+unsafeASCIIKind :: (ASCII ByteString -> Kind) -> AlexAction Lexeme
+unsafeASCIIKind f = do
+  text <- gview #text
+  pure $ Right $ Token $ f $ ASCII.unsafeToASCII $ Text.Encoding.encodeUtf8 text
 
 alexEOF :: Token
 alexEOF = Token TK.Eof

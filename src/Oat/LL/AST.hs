@@ -3,9 +3,9 @@
 
 module Oat.LL.AST where
 
+import Data.ASCII (ASCII)
+import Data.Data (Data)
 import Oat.Common
-import Oat.LL.LexerWrapper
-import Oat.LL.Name (Name)
 import Optics
 
 data Ty
@@ -17,18 +17,20 @@ data Ty
   | TyFun FunTy
   | TyNamed !Name
   | TyArray !Int Ty
-  | TyStruct (NonEmpty Ty)
+  | TyStruct [Ty]
   deriving (Show, Eq)
 
 data FunTy = FunTy
-  { args :: NonEmpty Ty,
+  { args :: [Ty],
     ret :: Ty
   }
   deriving (Show, Eq)
 
-type TyMap = HashMap Name Ty
+type Name = ASCII ByteString
 
-lookupTy :: Name -> TyMap -> Ty
+type TyMap = HashMap (ASCII ByteString) Ty
+
+lookupTy :: ASCII ByteString -> TyMap -> Ty
 lookupTy name mp = mp ^. at name % unwrap (internalError $ "Could not find name " <> show name <> " in map")
 
 -- note, for this to be valid, you must not change the type for TyNamed
@@ -118,7 +120,7 @@ data IcmpIns = IcmpIns
 data CallIns = CallIns
   { ty :: Ty,
     fn :: Operand,
-    args :: [Operand]
+    args :: [(Ty, Operand)]
   }
   deriving (Show, Eq)
 
@@ -131,8 +133,8 @@ data BitcastIns = BitcastIns
 
 data GepIns = GepIns
   { ty :: Ty,
-    arg1 :: Operand,
-    arg2 :: Operand
+    arg :: Operand,
+    args :: [Operand]
   }
   deriving (Show, Eq)
 
@@ -157,7 +159,7 @@ data CbrTerm = CbrTerm
 
 data Block = Block
   { ins :: [Named Ins],
-    terminator :: Named Terminator
+    terminator :: Terminator
   }
   deriving (Show, Eq)
 
@@ -181,36 +183,35 @@ data FunDecl = FunDecl
   deriving (Show, Eq)
 
 data Named a
-  = Named !Name a
+  = Named Name a
   | Do a
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Data, Typeable, Generic)
 
 instance Hashable a => Hashable (Named a)
 
-pattern (:=) :: Name -> a -> Named a
-pattern name := a = Named name a
-
-{-# COMPLETE (:=) #-}
-
-data GInit
-  = GNull
-  | GGid !Name
-  | GInt
-  | GString !Name
-  | GArray [GDecl]
-  | GStruct [GDecl]
+data GlobalInit
+  = GlobalNull
+  | GlobalGid !(ASCII ByteString)
+  | GlobalInt !Int64
+  | GlobalString !ByteString
+  | GlobalArray [GDecl]
+  | GlobalStruct [GDecl]
   deriving (Show, Eq)
 
-data GDecl = GDecl {ty :: Ty, gInit :: GInit}
+data GDecl = GDecl {ty :: Ty, gInit :: GlobalInit}
   deriving (Show, Eq)
+
+data DeclKind
+  = DeclTy
+  | DeclGlobal
+  | DeclFun
+  | DeclExtern
+
+data Decl = Decl {kind :: DeclKind, name :: Name, ty :: Ty}
 
 data Prog = Prog
-  { tyDecls :: [Named Ty],
-    globalDecls :: [Named GDecl],
-    funDecls :: [Named FunDecl],
-    externalDecls :: [Named Ty]
+  { decls :: [Decl]
   }
-  deriving (Show, Eq)
 
 makeFieldLabelsNoPrefix ''LoadIns
 makeFieldLabelsNoPrefix ''StoreIns

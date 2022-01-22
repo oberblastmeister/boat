@@ -5,13 +5,13 @@ module Oat.Backend where
 
 import Control.Exception (assert)
 import qualified Control.Monad as Monad
-import qualified Data.List.NonEmpty as NE
+import Data.ASCII (ASCII)
+import Data.List ((!!))
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
 import Oat.Common (internalError, (++>), pattern (:>))
 import Oat.Fold (paraOf)
 import qualified Oat.LL.AST as LL
-import qualified Oat.LL.Name as LL
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
 import Optics hiding ((:>))
@@ -24,7 +24,7 @@ import Prelude hiding (Const)
 -- the instructions that come in should probably be a Seq
 data BackendState = BackendState
   { insStream :: X86Stream,
-    tyDecls :: HashMap LL.Name LL.Ty
+    tyDecls :: HashMap (ASCII ByteString) LL.Ty
   }
 
 type BackendM = State BackendState
@@ -33,7 +33,7 @@ type MonadBackend = (MonadState BackendState)
 
 data X86Elt
   = I X86.Ins
-  | L !ByteString !Bool -- label, whether global or not
+  | L !(ASCII ByteString) !Bool -- label, whether global or not
 
 type X86Stream = [X86Elt]
 
@@ -63,7 +63,7 @@ emitMov src dst = case (src, dst) of
   where
     mov = emitIns [X86.Movq @@ [src, dst]]
 
-tySize' :: HashMap LL.Name LL.Ty -> LL.Ty -> Int
+tySize' :: HashMap (ASCII ByteString) LL.Ty -> LL.Ty -> Int
 tySize' tyDecls =
   paraOf (LL.plateTy tyDecls) go
   where
@@ -86,7 +86,7 @@ tySize ty = do
   tyDecls <- use #tyDecls
   pure $ tySize' tyDecls ty
 
-lookupTy :: MonadBackend m => LL.Name -> m LL.Ty
+lookupTy :: MonadBackend m => ASCII ByteString -> m LL.Ty
 lookupTy name = do
   mp <- use #tyDecls
   pure $ LL.lookupTy name mp
@@ -167,7 +167,7 @@ compileGep Alloc.GepIns {loc, ty, arg, args} = do
           (LL.TyStruct tys, Alloc.Const i) -> do
             offset <- structOffset (fromIntegral i) tys
             emitIns [X86.Addq @@ [(:$) $ fromIntegral offset, (:%) X86.Rax]]
-            pure (tys NE.!! fromIntegral i)
+            pure (tys !! fromIntegral i)
           (LL.TyArray _ ty, Alloc.Const 0) -> pure ty
           (LL.TyArray _ ty, _) -> do
             emitMov ((:%) X86.Rax) ((:%) X86.Rcx)
@@ -184,9 +184,9 @@ compileGep Alloc.GepIns {loc, ty, arg, args} = do
     args
   emitMov ((:%) X86.Rax) (compileLoc loc)
 
-structOffset :: MonadBackend m => Int -> NonEmpty LL.Ty -> m Int
+structOffset :: MonadBackend m => Int -> [LL.Ty] -> m Int
 structOffset i tys =
-  NE.take i tys
+  take i tys
     & Monad.foldM
       ( \offset ty -> do
           size <- tySize ty

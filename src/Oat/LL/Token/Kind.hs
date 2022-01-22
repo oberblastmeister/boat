@@ -1,5 +1,7 @@
 module Oat.LL.Token.Kind where
 
+import Data.ASCII (ASCII)
+
 data Kind
   = Star
   | Comma
@@ -19,7 +21,7 @@ data Kind
   | To
   | Br
   | Eq
-  | NEq
+  | Neq
   | Or
   | And
   | Add
@@ -51,9 +53,9 @@ data Kind
   | Bitcast
   | Gep
   | Int !Int
-  | Lab !Text
-  | Gid !Text
-  | Uid !Text
-  | String !Text
+  | Lab !(ASCII ByteString)
+  | Gid !(ASCII ByteString)
+  | Uid !(ASCII ByteString)
+  | String !ByteString
   | Eof
   deriving (Show, Eq)

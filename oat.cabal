@@ -93,7 +93,6 @@ common common-options
     recursion-schemes ^>= 5.2.2.2,
     prettyprinter ^>= 1.7.1,
     pretty-simple ^>= 4.0.0.0,
-    ascii ^>= 1.1.1.2,
     typed-process ^>= 0.2.8.0,
     optparse-applicative ^>= 0.16.1.0
   build-tool-depends:
@@ -110,6 +109,7 @@ library
   import: common-options
   hs-source-dirs: src
   exposed-modules:
+    Data.ASCII
     Oat
     Oat.Span
     Oat.Fold
@@ -127,7 +127,6 @@ library
     Oat.LL.Lexer
     Oat.LL.Parser
     Oat.LL.AST
-    Oat.LL.Name
     Oat.LL.LexerWrapper
     Oat.LL.ParserWrapper
     Oat.X86.AST

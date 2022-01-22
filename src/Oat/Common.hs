@@ -1,15 +1,12 @@
 module Oat.Common
   ( (++>),
     pattern (:>),
-    ascii,
     internalError,
     unwrap,
     unreachable,
   )
 where
 
-import ASCII (ASCII)
-import qualified ASCII
 import Optics hiding ((:>))
 
 infixl 4 :>
@@ -21,11 +18,6 @@ pattern xs :> x <- x : xs where xs :> x = x : xs
 
 (++>) :: [a] -> [a] -> [a]
 (++>) l l' = l' ++ l
-
-ascii :: ASCII.StringSuperset s => s -> ASCII s
-ascii s = case ASCII.validateString s of
-  Nothing -> error "Oat.Common.ascii: The string was not ascii!"
-  Just s -> s
 
 internalError :: forall a. HasCallStack => Text -> a
 internalError t = error $ "Internal compiler error: " <> t

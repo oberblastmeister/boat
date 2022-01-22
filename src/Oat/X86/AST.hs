@@ -21,16 +21,16 @@ module Oat.X86.AST
   )
 where
 
-import ASCII (ASCII)
+import Data.ASCII (ASCII, ToASCII (toASCII))
 import qualified Data.Text.Encoding as T
-import Oat.Common (ascii)
-import qualified Optics as O
+import Optics
+import Optics.Operators.Unsafe ((^?!))
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
 
 data Imm
   = Lit !Int64
-  | Lab !ByteString
+  | Lab !(ASCII ByteString)
   deriving (Show, Eq)
 
 data Reg
@@ -103,13 +103,13 @@ data OpCode
   deriving (Show, Eq)
 
 data Ins = Ins
-  { _opcode :: !OpCode,
-    _operands :: ![Operand]
+  { opcode :: !OpCode,
+    operands :: ![Operand]
   }
   deriving (Show, Eq, Generic)
 
 (@@) :: OpCode -> [Operand] -> Ins
-(@@) _opcode _operands = Ins {_opcode, _operands}
+(@@) opcode operands = Ins {opcode, operands}
 
 infix 9 @@
 
@@ -124,17 +124,17 @@ data Asm
   deriving (Show, Eq)
 
 data Elem = Elem
-  { _lab :: !(ASCII ByteString),
-    _global :: !Bool,
-    _asm :: !Asm
+  { lab :: !(ASCII ByteString),
+    global :: !Bool,
+    asm :: !Asm
   }
   deriving (Show, Eq, Generic)
 
 newtype Prog = Prog [Elem]
   deriving (Show, Eq)
 
-O.makeFieldLabelsNoPrefix ''Ins
-O.makeFieldLabelsNoPrefix ''Elem
+makeFieldLabelsNoPrefix ''Ins
+makeFieldLabelsNoPrefix ''Elem
 
 instance Pretty Reg where
   pretty = \case
@@ -239,15 +239,15 @@ prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperand' pretty
 
 instance Pretty Ins where
-  pretty Ins {_opcode, _operands} = case _opcode of
+  pretty Ins {opcode, operands} = case opcode of
     Shlq -> handleShift
     Sarq -> handleShift
     Shrq -> handleShift
-    _ -> "\t" <> pretty _opcode <> "\t" <> P.hsep (P.punctuate P.comma (f <$> _operands))
+    _ -> "\t" <> pretty opcode <> "\t" <> P.hsep (P.punctuate P.comma (f <$> operands))
     where
-      handleShift = prettyShift _opcode _operands
+      handleShift = prettyShift opcode operands
 
-      f = case _opcode of
+      f = case opcode of
         J _ -> prettyJmpOperand
         Jmp -> prettyJmpOperand
         Callq -> prettyJmpOperand
@@ -271,14 +271,14 @@ instance Pretty Asm where
   pretty (Data ds) = "\t.data\n" <> P.vsep (pretty <$> ds)
 
 instance Pretty Elem where
-  pretty Elem {_lab, _global, _asm} =
-    sec <> glb <> P.viaShow _lab <> ":\n" <> body
+  pretty Elem {lab, global, asm} =
+    sec <> glb <> P.viaShow lab <> ":\n" <> body
     where
       glb =
-        if _global
-          then "\t.global\t" <> P.viaShow _lab <> "\n"
+        if global
+          then "\t.global\t" <> P.viaShow lab <> "\n"
           else ""
-      (sec, body) = case _asm of
+      (sec, body) = case asm of
         Text is -> ("\t.text\n", P.vsep (pretty <$> is))
         Data ds -> ("\t.data\n", P.vsep (pretty <$> ds))
 
@@ -286,13 +286,13 @@ instance Pretty Prog where
   pretty (Prog elems) = P.vsep (pretty <$> elems)
 
 dat :: ASCII ByteString -> [Data] -> Elem
-dat _lab ds = Elem {_lab, _global = True, _asm = Data ds}
+dat lab ds = Elem {lab, global = True, asm = Data ds}
 
 text :: ASCII ByteString -> [Ins] -> Elem
-text _lab is = Elem {_lab, _global = False, _asm = Text is}
+text lab is = Elem {lab, global = False, asm = Text is}
 
 gText :: ASCII ByteString -> [Ins] -> Elem
-gText _lab is = Elem {_lab, _global = True, _asm = Text is}
+gText lab is = Elem {lab, global = True, asm = Text is}
 
 pattern (:%) :: Reg -> Operand
 pattern (:%) r = Reg r
@@ -304,7 +304,7 @@ pattern (:$) i = Imm (Lit i)
 
 {-# COMPLETE (:$) #-}
 
-pattern (:$$) :: ByteString -> Operand
+pattern (:$$) :: ASCII ByteString -> Operand
 pattern (:$$) l = Imm (Lab l)
 
 {-# COMPLETE (:$$) #-}
@@ -313,7 +313,7 @@ p1 :: Prog
 p1 =
   Prog
     [ text
-        (ascii "foo")
+        (toASCII "foo" ^?! _Just)
         [ Ins Xorq [(:%) Rax, (:%) Rax],
           Ins Movq [(:$) 100, Reg Rax],
           Ins Retq []

@@ -6,22 +6,23 @@ module Oat.Alloc where
 
 import Oat.LL.AST (Ty)
 import qualified Oat.LL.AST as LL.AST
+import Oat.Wrappers.Lexer
 import qualified Oat.X86.AST as X86
 import Optics
 import Optics.Operators
-import Oat.Wrappers.Lexer
+import Data.ASCII (ASCII)
 
 data Loc
   = LVoid
   | LReg !X86.Reg
   | LStack !Int
-  | LLab !ByteString
+  | LLab !(ASCII ByteString)
   deriving (Show, Eq)
 
 data Operand
   = Null
   | Const !Int64
-  | Gid !ByteString
+  | Gid !(ASCII ByteString)
   | Loc !Loc
   deriving (Show, Eq)
 
