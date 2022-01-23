@@ -9,8 +9,9 @@ import Data.ASCII (ASCII)
 import Data.List ((!!))
 import Oat.Alloc (Loc (..), Operand (..))
 import qualified Oat.Alloc as Alloc
-import Oat.Common (internalError, (++>), pattern (:>))
+import Oat.Common (internalError, unreachable, (++>), pattern (:>))
 import Oat.Fold (paraOf)
+import Oat.LL.AST (Named (Do), pattern (:=))
 import qualified Oat.LL.AST as LL
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
@@ -98,7 +99,6 @@ compileOperand (Gid l) = (:$$) l
 compileOperand (Loc loc) = compileLoc loc
 
 compileLoc :: Alloc.Loc -> X86.Operand
-compileLoc LVoid = error "compiling uid without location"
 compileLoc (LReg r) = (:%) r
 compileLoc (LStack i) = X86.Ind3 (X86.Lit (fromIntegral i * 8)) X86.Rbp
 compileLoc (LLab l) = X86.Ind1 (X86.Lab l)
@@ -143,15 +143,17 @@ compileAlloc insns = for_ insns $ \ins -> do
     Alloc.Cbr ins -> compileCbr ins
 
 compileCall :: MonadBackend m => Alloc.CallIns -> m ()
-compileCall Alloc.CallIns {loc, ty, arg, args} = do
+compileCall Alloc.CallIns {loc, ty, fn, args} = do
   for_ (reverse $ zip [1 :: Int ..] args) $ \(i, (_, arg)) -> case X86.argReg i of
     Nothing -> emitIns [X86.Pushq @@ [compileOperand arg]]
     Just r -> emitMov (compileOperand arg) ((:%) r)
   let nStack = length args - 6
   emitIns $
-    [X86.Callq @@ [compileOperand arg]]
+    [X86.Callq @@ [compileOperand fn]]
       ++> [X86.Addq @@ [(:$) $ fromIntegral nStack, (:%) X86.Rsp] | nStack > 0]
-      ++> [X86.Movq @@ [(:%) X86.Rax, compileLoc loc] | ty /= LL.Void]
+      ++> case loc of
+        Nothing -> []
+        Just loc' -> [X86.Movq @@ [(:%) X86.Rax, compileLoc loc'] | ty /= LL.Void]
 
 compileGep :: MonadBackend m => Alloc.GepIns -> m ()
 compileGep Alloc.GepIns {loc, ty, arg, args} = do
@@ -195,17 +197,17 @@ structOffset i tys =
       0
 
 compileIcmp :: MonadBackend m => Alloc.IcmpIns -> m ()
-compileIcmp Alloc.IcmpIns {loc, cmpOp, arg1, arg2}
+compileIcmp Alloc.IcmpIns {loc, op, arg1, arg2}
   | Loc (LReg r) <- arg1 =
     emitIns $
       [X86.Cmpq @@ [compileOperand arg2, (:%) r]]
-        :> mapCmpOp cmpOp @@ [compileLoc loc]
+        :> mapCmpOp op @@ [compileLoc loc]
         :> X86.Andq @@ [(:$) 1, compileLoc loc]
   | otherwise = do
     emitMov (compileOperand arg1) ((:%) X86.Rax)
     emitIns $
       [X86.Cmpq @@ [compileOperand arg2, (:%) X86.Rax]]
-        :> mapCmpOp cmpOp @@ [compileLoc loc]
+        :> mapCmpOp op @@ [compileLoc loc]
         :> X86.Andq @@ [(:$) 1, compileLoc loc]
 
 compileBinOp :: MonadBackend m => Alloc.BinOpIns -> m ()
@@ -274,3 +276,95 @@ retIns =
     [X86.Movq @@ [(:%) X86.Rbp, (:%) X86.Rsp]]
       :> X86.Popq @@ [(:%) X86.Rbp]
       :> X86.Retq @@ []
+
+type GetLoc = LL.Name -> Loc
+
+type Mangler = ASCII ByteString -> ASCII ByteString
+
+funBodyToAlloc :: GetLoc -> Mangler -> LL.FunBody -> Alloc.FunBody
+funBodyToAlloc getLoc mangle LL.FunBody {entry, labeled} =
+  blockToAlloc getLoc mangle entry ++ concatMap (labBlockToAlloc getLoc mangle) labeled
+
+labBlockToAlloc :: GetLoc -> Mangler -> LL.LabBlock -> Alloc.FunBody
+labBlockToAlloc getLoc mangle LL.LabBlock {lab, block} =
+  Alloc.ILab (LLab $ mangle lab) : blockToAlloc getLoc mangle block
+
+blockToAlloc :: GetLoc -> Mangler -> LL.Block -> Alloc.FunBody
+blockToAlloc getLoc mangle LL.Block {ins, terminator} =
+  map (insToAlloc getLoc mangle) ins ++ [termToAlloc getLoc mangle terminator]
+
+operandToAlloc :: GetLoc -> Mangler -> LL.Operand -> Alloc.Operand
+operandToAlloc getLoc mangle = \case
+  LL.Null -> Alloc.Null
+  LL.Const i -> Alloc.Const i
+  LL.Gid x -> Alloc.Gid $ mangle x
+  LL.Temp x -> Alloc.Loc $ getLoc x
+
+insToAlloc :: GetLoc -> Mangler -> LL.Named LL.Ins -> Alloc.Ins
+insToAlloc getLoc mangle = \case
+  x := LL.BinOp LL.BinOpIns {op, ty, arg1, arg2} ->
+    Alloc.BinOp
+      Alloc.BinOpIns
+        { loc = getLoc x,
+          op,
+          ty,
+          arg1 = mo arg1,
+          arg2 = mo arg2
+        }
+  Do (LL.BinOp _) -> unreachable
+  x := LL.Alloca LL.AllocaIns {ty} ->
+    Alloc.Alloca Alloc.AllocaIns {loc = getLoc x, ty}
+  Do (LL.Alloca _) -> unreachable
+  x := LL.Load LL.LoadIns {ty, arg} ->
+    Alloc.Load Alloc.LoadIns {loc = getLoc x, ty, arg = mo arg}
+  Do (LL.Load _) -> unreachable
+  Do (LL.Store LL.StoreIns {ty, arg1, arg2}) ->
+    Alloc.Store Alloc.StoreIns {ty, arg1 = mo arg1, arg2 = mo arg2}
+  _ := (LL.Store _) -> unreachable
+  x := LL.Icmp LL.IcmpIns {op, ty, arg1, arg2} ->
+    Alloc.Icmp
+      Alloc.IcmpIns
+        { loc = getLoc x,
+          op,
+          ty,
+          arg1 = mo arg1,
+          arg2 = mo arg2
+        }
+  Do (LL.Icmp _) -> unreachable
+  x := LL.Call LL.CallIns {ty, fn, args} ->
+    Alloc.Call
+      Alloc.CallIns
+        { loc = Just $ getLoc x,
+          ty,
+          fn = mo fn,
+          args = args & mapped % _2 %~ mo
+        }
+  Do (LL.Call LL.CallIns {ty, fn, args}) ->
+    Alloc.Call
+      Alloc.CallIns
+        { loc = Nothing,
+          ty,
+          fn = mo fn,
+          args = args & mapped % _2 %~ mo
+        }
+  x := LL.Bitcast LL.BitcastIns {from, arg, to} ->
+    Alloc.Bitcast Alloc.BitcastIns {loc = getLoc x, from, arg = mo arg, to}
+  Do (LL.Bitcast _) -> unreachable
+  x := LL.Gep LL.GepIns {ty, arg, args} ->
+    Alloc.Gep Alloc.GepIns {loc = getLoc x, ty, arg = mo arg, args = args <&> mo}
+  where
+    mo = operandToAlloc getLoc mangle
+
+termToAlloc :: GetLoc -> Mangler -> LL.Terminator -> Alloc.Ins
+termToAlloc getLoc mangle = \case
+  LL.Ret LL.RetTerm {ty, arg} -> Alloc.Ret Alloc.RetIns {ty, arg = mo <$> arg}
+  LL.Br name -> Alloc.Br $ getLoc name
+  LL.Cbr LL.CbrTerm {arg, lab1, lab2} ->
+    Alloc.Cbr Alloc.CbrIns {arg = mo arg, loc1 = getLoc lab1, loc2 = getLoc lab2}
+  where
+    mo = operandToAlloc getLoc mangle
+
+data Layout = Layout
+  { getLoc :: GetLoc,
+    spilled :: !Int
+  }

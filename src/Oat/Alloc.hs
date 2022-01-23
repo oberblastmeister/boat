@@ -11,8 +11,7 @@ import qualified Oat.X86.AST as X86
 import Optics
 
 data Loc
-  = LVoid
-  | LReg !X86.Reg
+  = LReg !X86.Reg
   | LStack !Int
   | LLab !(ASCII ByteString)
   deriving (Show, Eq)
@@ -66,16 +65,16 @@ data StoreIns = StoreIns
 
 data IcmpIns = IcmpIns
   { loc :: !Loc,
-    cmpOp :: !LL.AST.CmpOp,
+    op :: !LL.AST.CmpOp,
     ty :: Ty,
     arg1 :: !Operand,
     arg2 :: !Operand
   }
 
 data CallIns = CallIns
-  { loc :: !Loc,
+  { loc :: Maybe Loc,
     ty :: Ty,
-    arg :: Operand,
+    fn :: Operand,
     args :: [(Ty, Operand)]
   }
 
@@ -109,6 +108,8 @@ data CbrIns = CbrIns
     loc1 :: !Loc,
     loc2 :: !Loc
   }
+
+type FunBody = [Ins]
 
 makeFieldLabelsNoPrefix ''AllocaIns
 makeFieldLabelsNoPrefix ''LoadIns

@@ -187,6 +187,11 @@ data Named a
   | Do a
   deriving (Show, Eq, Data, Typeable, Generic)
 
+pattern (:=) :: Name -> a -> Named a
+pattern (:=) name a = Named name a
+
+{-# COMPLETE (:=) #-}
+
 type WithName a = (Name, a)
 
 instance Hashable a => Hashable (Named a)

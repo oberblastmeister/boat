@@ -2,6 +2,7 @@ module Data.ASCII
   ( ToASCII (..),
     ASCII,
     unsafeToASCII,
+    unsafeWithASCII,
     fromASCII,
   )
 where
@@ -9,12 +10,16 @@ where
 import qualified Data.ByteString as ByteString
 import qualified Data.Char as Char
 import Data.Data (Data)
+import qualified Text.Show
 
 class ToASCII s where
   toASCII :: s -> Maybe (ASCII s)
 
 newtype ASCII s = ASCII {unASCII :: s}
-  deriving (Show, Eq, Ord, Data, Typeable, Generic, Hashable)
+  deriving (Eq, Ord, Data, Typeable, Generic, Hashable)
+
+instance Show s => Show (ASCII s) where
+  show = show . unASCII
 
 instance ToASCII ByteString where
   toASCII bs =
@@ -39,3 +44,6 @@ unsafeToASCII = ASCII
 
 fromASCII :: ASCII s -> s
 fromASCII = unASCII
+
+unsafeWithASCII :: (s -> s) -> ASCII s -> ASCII s
+unsafeWithASCII f = unsafeToASCII . f . unASCII
