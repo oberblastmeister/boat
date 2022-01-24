@@ -6,6 +6,7 @@ module Oat.LL.AST where
 import Data.ASCII (ASCII)
 import Data.Data (Data)
 import Oat.Common
+import Oat.LL.Name (Name)
 import Optics
 
 data Ty
@@ -25,8 +26,6 @@ data FunTy = FunTy
     ret :: Ty
   }
   deriving (Show, Eq)
-
-type Name = ASCII ByteString
 
 type TyMap = HashMap (ASCII ByteString) Ty
 

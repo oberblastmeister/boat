@@ -13,6 +13,7 @@ import Oat.Common (internalError, unreachable, (++>), pattern (:>))
 import Oat.Fold (paraOf)
 import Oat.LL.AST (Named (Do), pattern (:=))
 import qualified Oat.LL.AST as LL
+import Oat.LL.Name (Name)
 import Oat.X86.AST (Operand ((:$), (:$$), (:%)), (@@))
 import qualified Oat.X86.AST as X86
 import Optics hiding ((:>))
@@ -277,9 +278,9 @@ retIns =
       :> X86.Popq @@ [(:%) X86.Rbp]
       :> X86.Retq @@ []
 
-type GetLoc = LL.Name -> Loc
+type GetLoc = Name -> Loc
 
-type Mangler = ASCII ByteString -> ASCII ByteString
+type Mangler = Name -> Name
 
 funBodyToAlloc :: GetLoc -> Mangler -> LL.FunBody -> Alloc.FunBody
 funBodyToAlloc getLoc mangle LL.FunBody {entry, labeled} =

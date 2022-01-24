@@ -11,6 +11,7 @@ import Oat.LL.Token
 import qualified Oat.LL.Token.Kind as Kind
 import Oat.LL.ParserWrapper
 import Oat.LL.AST
+import Oat.LL.Name
 import qualified Data.Sequence as Seq
 import Optics
 import Data.List.NonEmpty (NonEmpty(..))
