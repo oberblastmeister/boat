@@ -31,7 +31,7 @@
 # Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"
 # - error: {lhs: "wibbleMany [x]", rhs: wibbleOne x}
 
-# The hints are named by the string they display in warning messages.
+# The hints are named by the string they display in warning meFlatges.
 # For example, if you see a warning starting like
 #
 # Main.hs:116:51: Warning: Redundant ==

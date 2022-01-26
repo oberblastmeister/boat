@@ -23,7 +23,7 @@ data Operand
   | Loc !Loc
   deriving (Show, Eq)
 
-data Ins
+data Inst
   = ILab !Loc
   | PMove [SMove] -- parallel move
   | BinOp BinOpIns
@@ -109,7 +109,7 @@ data CbrIns = CbrIns
     loc2 :: !Loc
   }
 
-type FunBody = [Ins]
+type FunBody = [Inst]
 
 makeFieldLabelsNoPrefix ''AllocaIns
 makeFieldLabelsNoPrefix ''LoadIns
@@ -123,7 +123,7 @@ makeFieldLabelsNoPrefix ''SMove
 makeFieldLabelsNoPrefix ''CbrIns
 makeFieldLabelsNoPrefix ''RetIns
 
-operands :: Traversal' Ins Operand
+operands :: Traversal' Inst Operand
 operands = traversalVL go
   where
     go f = \case
@@ -136,32 +136,32 @@ operands = traversalVL go
             )
             movs
         pure $ PMove res
-      BinOp ins@BinOpIns {arg1, arg2} -> do
+      BinOp inst@BinOpIns {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
-        pure $ BinOp ins {arg1, arg2}
-      Load ins@LoadIns {arg} -> do
+        pure $ BinOp inst {arg1, arg2}
+      Load inst@LoadIns {arg} -> do
         arg <- f arg
-        pure $ Load ins {arg}
-      Store ins@StoreIns {arg1, arg2} -> do
+        pure $ Load inst {arg}
+      Store inst@StoreIns {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
-        pure $ Store ins {arg1, arg2}
-      Icmp ins@IcmpIns {arg1, arg2} -> do
+        pure $ Store inst {arg1, arg2}
+      Icmp inst@IcmpIns {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
-        pure $ Icmp ins {arg1, arg2}
-      Call ins@CallIns {args} -> do
+        pure $ Icmp inst {arg1, arg2}
+      Call inst@CallIns {args} -> do
         args <- traverse (\(ty, operand) -> (ty,) <$> f operand) args
-        pure $ Call ins {args}
-      Bitcast ins@BitcastIns {arg} -> do
+        pure $ Call inst {args}
+      Bitcast inst@BitcastIns {arg} -> do
         arg <- f arg
-        pure $ Bitcast ins {arg}
-      Gep ins@GepIns {arg, args} -> do
+        pure $ Bitcast inst {arg}
+      Gep inst@GepIns {arg, args} -> do
         arg <- f arg
         args <- traverse f args
-        pure $ Gep ins {arg, args}
-      Cbr ins@CbrIns {arg} -> do
+        pure $ Gep inst {arg, args}
+      Cbr inst@CbrIns {arg} -> do
         arg <- f arg
-        pure $ Cbr ins {arg}
+        pure $ Cbr inst {arg}
       other -> pure other

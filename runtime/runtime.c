@@ -6,6 +6,7 @@
 
 /* Oat Internal Functions --------------------------------------------------- */
 
+// this just leaks memory for now
 int64_t *oat_malloc(int64_t size) {
     return (int64_t *)calloc(size, sizeof(char));
 }

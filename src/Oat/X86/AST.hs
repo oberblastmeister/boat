@@ -7,7 +7,7 @@ module Oat.X86.AST
     Operand (.., (:%), (:$), (:$$)),
     Cond (..),
     OpCode (..),
-    Ins (..),
+    Inst (..),
     Data (..),
     Asm (..),
     Elem (..),
@@ -23,10 +23,22 @@ where
 
 import Data.ASCII (ASCII, ToASCII (toASCII))
 import qualified Data.Text.Encoding as T
+import qualified Oat.Asm.AST as Asm
 import Optics
 import Optics.Operators.Unsafe ((^?!))
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
+
+data X86
+
+data Mem
+  = Ind1' !Imm
+  | Ind2' !Imm
+  | Ind3' !Imm !Reg
+
+instance Asm.Frame X86 where
+  type Reg X86 = Reg
+  type Mem X86 = Mem
 
 data Imm
   = Lit !Int64
@@ -102,14 +114,14 @@ data OpCode
   | Retq
   deriving (Show, Eq)
 
-data Ins = Ins
+data Inst = Inst
   { opcode :: !OpCode,
     operands :: ![Operand]
   }
   deriving (Show, Eq, Generic)
 
-(@@) :: OpCode -> [Operand] -> Ins
-(@@) opcode operands = Ins {opcode, operands}
+(@@) :: OpCode -> [Operand] -> Inst
+(@@) opcode operands = Inst {opcode, operands}
 
 infix 9 @@
 
@@ -119,7 +131,7 @@ data Data
   deriving (Show, Eq)
 
 data Asm
-  = Text ![Ins]
+  = Text ![Inst]
   | Data ![Data]
   deriving (Show, Eq)
 
@@ -133,7 +145,7 @@ data Elem = Elem
 newtype Prog = Prog [Elem]
   deriving (Show, Eq)
 
-makeFieldLabelsNoPrefix ''Ins
+makeFieldLabelsNoPrefix ''Inst
 makeFieldLabelsNoPrefix ''Elem
 
 instance Pretty Reg where
@@ -238,8 +250,8 @@ prettyByteOperand = prettyOperand' prettyByteReg
 prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperand' pretty
 
-instance Pretty Ins where
-  pretty Ins {opcode, operands} = case opcode of
+instance Pretty Inst where
+  pretty Inst {opcode, operands} = case opcode of
     Shlq -> handleShift
     Sarq -> handleShift
     Shrq -> handleShift
@@ -288,10 +300,10 @@ instance Pretty Prog where
 dat :: ASCII ByteString -> [Data] -> Elem
 dat lab ds = Elem {lab, global = True, asm = Data ds}
 
-text :: ASCII ByteString -> [Ins] -> Elem
+text :: ASCII ByteString -> [Inst] -> Elem
 text lab is = Elem {lab, global = False, asm = Text is}
 
-gText :: ASCII ByteString -> [Ins] -> Elem
+gText :: ASCII ByteString -> [Inst] -> Elem
 gText lab is = Elem {lab, global = True, asm = Text is}
 
 pattern (:%) :: Reg -> Operand
@@ -314,9 +326,9 @@ p1 =
   Prog
     [ text
         (toASCII "foo" ^?! _Just)
-        [ Ins Xorq [(:%) Rax, (:%) Rax],
-          Ins Movq [(:$) 100, Reg Rax],
-          Ins Retq []
+        [ Inst Xorq [(:%) Rax, (:%) Rax],
+          Inst Movq [(:$) 100, Reg Rax],
+          Inst Retq []
         ]
     ]
 

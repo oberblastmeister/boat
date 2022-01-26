@@ -86,16 +86,16 @@ import Data.ByteString (ByteString)
 
 %%
 
-Prog :: { Prog }
+Prog :: { Prog Flat }
   : List(Decl) { Prog {decls = $1} }
   
-Decl :: { Decl }
+Decl :: { Decl Flat }
   : GlobalDecl { $1 }
   | TyDecl { $1 }
   | ExternDecl { $1 }
   | FunDecl { $1 }
   
-FunDecl :: { Decl }
+FunDecl :: { Decl Flat }
   : define Ty gid '(' ParamList ')' '{' EntryBlock List(LabBlock) '}'
     { DeclFun
         { name = $3,
@@ -114,11 +114,11 @@ ParamList :: { [(Ty, Name)] }
 Param :: { (Ty, Name) }
   : Ty uid { ($1, $2) }
 
-ExternDecl :: { Decl }
+ExternDecl :: { Decl Flat }
   : declare Ty gid '(' TyList ')' { DeclExtern {name = $3, ty = TyFun FunTy {args = $5, ret = $2}}}
   | gid '=' external global Ty { DeclExtern {name = $1, ty = $5} }
 
-GlobalDecl :: { Decl }
+GlobalDecl :: { Decl Flat }
   : gid '=' global Ty GlobalInit
     { DeclGlobal
         { name = $1,
@@ -135,12 +135,12 @@ GlobalInit :: { GlobalInit }
   | '{' GlobalDeclList '}' { GlobalStruct $2 }
   
 GlobalDeclList :: { [GlobalDecl] }
-  : ListSep(InsideArrayGlobalDecl, ',') { $1 }
+  : ListSep(InstideArrayGlobalDecl, ',') { $1 }
 
-InsideArrayGlobalDecl :: { GlobalDecl }
+InstideArrayGlobalDecl :: { GlobalDecl }
   : Ty GlobalInit { GlobalDecl {ty = $1, globalInit = $2} }
 
-TyDecl :: { Decl }
+TyDecl :: { Decl Flat }
   : uid '=' type Ty { DeclTy {name = $1, ty = $4} }
 
 Ty :: { Ty }
@@ -160,59 +160,61 @@ NonPtrTy :: { Ty }
 TyList :: { [Ty] }
   : ListSep(Ty, ',') { $1 }
   
-EntryBlock :: { Block }
+EntryBlock :: { Block Flat }
   : entry ':' Block { $3 }
   | Block { $1 }
 
-LabBlock :: { LabBlock }
+LabBlock :: { LabBlock Flat }
   : lab ':' Block { LabBlock {lab = $1, block = $3} }
 
-Block :: { Block }
-  : List(Ins) Terminator { Block {ins = $1, terminator = $2} }
+Block :: { Block Flat }
+  : List(Inst) Term { Block {inst = $1, term = $2} }
   
-Ins :: { Named Ins }
-  : uid '=' BinOpIns { Named $1 $ BinOp $3 }
-  | uid '=' AllocaIns { Named $1 $ Alloca $3 }
-  | uid '=' LoadIns { Named $1 $ Load $3 }
-  | StoreIns { Do $ Store $1 }
-  | uid '=' IcmpIns { Named $1 $ Icmp $3 }
-  | CallIns { Do $ Call $1 }
-  | uid '=' CallIns { Named $1 $ Call $3 }
-  | uid '=' BitcastIns { Named $1 $ Bitcast $3 }
-  | uid '=' GepIns { Named $1 $ Gep $3 }
+Inst :: { Inst Flat }
+  : BinOpInst { BinOp $1 }
+  | AllocaInst { Alloca $1 }
+  | LoadInst { Load $1 } 
+  | StoreInst { Store $1 }
+  | IcmpInst { Icmp $1 }
+  | CallInst { Call $1 }
+  | BitcastInst { Bitcast $1 }
+  | GepInst { Gep $1 }
 
-BinOpIns :: { BinOpIns }
-  : BinOp Ty Operand ',' Operand  { BinOpIns {op = $1, ty = $2, arg1 = $3, arg2 = $5} }
+BinOpInst :: { BinOpInst Flat }
+  : uid '=' BinOp Ty Operand ',' Operand  { BinOpInst {name = $1, op = $3, ty = $4, arg1 = $5, arg2 = $7} }
   
-AllocaIns :: { AllocaIns }
-  : alloca Ty { AllocaIns {ty = $2} }
+AllocaInst :: { AllocaInst }
+  : uid '=' alloca Ty { AllocaInst {name = $1, ty = $4} }
   
-LoadIns :: { LoadIns }
-  : load Ty ',' Ty Operand { LoadIns {ty = $4, arg = $5} }
+LoadInst :: { LoadInst Flat }
+  : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $6, arg = $7} }
 
-StoreIns :: { StoreIns }
-  : store Ty Operand ',' Ty Operand { StoreIns {ty = $2, arg1 = $3, arg2 = $6} }
+StoreInst :: { StoreInst Flat }
+  : store Ty Operand ',' Ty Operand { StoreInst {ty = $2, arg1 = $3, arg2 = $6} }
   
-IcmpIns :: { IcmpIns }
-  : icmp CmpOp Ty Operand ',' Operand { IcmpIns {op = $2, ty = $3, arg1 = $4, arg2 = $6} }
+IcmpInst :: { IcmpInst Flat }
+  : uid '=' icmp CmpOp Ty Operand ',' Operand { IcmpInst {name = $1, op = $4, ty = $5, arg1 = $6, arg2 = $8} }
 
-CallIns :: { CallIns }
-  : call Ty Operand '(' ArgList ')' { CallIns {ty = $2, fn = $3, args = $5} }
+CallInst :: { CallInst Flat }
+  : Maybe(CallUid) call Ty Operand '(' ArgList ')' { CallInst {name = $1, ty = $3, fn = $4, args = $6} }
   
-BitcastIns :: { BitcastIns }
-  : bitcast Ty Operand to Ty { BitcastIns {from = $2, arg = $3, to = $5} }
+CallUid :: { Name }
+  : uid '=' { $1 }
+  
+BitcastInst :: { BitcastInst Flat }
+  : uid '=' bitcast Ty Operand to Ty { BitcastInst {name = $1, from = $4, arg = $5, to = $7} }
 
-GepIns :: { GepIns }
-  : getelementptr Ty ',' Ty Operand ',' ListSep(GepOperand, ',') { GepIns {ty = $4, arg = $5, args = $7} }
+GepInst :: { GepInst Flat }
+  : uid '=' getelementptr Ty ',' Ty Operand ',' ListSep(GepOperand, ',') { GepInst {name = $1, ty = $6, arg = $7, args = $9} }
   
-GepOperand :: { Operand }
+GepOperand :: { Operand Flat }
   : i64 Operand { $2 }
   | i32 Operand { $2 }
 
-ArgList :: { [(Ty, Operand)] }
+ArgList :: { [(Ty, Operand Flat)] }
   : ListSep(Arg, ',') { $1 }
   
-Arg :: { (Ty, Operand) }
+Arg :: { (Ty, Operand Flat) }
   : Ty Operand { ($1, $2) }
 
 CmpOp :: { CmpOp }
@@ -234,12 +236,12 @@ BinOp :: { BinOp }
   | or { Or }
   | xor { Xor }
 
-Terminator :: { Terminator }
+Term :: { Term Flat }
   : ret Ty Maybe(Operand) { Ret RetTerm {ty = $2, arg = $3} }
   | br label uid { Br $3 }
   | br i1 Operand ',' label uid ',' label uid { Cbr CbrTerm {arg = $3, lab1 = $6, lab2 = $9} }
 
-Operand :: { Operand }
+Operand :: { Operand Flat }
   : null { Null }
   | int { Const $ fromIntegral $1 }
   | gid { Gid $1 }

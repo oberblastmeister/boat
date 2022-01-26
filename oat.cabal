@@ -123,6 +123,7 @@ library
     Oat.Common
     Oat.Backend
     Oat.Alloc
+    Oat.LL
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer
@@ -130,6 +131,8 @@ library
     Oat.LL.AST
     Oat.LL.LexerWrapper
     Oat.LL.ParserWrapper
+    Oat.LL.Name
+    Oat.Asm.AST
     Oat.X86.AST
 
 common rtsopts

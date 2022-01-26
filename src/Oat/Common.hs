@@ -22,13 +22,14 @@ pattern xs :> x <- x : xs where xs :> x = x : xs
 internalError :: forall a. HasCallStack => Text -> a
 internalError t = error $ "Internal compiler error: " <> t
 
--- non but only a getter
-unwrap :: a -> Getter (Maybe a) a
+-- non but only a lens
+unwrap :: a -> Lens' (Maybe a) a
 unwrap def =
-  to
-    ( \case
-        Just a -> a
-        Nothing -> def
+  lens
+    (fromMaybe def)
+    ( \m b -> case m of
+        Just _ -> Just b
+        Nothing -> Just def
     )
 
 unreachable :: forall a. a
