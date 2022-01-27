@@ -49,7 +49,6 @@ plateTy mp = traversalVL $ \f -> \case
 data InstShape = Flat | Tree
 
 data Operand :: InstShape -> Type where
-  Null :: Operand s
   Const :: !Int -> Operand s
   Gid :: !Name -> Operand s
   Temp :: !Name -> Operand 'Flat

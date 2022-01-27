@@ -32,7 +32,6 @@ blockToTree Block {inst, term} = do
 toTree :: MonadToTree m => Inst' s 'Flat -> m (Inst' s 'Tree)
 toTree inst = do
   forOf instOperands inst $ \case
-    Null -> pure Null
     Const i -> pure $ Const i
     Gid name -> pure $ Gid name
     Temp name -> do

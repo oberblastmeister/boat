@@ -10,6 +10,7 @@ import Optics.State.Operators
 class Frame a where
   type Reg a :: Type
   type Mem a :: Type
+  type OpCode a :: Type
 
   newFrame :: Int -> a
   allocLocalWith :: Int -> a -> (Mem a, a)
@@ -19,11 +20,12 @@ class HasFrame a b | a -> b where
   frameLens :: Optic' A_Lens NoIx a b
 
 type AsmConstraint :: (Type -> Constraint) -> Type -> Constraint
-type AsmConstraint c a = (c a, c (Reg a), c (Mem a))
+type AsmConstraint c a = (c (Reg a), c (Mem a), c (OpCode a))
 
 data Loc a
   = LReg !(Reg a)
   | LMem !(Mem a)
+  | LLab !ByteString
   | LTemp !LL.Name
 
 deriving instance AsmConstraint Show a => Show (Loc a)
@@ -38,16 +40,28 @@ deriving instance AsmConstraint Show a => Show (Operand a)
 
 deriving instance AsmConstraint Eq a => Eq (Operand a)
 
+pattern Reg :: Reg a -> Operand a
+pattern Reg r = Loc (LReg r)
+
+pattern Temp :: LL.Name -> Operand a
+pattern Temp t = Loc (LTemp t)
+
 data Inst a
   = InsOp (OpIns a)
   | InsLabel !LL.Name
   | InsMove (MoveIns a)
 
+pattern Move :: Operand a -> Operand a -> Inst a
+pattern Move src dst = InsMove MoveIns {src, dst}
+
+pattern Op :: OpCode a -> [Operand a] -> [Operand a] -> Inst a
+pattern Op op src dst = InsOp OpIns {op, src, dst}
+
 deriving instance AsmConstraint Show a => Show (Inst a)
 
 deriving instance AsmConstraint Eq a => Eq (Inst a)
 
-data OpIns a = OpIns {op :: !a, src :: [Operand a], dst :: [Operand a]}
+data OpIns a = OpIns {op :: !(OpCode a), src :: [Operand a], dst :: [Operand a]}
 
 deriving instance AsmConstraint Show a => Show (OpIns a)
 
