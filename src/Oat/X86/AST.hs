@@ -26,12 +26,16 @@ where
 import Data.ASCII (ASCII, ToASCII (toASCII))
 import qualified Data.Text.Encoding as T
 import qualified Oat.Asm.AST as Asm
+import Oat.Frame (Frame)
+import qualified Oat.Frame as Frame
 import Optics
 import Optics.Operators.Unsafe ((^?!))
 import Prettyprinter (Doc, Pretty (pretty))
 import qualified Prettyprinter as P
 
-data X86Frame
+data X86Frame = X86Frame
+  { stack :: !Int
+  }
 
 -- data Operand
 --   = Imm !Imm
@@ -66,14 +70,15 @@ pattern MemReg reg =
       scale = Nothing
     }
 
-instance Asm.Frame X86Frame where
+instance Frame X86Frame where
   type Reg X86Frame = Reg
   type Mem X86Frame = Mem
+  type Imm X86Frame = Imm
   type OpCode X86Frame = OpCode
 
 data Imm
   = Lit !Int64
-  | Lab !(ASCII ByteString)
+  | Lab !ByteString
   deriving (Show, Eq)
 
 data Reg
@@ -178,7 +183,8 @@ data Elem = Elem
 
 type Prog = [Elem]
 
--- makeFieldLabelsNoPrefix ''Inst
+makeFieldLabelsNoPrefix ''X86Frame
+makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
 
 -- instance Pretty Reg where

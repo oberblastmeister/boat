@@ -3,29 +3,17 @@
 
 module Oat.Asm.AST where
 
+import Oat.Frame (Frame (..), HasFrame (..))
 import qualified Oat.LL as LL
 import Optics
 import Optics.State.Operators
 
-class Frame a where
-  type Reg a :: Type
-  type Mem a :: Type
-  type OpCode a :: Type
-
-  newFrame :: Int -> a
-  allocLocalWith :: Int -> a -> (Mem a, a)
-  allocGlobal :: LL.Name -> a -> Mem a
-
-class HasFrame a b | a -> b where
-  frameLens :: Optic' A_Lens NoIx a b
-
 type AsmConstraint :: (Type -> Constraint) -> Type -> Constraint
-type AsmConstraint c a = (c (Reg a), c (Mem a), c (OpCode a))
+type AsmConstraint c a = (c (Reg a), c (Mem a), c (Imm a), c (OpCode a))
 
 data Loc a
   = LReg !(Reg a)
   | LMem !(Mem a)
-  | LLab !ByteString
   | LTemp !LL.Name
 
 deriving instance AsmConstraint Show a => Show (Loc a)
@@ -33,7 +21,7 @@ deriving instance AsmConstraint Show a => Show (Loc a)
 deriving instance AsmConstraint Eq a => Eq (Loc a)
 
 data Operand a
-  = Const !Int64
+  = Imm !(Imm a)
   | Loc !(Loc a)
 
 deriving instance AsmConstraint Show a => Show (Operand a)
@@ -73,16 +61,3 @@ data MoveIns a = MoveIns {src :: Operand a, dst :: Operand a}
 deriving instance AsmConstraint Show a => Show (MoveIns a)
 
 deriving instance AsmConstraint Eq a => Eq (MoveIns a)
-
-allocLocal :: (Frame a) => a -> (Mem a, a)
-allocLocal = allocLocalWith 8
-
-allocLocalWithM :: forall a b m. (Frame b, HasFrame a b, MonadState a m) => Int -> m (Mem b)
-allocLocalWithM i = do
-  frame <- use frameLens
-  let (mem, frame') = allocLocalWith i frame
-  frameLens .= frame'
-  pure mem
-
-allocLocalM :: (Frame b, HasFrame a b, MonadState a m) => m (Mem b)
-allocLocalM = allocLocalWithM 8

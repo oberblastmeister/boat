@@ -8,7 +8,7 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.Range (Range (RangeP))
 import Oat.Common (inBetween)
 import Oat.LL.AST
-  ( Block,
+  ( Block (..),
     Inst (..),
     Operand (Nested, Temp),
     Term,
@@ -29,8 +29,10 @@ data CombineState = CombineState
     -- the other fields are just used for maps only
     idToInst :: !(IntMap Inst),
     nameToInst :: !(HashMap Name (Int, Inst)),
+    -- if it is Nothing, that means it is used in a terminator
     idToUses :: !(IntMap Int),
-    term :: !Term
+    term :: !Term,
+    prevId :: !Int
   }
 
 $(makeFieldLabelsNoPrefix ''CombineState)
@@ -39,19 +41,34 @@ type MonadCombine = MonadState CombineState
 
 type CombineM = State CombineState
 
--- blockToTree :: Block -> Block
--- blockToTree =
+combineBlock :: Block -> Block
+combineBlock block = block'
+  where
+    block' = Block {insts = combineState' ^.. #idToInst % each, term = combineState' ^. #term}
+    ((), combineState') = runState combineLoop combineState
+    combineState = stateFromBlock block
 
-combineInst :: MonadCombine m => Int -> Inst -> m Inst
+combineLoop :: MonadCombine m => m ()
+combineLoop = do
+  prevId <- use #prevId
+  idToInst <- use #idToInst
+  case IntMap.lookupGT prevId idToInst of
+    Just (currId, inst) -> do
+      combineInst currId inst
+      #prevId .= currId
+      combineLoop
+    Nothing -> pure ()
+
+combineInst :: MonadCombine m => Int -> Inst -> m ()
 combineInst id inst = do
   st <- get
   case combineInst' id inst st of
-    Just (toDelete, inst') -> do
+    Just (toDelete, toInsert, inst') -> do
       #idToInst % at toDelete .= Nothing
-      pure inst'
-    Nothing -> pure inst
+      #idToInst % at toInsert ?= inst'
+    Nothing -> pure ()
 
-combineInst' :: Int -> Inst -> CombineState -> Maybe (Int, Inst)
+combineInst' :: Int -> Inst -> CombineState -> Maybe (Int, Int, Inst)
 combineInst' id inst st = do
   -- TODO: for now stuff without names cannot be combined
   name <- inst ^? instName
@@ -63,7 +80,7 @@ combineInst' id inst st = do
     _ : _ : _ -> Nothing
     _ -> pure ()
   let between = inBetween (RangeP id useId) (st ^. #idToInst)
-  let substDownRes = (id, substInstInst inst useInst)
+  let substDownRes = (id, useId, substInstInst inst useInst)
   case (getMoveStatus inst, getMoveStatus useInst) of
     (EasilyMoved, _) -> Just substDownRes
     (HardToMove, _) ->
@@ -81,8 +98,6 @@ noCalls = allOf each (hasn't #_Call)
 
 usesName :: Name -> IntMap Inst -> Bool
 usesName name = allOf (each % instOperands % operandName) (/= name)
-
--- between = inBetween idT
 
 substInstInst :: Inst -> Inst -> Inst
 substInstInst inst inst' = inst' & instOperands %~ substInstOperand inst
@@ -122,7 +137,8 @@ stateFromBlock block =
     { idToInst,
       nameToInst,
       idToUses,
-      term = block ^. #term
+      term = block ^. #term,
+      prevId = 0
     }
   where
     idToInst = IntMap.fromList instWithId

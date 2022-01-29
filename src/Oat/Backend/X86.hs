@@ -13,8 +13,8 @@ import Optics
 import Optics.State.Operators
 import Prelude hiding (Op)
 
-pattern With :: LL.Inst 'LL.Tree -> LL.Operand 'LL.Tree
-pattern With inst <- LL.TempTree _ (Just inst)
+pattern With :: LL.Inst -> LL.Operand
+pattern With inst <- LL.Nested inst
 
 data BackendState = BackendState
   { insts :: !(Seq X86.Inst)
@@ -27,20 +27,20 @@ type MonadBackend = MonadState BackendState
 
 makeFieldLabelsNoPrefix ''BackendState
 
-compileOperand :: LL.Operand 'LL.Tree -> X86.Operand
+compileOperand :: LL.Operand -> X86.Operand
 compileOperand (LL.Const i) = Asm.Const $ fromIntegral i
 compileOperand (LL.Gid i) = undefined
-compileOperand (LL.TempTree name _) = Asm.Loc $ Asm.LTemp name
+-- compileOperand (LL.TempTree name _) = Asm.Loc $ Asm.LTemp name
 
 emitInsts :: MonadBackend m => [X86.Inst] -> m ()
 emitInsts insts = modify' (#insts %~ (<> Seq.fromList insts))
 
-munchInst :: MonadBackend m => LL.Inst 'LL.Tree -> m ()
+munchInst :: MonadBackend m => LL.Inst -> m ()
 munchInst = \case
   LL.BinOp inst -> munchBinOp inst
   other -> pure undefined
 
-munchBinOp :: MonadBackend m => LL.BinOpInst 'LL.Tree -> m ()
+munchBinOp :: MonadBackend m => LL.BinOpInst -> m ()
 munchBinOp LL.BinOpInst {name, op, arg1, arg2}
   | LL.Mul <- op =
     emitInsts

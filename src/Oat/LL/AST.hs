@@ -270,6 +270,12 @@ instName = atraversalVL go
       Gep inst -> Gep <$> atraverseOf #name point f inst
       other -> point other
 
+bodyBlocks :: Traversal' FunBody Block
+bodyBlocks = traversalVL $ \f body -> do
+  entry <- f (body ^. #entry)
+  labeled <- traverseOf (each % #block) f (body ^. #labeled)
+  pure $ FunBody {entry, labeled}
+
 instOperands :: Traversal' Inst Operand
 instOperands = traversalVL go
   where
@@ -325,6 +331,3 @@ doesInsAssign :: Inst -> Bool
 doesInsAssign (Call CallInst {ty = Void}) = False
 doesInsAssign (Store _) = False
 doesInsAssign _ = True
-
--- thing :: Bool
--- thing = True
