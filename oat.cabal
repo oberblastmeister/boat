@@ -79,6 +79,7 @@ common common-options
     mtl ^>= 2.2.2,
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
+    fgl ^>= 5.7.0.3,
     text ^>= 1.2.5.0,
     text-builder ^>= 0.6.6.3,
     -- relude bound
@@ -111,8 +112,10 @@ library
   hs-source-dirs: src
   exposed-modules:
     Data.ASCII
+    Data.Pos
+    Data.Span
+    Data.Range
     Oat
-    Oat.Span
     Oat.Fold
     Oat.Interned
     Oat.Interned.Internal

@@ -48,16 +48,6 @@ plateTy mp = traversalVL $ \f -> \case
 
 data InstShape = Flat | Tree
 
-data Operand :: InstShape -> Type where
-  Const :: !Int -> Operand s
-  Gid :: !Name -> Operand s
-  Temp :: !Name -> Operand 'Flat
-  TempTree :: !Name -> (Maybe (Inst 'Tree)) -> Operand 'Tree
-
-deriving instance (Show (Operand s))
-
-deriving instance (Eq (Operand s))
-
 data BinOp
   = Add
   | Sub
@@ -81,35 +71,37 @@ data CmpOp
 
 data InstS = SInst | STerm
 
-type AnyInst s' = forall s. Inst' s s'
+data Inst where
+  BinOp :: BinOpInst -> Inst
+  Alloca :: AllocaInst -> Inst
+  Load :: LoadInst -> Inst
+  Store :: StoreInst -> Inst
+  Icmp :: IcmpInst -> Inst
+  Call :: CallInst -> Inst
+  Bitcast :: BitcastInst -> Inst
+  Gep :: GepInst -> Inst
+  deriving (Show, Eq)
 
-type Inst = Inst' 'SInst
+data Term where
+  Ret :: RetTerm -> Term
+  Br :: !Name -> Term
+  Cbr :: CbrTerm -> Term
+  deriving (Show, Eq)
 
-type Term = Inst' 'STerm
+data Operand where
+  Const :: !Int -> Operand
+  Gid :: !Name -> Operand
+  Temp :: !Name -> Operand
+  -- invariant, some instructions cannot be nested
+  Nested :: Inst -> Operand
+  deriving (Show, Eq)
 
-data Inst' :: InstS -> InstShape -> Type where
-  BinOp :: BinOpInst s -> Inst' 'SInst s
-  Alloca :: AllocaInst -> Inst' 'SInst s
-  Load :: LoadInst s -> Inst' 'SInst s
-  Store :: StoreInst s -> Inst' 'SInst s
-  Icmp :: IcmpInst s -> Inst' 'SInst s
-  Call :: CallInst s -> Inst' 'SInst s
-  Bitcast :: BitcastInst s -> Inst' 'SInst s
-  Gep :: GepInst s -> Inst' 'SInst s
-  Ret :: RetTerm s -> Inst' 'STerm s
-  Br :: !Name -> Inst' 'STerm s
-  Cbr :: CbrTerm s -> Inst' 'STerm s
-
-deriving instance (Show (Inst' s s'))
-
-deriving instance (Eq (Inst' s s'))
-
-data BinOpInst s = BinOpInst
+data BinOpInst = BinOpInst
   { name :: Name,
     op :: BinOp,
     ty :: Ty,
-    arg1 :: Operand s,
-    arg2 :: Operand s
+    arg1 :: Operand,
+    arg2 :: Operand
   }
   deriving (Show, Eq)
 
@@ -119,88 +111,88 @@ data AllocaInst = AllocaInst
   }
   deriving (Show, Eq)
 
-data LoadInst s = LoadInst
+data LoadInst = LoadInst
   { name :: Name,
     ty :: Ty,
-    arg :: Operand s
+    arg :: Operand
   }
   deriving (Show, Eq)
 
-data StoreInst s = StoreInst
+data StoreInst = StoreInst
   { ty :: Ty,
-    arg1 :: Operand s,
-    arg2 :: Operand s
+    arg1 :: Operand,
+    arg2 :: Operand
   }
   deriving (Show, Eq)
 
-data IcmpInst s = IcmpInst
+data IcmpInst = IcmpInst
   { name :: Name,
     op :: !CmpOp,
     ty :: Ty,
-    arg1 :: Operand s,
-    arg2 :: Operand s
+    arg1 :: Operand,
+    arg2 :: Operand
   }
   deriving (Show, Eq)
 
-data CallInst s = CallInst
+data CallInst = CallInst
   { name :: Maybe Name,
     ty :: Ty,
-    fn :: Operand s,
-    args :: [(Ty, Operand s)]
+    fn :: Operand,
+    args :: [(Ty, Operand)]
   }
   deriving (Show, Eq)
 
-data BitcastInst s = BitcastInst
+data BitcastInst = BitcastInst
   { name :: Name,
     from :: Ty,
-    arg :: Operand s,
+    arg :: Operand,
     to :: Ty
   }
   deriving (Show, Eq)
 
-data GepInst s = GepInst
+data GepInst = GepInst
   { name :: Name,
     ty :: Ty,
-    arg :: Operand s,
-    args :: [Operand s]
+    arg :: Operand,
+    args :: [Operand]
   }
   deriving (Show, Eq)
 
-data RetTerm s = RetTerm
+data RetTerm = RetTerm
   { ty :: Ty,
-    arg :: Maybe (Operand s)
+    arg :: Maybe Operand
   }
   deriving (Show, Eq)
 
-data CbrTerm s = CbrTerm
-  { arg :: Operand s,
+data CbrTerm = CbrTerm
+  { arg :: Operand,
     lab1 :: !Name,
     lab2 :: !Name
   }
   deriving (Show, Eq)
 
-data Block s = Block
-  { inst :: [Inst s],
-    term :: Term s
+data Block = Block
+  { insts :: [Inst],
+    term :: Term
   }
   deriving (Show, Eq)
 
-data LabBlock s = LabBlock
+data LabBlock = LabBlock
   { lab :: !Name,
-    block :: Block s
+    block :: Block
   }
   deriving (Show, Eq)
 
-data FunBody s = FunBody
-  { entry :: Block s,
-    labeled :: [LabBlock s]
+data FunBody = FunBody
+  { entry :: Block,
+    labeled :: [LabBlock]
   }
   deriving (Show, Eq)
 
-data FunDecl s = FunDecl
+data FunDecl = FunDecl
   { funTy :: FunTy,
     params :: [Name],
-    cfg :: FunBody s
+    cfg :: FunBody
   }
   deriving (Show, Eq)
 
@@ -237,36 +229,38 @@ data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
 --   | DeclFun
 --   | DeclExtern
 
-data Decl s
+data Decl
   = DeclTy {name :: Name, ty :: Ty}
   | DeclGlobal {name :: Name, globalDecl :: GlobalDecl}
-  | DeclFun {name :: Name, funDecl :: FunDecl s}
+  | DeclFun {name :: Name, funDecl :: FunDecl}
   | DeclExtern {name :: Name, ty :: Ty}
 
-data Prog s = Prog
-  { decls :: [Decl s]
+data Prog = Prog
+  { decls :: [Decl]
   }
 
-makeFieldLabelsNoPrefix ''LoadInst
-makeFieldLabelsNoPrefix ''BinOpInst
-makeFieldLabelsNoPrefix ''StoreInst
-makeFieldLabelsNoPrefix ''IcmpInst
-makeFieldLabelsNoPrefix ''CallInst
-makeFieldLabelsNoPrefix ''BitcastInst
-makeFieldLabelsNoPrefix ''GepInst
-makeFieldLabelsNoPrefix ''FunTy
-makeFieldLabelsNoPrefix ''Block
-makeFieldLabelsNoPrefix ''FunBody
-makeFieldLabelsNoPrefix ''FunDecl
-makeFieldLabelsNoPrefix ''Prog
-makeFieldLabelsNoPrefix ''LabBlock
-makeFieldLabelsNoPrefix ''RetTerm
-makeFieldLabelsNoPrefix ''CbrTerm
+$(makeFieldLabelsNoPrefix ''LoadInst)
+$(makeFieldLabelsNoPrefix ''BinOpInst)
+$(makeFieldLabelsNoPrefix ''StoreInst)
+$(makeFieldLabelsNoPrefix ''IcmpInst)
+$(makeFieldLabelsNoPrefix ''CallInst)
+$(makeFieldLabelsNoPrefix ''BitcastInst)
+$(makeFieldLabelsNoPrefix ''GepInst)
+$(makeFieldLabelsNoPrefix ''FunTy)
+$(makeFieldLabelsNoPrefix ''Block)
+$(makeFieldLabelsNoPrefix ''FunBody)
+$(makeFieldLabelsNoPrefix ''FunDecl)
+$(makeFieldLabelsNoPrefix ''Prog)
+$(makeFieldLabelsNoPrefix ''LabBlock)
+$(makeFieldLabelsNoPrefix ''RetTerm)
+$(makeFieldLabelsNoPrefix ''CbrTerm)
+$(makePrismLabels ''Operand)
+$(makePrismLabels ''Inst)
 
-instName :: AffineTraversal' (Inst s) Name
+instName :: AffineTraversal' Inst Name
 instName = atraversalVL go
   where
-    go :: AffineTraversalVL' (Inst s) Name
+    go :: AffineTraversalVL' Inst Name
     go point f = \case
       BinOp inst -> BinOp <$> atraverseOf #name point f inst
       Load inst -> Load <$> atraverseOf #name point f inst
@@ -276,10 +270,10 @@ instName = atraversalVL go
       Gep inst -> Gep <$> atraverseOf #name point f inst
       other -> point other
 
-instOperands :: Traversal (Inst' s sa) (Inst' s sb) (Operand sa) (Operand sb)
+instOperands :: Traversal' Inst Operand
 instOperands = traversalVL go
   where
-    go :: TraversalVL (Inst' s sa) (Inst' s sb) (Operand sa) (Operand sb)
+    go :: TraversalVL' Inst Operand
     go f = \case
       BinOp inst@BinOpInst {arg1, arg2} -> do
         arg1 <- f arg1
@@ -308,11 +302,26 @@ instOperands = traversalVL go
         arg <- f arg
         args <- traverse f args
         pure $ Gep inst {arg, args}
+
+termOperands :: Traversal' Term Operand
+termOperands = traversalVL go
+  where
+    go :: TraversalVL' Term Operand
+    go f = \case
       Ret inst -> Ret <$> traverseOf (#arg % _Just) f inst
       Br name -> pure $ Br name
       Cbr inst -> Cbr <$> traverseOf #arg f inst
 
-doesInsAssign :: Inst s -> Bool
+operandNames :: Traversal' Operand Name
+operandNames = traversalVL go
+  where
+    go :: TraversalVL' Operand Name
+    go f = \case
+      Gid name -> Gid <$> f name
+      Temp name -> Temp <$> f name
+      other -> pure other
+
+doesInsAssign :: Inst -> Bool
 doesInsAssign (Call CallInst {ty = Void}) = False
 doesInsAssign (Store _) = False
 doesInsAssign _ = True

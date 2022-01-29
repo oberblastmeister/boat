@@ -9,10 +9,11 @@ module Oat.Wrappers.Lexer
 where
 
 import qualified Data.ByteString as ByteString
+import Data.Pos
+import Data.Span
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as Text.Encoding
 import qualified Language.Haskell.TH as TH
-import Oat.Span
 import Optics
 import qualified Relude.Unsafe as Unsafe
 

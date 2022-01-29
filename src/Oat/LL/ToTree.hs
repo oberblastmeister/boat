@@ -1,75 +1,124 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Oat.LL.ToTree where
 
-import qualified Data.HashMap.Lazy as HashMap
-import Oat.Common (unwrap)
+import qualified Data.HashMap.Optics as HashMap
+import qualified Data.IntMap.Strict as IntMap
+import Data.Range (Range (RangeP))
+import Oat.Common (inBetween)
 import Oat.LL.AST
 import Oat.LL.Name (Name)
 import Optics
-import Optics.State.Operators
-import Prelude hiding (Const)
+import Optics.Operators.Unsafe ((^?!))
 
-type TempMap = HashMap Name (Inst 'Flat, Maybe (Inst 'Tree))
+data ToTreeState = ToTreeState
+  { idToInst :: !(IntMap Inst),
+    nameToInst :: !(HashMap Name (Int, Inst)),
+    idToUses :: !(IntMap Int),
+    term :: !Term
+  }
 
-type MonadToTree m = MonadState TempMap m
+$(makeFieldLabelsNoPrefix ''ToTreeState)
 
-funBodyToTree :: FunBody 'Flat -> FunBody 'Tree
-funBodyToTree body = evalState (funBodyToTreeWith body) tempMap
+type MonadToTree = MonadState ToTreeState
+
+type ToTreeM = State ToTreeState
+
+toTreeInst :: MonadToTree m => Int -> Inst -> m Inst
+toTreeInst id inst = do
+  st <- get
+  case toTreeInst' id inst st of
+    Just (toDelete, inst') -> undefined
+    Nothing -> pure inst
+
+-- case toTreeInst'
+-- let (toDelete, inst')
+
+toTreeInst' :: Int -> Inst -> ToTreeState -> Maybe (Int, Inst)
+toTreeInst' id inst st = do
+  -- TODO: for now stuff without names cannot be combined
+  name <- inst ^? instName
+  useId <- st ^. #idToUses % at id
+  let useInst = st ^?! #idToInst % ix useId
+  let between = inBetween (RangeP id useId) (st ^. #idToInst)
+  let substDownRes = (id, substInstInst inst useInst)
+  case (getMoveStatus inst, getMoveStatus useInst) of
+    (EasilyMoved, _) -> Just substDownRes
+    (HardToMove, _) ->
+      if usesName name between
+        then Nothing
+        else case inst of
+          Call _ | noCalls between -> Just substDownRes
+          _ -> Nothing
+    _ -> Nothing
+
+noCalls :: IntMap Inst -> Bool
+noCalls = allOf each (hasn't #_Call)
+
+usesName :: Name -> IntMap Inst -> Bool
+usesName name = allOf (each % instOperands % operandNames) (/= name)
+
+-- between = inBetween idT
+
+substInstInst :: Inst -> Inst -> Inst
+substInstInst inst inst' = inst' & instOperands %~ substInstOperand inst
+
+substInstOperand :: Inst -> Operand -> Operand
+substInstOperand inst operand = case (inst ^? instName, operand) of
+  (Just name, Temp name') | name == name' -> Nested inst
+  (Just _name, Nested inst') -> Nested $ inst' & instOperands %~ substInstOperand inst
+  (Just _name, other) -> other
+  (Nothing, other) -> other
+
+-- for calls we also need to make sure that there aren't any calls in between
+getMoveStatus :: Inst -> MoveStatus
+getMoveStatus = \case
+  Alloca _ -> Don'tMove
+  Call _ -> HardToMove
+  Store _ -> HardToMove
+  Load _ -> HardToMove
+  Gep _ -> EasilyMoved
+  BinOp _ -> EasilyMoved
+  Bitcast _ -> EasilyMoved
+  Icmp _ -> EasilyMoved
+
+data MoveStatus
+  = EasilyMoved
+  | Don'tMove
+  | HardToMove
+
+-- usesInBetween :: Name -> Range -> ToTreeState -> Bool
+-- usesInBetween name range@(RangeP start end) st = undefined
+--   where
+--     between = inBetween idT
+
+stateFromBlock :: Block -> ToTreeState
+stateFromBlock block =
+  ToTreeState
+    { idToInst,
+      nameToInst,
+      idToUses,
+      term = block ^. #term
+    }
   where
-    tempMap = getTempMap body
-
-funBodyToTreeWith :: MonadState TempMap m => FunBody 'Flat -> m (FunBody 'Tree)
-funBodyToTreeWith FunBody {entry, labeled} = do
-  entry <- blockToTree entry
-  labeled <- traverseOf (traversed % #block) blockToTree labeled
-  pure FunBody {entry, labeled}
-
-blockToTree :: MonadToTree m => Block 'Flat -> m (Block 'Tree)
-blockToTree Block {inst, term} = do
-  inst <- traverse toTree inst
-  term <- toTree term
-  pure Block {inst, term}
-
-toTree :: MonadToTree m => Inst' s 'Flat -> m (Inst' s 'Tree)
-toTree inst = do
-  forOf instOperands inst $ \case
-    Const i -> pure $ Const i
-    Gid name -> pure $ Gid name
-    Temp name -> do
-      (instAt, maybeRest) <- use $ at name % unwrap (error "")
-      case maybeRest of
-        Just rest -> pure $ TempTree name (Just rest)
-        Nothing -> do
-          rest <- toTreeDeep instAt
-          at name % unwrap (error "") % _2 .= rest
-          pure $ TempTree name rest
-
--- see if the operations have side effects before converting them
-toTreeDeep :: MonadToTree m => Inst' s 'Flat -> m (Maybe (Inst' s 'Tree))
-toTreeDeep = \case
-  Alloca _ -> pure Nothing
-  Store _ -> pure Nothing
-  Call _ -> pure Nothing
-  inst -> Just <$> toTree inst
-
-getTempMap :: FunBody 'Flat -> TempMap
-getTempMap body = tempMapEntry <> tempMapLabeled
-  where
-    tempMapEntry = getTempMapInsts (body ^. #entry % #inst) <> tempMapLabeled
-    tempMapLabeled =
-      foldMap' id $
-        ( body
-            ^.. #labeled
-            % folded
-            % #block
-            % #inst
-        )
-          <&> getTempMapInsts
-
-getTempMapInsts :: [Inst 'Flat] -> TempMap
-getTempMapInsts insts =
-  HashMap.fromList $
-    ( insts & traversed
-        %~ (\inst -> inst ^? instName & _Just %~ (,(inst, Nothing)))
-    )
-      ^.. folded
-      % _Just
+    idToInst = IntMap.fromList instWithId
+    nameToInst = HashMap.toMapOf (folded % _Just % ifolded) instWithName
+    instWithName =
+      ( \(id, inst) -> do
+          name <- inst ^? instName
+          pure (name, (id, inst))
+      )
+        <$> instWithId
+    instWithId = zip [1 :: Int ..] (block ^. #insts)
+    idToUses = foldl' go Empty instWithId
+      where
+        go :: IntMap Int -> (Int, Inst) -> IntMap Int
+        go uses (id, inst) = uses & at id .~ firstSingle
+          where
+            names = inst ^.. instOperands % operandNames
+            ids = (\name -> nameToInst ^?! at name % _Just % _1) <$> names
+            first = getFirst $ foldMap (First . Just) ids
+            firstSingle = case ids of
+              _ : _ : _ -> Nothing
+              _ -> first

@@ -17,7 +17,8 @@ import qualified Data.Text.Read as Text.Read
 import Data.Maybe (fromJust)
 import GHC.Records
 import Debug.Trace
-import qualified Oat.Span as Span
+import qualified Data.Span as Span
+import Data.Span (Span(SpanP))
 import Oat.LL.Token.Kind (Kind)
 import Optics
 import Optics.Operators
@@ -140,7 +141,7 @@ alexMonadScan = do
       let text = T.take len $ inpText inp
           pos1 = inpPos inp
           pos2 = inpPos inp'
-          span = Span.mkSpan pos1 pos2
+          span = SpanP pos1 pos2
           env = AlexEnv text span
       runReaderT action env
 }
