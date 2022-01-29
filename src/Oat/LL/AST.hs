@@ -312,14 +312,14 @@ termOperands = traversalVL go
       Br name -> pure $ Br name
       Cbr inst -> Cbr <$> traverseOf #arg f inst
 
-operandNames :: Traversal' Operand Name
-operandNames = traversalVL go
+operandName :: AffineTraversal' Operand Name
+operandName = atraversalVL go
   where
-    go :: TraversalVL' Operand Name
-    go f = \case
+    go :: AffineTraversalVL' Operand Name
+    go point f = \case
       Gid name -> Gid <$> f name
       Temp name -> Temp <$> f name
-      other -> pure other
+      other -> point other
 
 doesInsAssign :: Inst -> Bool
 doesInsAssign (Call CallInst {ty = Void}) = False

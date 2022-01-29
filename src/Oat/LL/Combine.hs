@@ -1,46 +1,67 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.LL.ToTree where
+module Oat.LL.Combine where
 
 import qualified Data.HashMap.Optics as HashMap
 import qualified Data.IntMap.Strict as IntMap
 import Data.Range (Range (RangeP))
 import Oat.Common (inBetween)
 import Oat.LL.AST
+  ( Block,
+    Inst (..),
+    Operand (Nested, Temp),
+    Term,
+    instName,
+    instOperands,
+    operandName,
+  )
 import Oat.LL.Name (Name)
 import Optics
 import Optics.Operators.Unsafe ((^?!))
+import Optics.State.Operators
 
-data ToTreeState = ToTreeState
-  { idToInst :: !(IntMap Inst),
+data CombineState = CombineState
+  { -- this serves to purposes:
+    -- to be a map from ids to Insts
+    -- and also to be an ordered representation of the program
+    -- thus when we combine instructions we have to delete the ids from this field
+    -- the other fields are just used for maps only
+    idToInst :: !(IntMap Inst),
     nameToInst :: !(HashMap Name (Int, Inst)),
     idToUses :: !(IntMap Int),
     term :: !Term
   }
 
-$(makeFieldLabelsNoPrefix ''ToTreeState)
+$(makeFieldLabelsNoPrefix ''CombineState)
 
-type MonadToTree = MonadState ToTreeState
+type MonadCombine = MonadState CombineState
 
-type ToTreeM = State ToTreeState
+type CombineM = State CombineState
 
-toTreeInst :: MonadToTree m => Int -> Inst -> m Inst
-toTreeInst id inst = do
+-- blockToTree :: Block -> Block
+-- blockToTree =
+
+combineInst :: MonadCombine m => Int -> Inst -> m Inst
+combineInst id inst = do
   st <- get
-  case toTreeInst' id inst st of
-    Just (toDelete, inst') -> undefined
+  case combineInst' id inst st of
+    Just (toDelete, inst') -> do
+      #idToInst % at toDelete .= Nothing
+      pure inst'
     Nothing -> pure inst
 
--- case toTreeInst'
--- let (toDelete, inst')
-
-toTreeInst' :: Int -> Inst -> ToTreeState -> Maybe (Int, Inst)
-toTreeInst' id inst st = do
+combineInst' :: Int -> Inst -> CombineState -> Maybe (Int, Inst)
+combineInst' id inst st = do
   -- TODO: for now stuff without names cannot be combined
   name <- inst ^? instName
   useId <- st ^. #idToUses % at id
   let useInst = st ^?! #idToInst % ix useId
+  -- for now if the next instructions uses the name twice or more, we cannot combine it
+  -- maybe we should have some sort of seq instruction
+  case useInst ^.. instOperands % filtered (\operand -> Just name == (operand ^? operandName)) of
+    _ : _ : _ -> Nothing
+    _ -> pure ()
   let between = inBetween (RangeP id useId) (st ^. #idToInst)
   let substDownRes = (id, substInstInst inst useInst)
   case (getMoveStatus inst, getMoveStatus useInst) of
@@ -49,15 +70,17 @@ toTreeInst' id inst st = do
       if usesName name between
         then Nothing
         else case inst of
-          Call _ | noCalls between -> Just substDownRes
-          _ -> Nothing
+          Call _
+            | noCalls between -> Just substDownRes
+            | otherwise -> Nothing
+          _ -> Just substDownRes
     _ -> Nothing
 
 noCalls :: IntMap Inst -> Bool
 noCalls = allOf each (hasn't #_Call)
 
 usesName :: Name -> IntMap Inst -> Bool
-usesName name = allOf (each % instOperands % operandNames) (/= name)
+usesName name = allOf (each % instOperands % operandName) (/= name)
 
 -- between = inBetween idT
 
@@ -88,14 +111,14 @@ data MoveStatus
   | Don'tMove
   | HardToMove
 
--- usesInBetween :: Name -> Range -> ToTreeState -> Bool
+-- usesInBetween :: Name -> Range -> CombineState -> Bool
 -- usesInBetween name range@(RangeP start end) st = undefined
 --   where
 --     between = inBetween idT
 
-stateFromBlock :: Block -> ToTreeState
+stateFromBlock :: Block -> CombineState
 stateFromBlock block =
-  ToTreeState
+  CombineState
     { idToInst,
       nameToInst,
       idToUses,
@@ -116,7 +139,7 @@ stateFromBlock block =
         go :: IntMap Int -> (Int, Inst) -> IntMap Int
         go uses (id, inst) = uses & at id .~ firstSingle
           where
-            names = inst ^.. instOperands % operandNames
+            names = inst ^.. instOperands % operandName
             ids = (\name -> nameToInst ^?! at name % _Just % _1) <$> names
             first = getFirst $ foldMap (First . Just) ids
             firstSingle = case ids of
