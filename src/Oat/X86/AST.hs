@@ -14,6 +14,8 @@ module Oat.X86.AST
     Prog (..),
     Operand,
     Mem (.., MemImm, MemReg),
+    pattern ImmLit,
+    pattern ImmLab,
     -- (@@),
     -- operandHasLab,
     -- p1,
@@ -80,6 +82,12 @@ data Imm
   = Lit !Int64
   | Lab !ByteString
   deriving (Show, Eq)
+
+pattern ImmLit :: (Frame.Imm a ~ Imm) => Int64 -> Asm.Operand a
+pattern ImmLit i = Asm.Imm (Lit i)
+
+pattern ImmLab :: (Frame.Imm a ~ Imm) => ByteString -> Asm.Operand a
+pattern ImmLab l = Asm.Imm (Lab l)
 
 data Reg
   = Rax

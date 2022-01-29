@@ -31,6 +31,9 @@ deriving instance AsmConstraint Eq a => Eq (Operand a)
 pattern Reg :: Reg a -> Operand a
 pattern Reg r = Loc (LReg r)
 
+pattern Mem :: Mem a -> Operand a
+pattern Mem m = Loc (LMem m)
+
 pattern Temp :: LL.Name -> Operand a
 pattern Temp t = Loc (LTemp t)
 
