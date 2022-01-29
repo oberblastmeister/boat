@@ -132,6 +132,7 @@ library
     Oat.LL.Lexer
     Oat.LL.Parser
     Oat.LL.AST
+    Oat.LL.Combine
     Oat.LL.LexerWrapper
     Oat.LL.ParserWrapper
     Oat.LL.Name
