@@ -1,2 +1,7 @@
-packages: ./
-with-compiler: ghc-9.0.2
+packages:
+    oat-core/
+    oat-prelude/
+
+tests: true
+
+with-compiler: ghc-9.2.1

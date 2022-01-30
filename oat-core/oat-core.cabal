@@ -1,0 +1,146 @@
+cabal-version:      3.6
+name:               oat-core
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             brian
+maintainer:         littlebubu.shu@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+common common-options
+  -- yay
+  default-language: GHC2021
+  default-extensions:
+    LambdaCase,
+    OverloadedStrings,
+    DuplicateRecordFields,
+    DataKinds,
+    ViewPatterns,
+    PatternSynonyms,
+    TypeFamilies,
+    FunctionalDependencies,
+    GADTs,
+    ImpredicativeTypes,
+    OverloadedLabels,
+    NoFieldSelectors,
+    OverloadedRecordDot,
+  ghc-options:
+    -Wall
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -Wno-name-shadowing
+    -Werror=incomplete-patterns
+    -Werror=incomplete-uni-patterns
+    -Werror=missing-methods
+  build-depends:
+    base >=4.12 && <5,
+    oat-prelude,
+    template-haskell >= 2.16.0.0 && < 2.19.0.0,
+    optics ^>= 0.4,
+    optics-extra ^>= 0.4,
+    mtl ^>= 2.2.2,
+    containers ^>= 0.6.5.1,
+    unordered-containers ^>= 0.2.16.0,
+    fgl ^>= 5.7.0.3,
+    text ^>= 1.2.5.0,
+    text-builder ^>= 0.6.6.3,
+    -- relude bound
+    hashable >= 1.2 && <1.4,
+    bytestring ^>= 0.11.2.0,
+    filepath ^>= 1.4.2.1,
+    -- needed for alex
+    array ^>= 0.5.4.0,
+    vector ^>= 0.12.3.1,
+    foldl ^>= 1.4.12,
+    split ^>= 0.2.3.4,
+    conduit ^>= 1.3.4.2,
+    recursion-schemes ^>= 5.2.2.2,
+    prettyprinter ^>= 1.7.1,
+    pretty-simple ^>= 4.0.0.0,
+    typed-process ^>= 0.2.8.0,
+    optparse-applicative ^>= 0.16.1.0
+  build-tool-depends:
+    hspec-discover:hspec-discover,
+    alex:alex,
+    happy:happy
+  mixins:
+    base (Prelude as OldPrelude),
+    base hiding (Prelude),
+    oat-prelude (OatPrelude as Prelude),
+    oat-prelude
+
+library
+  import: common-options
+  hs-source-dirs: src
+  exposed-modules:
+    Data.ASCII
+    Data.Pos
+    Data.Span
+    Data.Range
+    Oat
+    Oat.Frame
+    Oat.Fold
+    Oat.Interned
+    Oat.Interned.Internal
+    Oat.Interned.Text
+    Oat.Interned.ShortByteString
+    Oat.Wrappers.Lexer
+    Oat.Wrappers.Parser
+    Oat.Common
+    Oat.Backend
+    Oat.Alloc
+    Oat.LL
+    Oat.LL.Token
+    Oat.LL.Token.Kind
+    Oat.LL.Lexer
+    Oat.LL.Parser
+    Oat.LL.AST
+    Oat.LL.Combine
+    Oat.LL.LexerWrapper
+    Oat.LL.ParserWrapper
+    Oat.LL.Name
+    Oat.Asm.AST
+    Oat.X86.AST
+
+common rtsopts
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+executable oat-core
+  import: common-options, rtsopts
+  main-is: Main.hs
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+  build-depends:
+    oat-core
+  hs-source-dirs:   app
+  
+test-suite oat-core-test
+  import: common-options, rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+    Oat.InternedSpec
+  build-depends:
+    oat-core,
+    -- doesn't build with bytestring for some reason
+    hspec == 2.9.2,
+    QuickCheck ^>= 2.14.2,
+    quickcheck-instances ^>= 0.3.27

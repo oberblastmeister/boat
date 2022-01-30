@@ -18,10 +18,10 @@
       {
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            haskell.compiler.ghc902
-            ormolu
-            haskell-language-server
-            clang_13
+            /* haskell.compiler.ghc921 */
+            /* ormolu */
+            /* haskell-language-server */
+            /* clang_13 */
           ];
         };
       }
