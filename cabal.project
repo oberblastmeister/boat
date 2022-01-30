@@ -1,3 +1,33 @@
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/optics.git
+    tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
+    subdir: optics
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/optics.git
+    tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
+    subdir: optics-extra
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/optics.git
+    tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
+    subdir: optics-core
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/optics.git
+    tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
+    subdir: optics-th
+
+source-repository-package
+    type: git
+    location: https://github.com/well-typed/optics.git
+    tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
+    subdir: optics-vl
+
 packages:
     oat-core/
     oat-prelude/

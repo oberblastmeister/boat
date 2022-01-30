@@ -4,12 +4,13 @@
 module Oat.Backend.X86 where
 
 import Data.ASCII (fromASCII)
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Oat.Asm.AST (pattern Move, pattern Op, pattern Reg, pattern Temp)
-import qualified Oat.Asm.AST as Asm
-import qualified Oat.LL as LL
+import Oat.Asm.AST qualified as Asm
+import Oat.Frame qualified as Frame
+import Oat.LL qualified as LL
 import Oat.X86.AST (OpCode (..), Reg (..))
-import qualified Oat.X86.AST as X86
+import Oat.X86.AST qualified as X86
 import Optics
 import Optics.Operators.Unsafe
 import Optics.State.Operators
@@ -23,8 +24,9 @@ data InstLifted
   | Lab ByteString
 
 data BackendState = BackEndState
-  { insts :: !(Seq InstLifted)
-  -- tyDecls :: HashMap (ASCII ByteString) LL.Ty
+  { insts :: !(Seq InstLifted),
+    frame :: !X86.Frame,
+    tyDecls :: LL.TyMap
   }
 
 type BackendM = State BackendState
@@ -32,6 +34,19 @@ type BackendM = State BackendState
 type MonadBackend = MonadState BackendState
 
 makeFieldLabelsNoPrefix ''BackendState
+
+instance Frame.HasFrame BackendState X86.Frame where
+  frameLens = #frame
+
+tySize :: MonadBackend m => LL.Ty -> m Int
+tySize ty = do
+  tyDecls <- use #tyDecls
+  pure $ LL.tySize tyDecls ty
+
+lookupTy :: MonadBackend m => LL.Name -> m LL.Ty
+lookupTy name = do
+  mp <- use #tyDecls
+  pure $ LL.lookupTy name mp
 
 compileOperand :: LL.Operand -> X86.Operand
 compileOperand (LL.Const i) = X86.ImmLit $ fromIntegral i
@@ -53,6 +68,10 @@ emitInsts insts = modify' (#insts %~ (<> Seq.fromList (Inst <$> insts)))
 munchInst :: MonadBackend m => LL.Inst -> m ()
 munchInst = \case
   LL.BinOp inst -> munchBinOp inst
+  LL.Icmp inst -> munchIcmp inst
+  -- LL.Alloca inst -> do
+  --   mem <- Frame.allocLocalM
+  --   allocLocalWithM
   other -> pure undefined
 
 munchNested :: MonadBackend m => LL.Operand -> m ()
@@ -70,21 +89,21 @@ munchIcmp LL.IcmpInst {name, op, arg1, arg2} = do
 munchBinOp :: MonadBackend m => LL.BinOpInst -> m ()
 munchBinOp LL.BinOpInst {name, op, arg1, arg2}
   | LL.Mul <- op = do
-    munchNested arg1
-    munchNested arg2
-    emitInsts
-      [ Move (compileOperand arg2) (Reg Rax),
-        Op Imulq [compileOperand arg1] [Reg Rax],
-        Move (Reg Rax) (Temp name)
-      ]
+      munchNested arg1
+      munchNested arg2
+      emitInsts
+        [ Move (compileOperand arg2) (Reg Rax),
+          Op Imulq [compileOperand arg1] [Reg Rax],
+          Move (Reg Rax) (Temp name)
+        ]
   | otherwise = do
-    munchNested arg1
-    munchNested arg2
-    emitInsts
-      [ Move (compileOperand arg2) (Reg Rax),
-        Op (mapBinOp op) [compileOperand arg1] [Reg Rax],
-        Move (Reg Rax) (Temp name)
-      ]
+      munchNested arg1
+      munchNested arg2
+      emitInsts
+        [ Move (compileOperand arg2) (Reg Rax),
+          Op (mapBinOp op) [compileOperand arg1] [Reg Rax],
+          Move (Reg Rax) (Temp name)
+        ]
 
 mapBinOp :: LL.BinOp -> X86.OpCode
 mapBinOp = \case

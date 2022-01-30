@@ -54,8 +54,8 @@ common common-options
     text ^>= 1.2.5.0,
     bytestring ^>= 0.11.2.0,
     hashable >= 1.2 && <1.4,
-    optics ^>= 0.4,
-    optics-extra ^>= 0.4,
+    optics,
+    optics-extra,
 
 library
   import: common-options

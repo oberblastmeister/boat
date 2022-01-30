@@ -1,4 +1,4 @@
--- need these to not get errors about invalid variables because of record selectors
+-- need these record extensions to not get errors about invalid variables because of record selectors
 {-# LANGUAGE FieldSelectors #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -56,9 +56,6 @@ makeLexer name defUserState = do
     instance LabelOptic "text" A_Lens AlexEnv AlexEnv Text Text where
       labelOptic = lensVL $ \f (AlexEnv text span) -> fmap (`AlexEnv` span) (f text)
 
-    alexStartPos :: Pos
-    alexStartPos = Pos 1 1
-
     alexMove :: Pos -> Char -> Pos
     alexMove (Pos line _) '\n' = Pos (line + 1) 1
     alexMove (Pos line col) _ = Pos line (col + 1)
@@ -74,7 +71,7 @@ makeLexer name defUserState = do
     defaultAlexState stateText =
       AlexState
         { stateBytes = Empty,
-          statePos = alexStartPos,
+          statePos = Pos 1 1,
           stateText,
           stateCh = '\n',
           stateScd = 0,

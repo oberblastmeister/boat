@@ -3,19 +3,13 @@
 
 module Oat.LL.Combine where
 
-import qualified Data.HashMap.Optics as HashMap
-import qualified Data.IntMap.Strict as IntMap
+import Data.HashMap.Optics qualified as HashMap
+import Data.HashSet.InsOrd (InsOrdHashSet)
+import Data.HashSet.Optics qualified as HashSet
+import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
-import Oat.Common (inBetween)
-import Oat.LL.AST
-  ( Block (..),
-    Inst (..),
-    Operand (Nested, Temp),
-    Term,
-    instName,
-    instOperands,
-    operandName,
-  )
+import Oat.Common (inBetween, insOrdSetOf)
+import Oat.LL.AST qualified as LL
 import Oat.LL.Name (Name)
 import Optics.Operators.Unsafe ((^?!))
 
@@ -25,11 +19,11 @@ data CombineState = CombineState
     -- and also to be an ordered representation of the program
     -- thus when we combine instructions we have to delete the ids from this field
     -- the other fields are just used for maps only
-    idToInst :: !(IntMap Inst),
-    nameToInst :: !(HashMap Name (Int, Inst)),
+    idToInst :: !(IntMap LL.Inst),
+    nameToInst :: !(HashMap Name (Int, LL.Inst)),
     -- if it is Nothing, that means it is used in a terminator
     idToUses :: !(IntMap Int),
-    term :: !Term,
+    term :: !LL.Term,
     prevId :: !Int
   }
 
@@ -39,10 +33,15 @@ type MonadCombine = MonadState CombineState
 
 type CombineM = State CombineState
 
-combineBlock :: Block -> Block
+-- combineBody :: LL.FunBody -> LL.FunBody
+-- combineBody body =
+--   where
+--     body' = removeAlloca
+
+combineBlock :: LL.Block -> LL.Block
 combineBlock block = block'
   where
-    block' = Block {insts = combineState' ^.. #idToInst % each, term = combineState' ^. #term}
+    block' = LL.Block {insts = combineState' ^.. #idToInst % each, term = combineState' ^. #term}
     ((), combineState') = runState combineLoop combineState
     combineState = stateFromBlock block
 
@@ -57,7 +56,7 @@ combineLoop = do
       combineLoop
     Nothing -> pure ()
 
-combineInst :: MonadCombine m => Int -> Inst -> m ()
+combineInst :: MonadCombine m => Int -> LL.Inst -> m ()
 combineInst id inst = do
   st <- get
   case combineInst' id inst st of
@@ -66,15 +65,15 @@ combineInst id inst = do
       #idToInst % at toInsert ?= inst'
     Nothing -> pure ()
 
-combineInst' :: Int -> Inst -> CombineState -> Maybe (Int, Int, Inst)
+combineInst' :: Int -> LL.Inst -> CombineState -> Maybe (Int, Int, LL.Inst)
 combineInst' id inst st = do
   -- TODO: for now stuff without names cannot be combined
-  name <- inst ^? instName
+  name <- inst ^? LL.instName
   useId <- st ^. #idToUses % at id
   let useInst = st ^?! #idToInst % ix useId
   -- for now if the next instructions uses the name twice or more, we cannot combine it
   -- maybe we should have some sort of seq instruction
-  case useInst ^.. instOperands % filtered (\operand -> Just name == (operand ^? operandName)) of
+  case useInst ^.. LL.instOperands % filtered (\operand -> Just name == (operand ^? LL.operandName)) of
     _ : _ : _ -> Nothing
     _ -> pure ()
   let between = inBetween (RangeP id useId) (st ^. #idToInst)
@@ -85,39 +84,39 @@ combineInst' id inst st = do
       if usesName name between
         then Nothing
         else case inst of
-          Call _
+          LL.Call _
             | noCalls between -> Just substDownRes
             | otherwise -> Nothing
           _ -> Just substDownRes
     _ -> Nothing
 
-noCalls :: IntMap Inst -> Bool
+noCalls :: IntMap LL.Inst -> Bool
 noCalls = allOf each (hasn't #_Call)
 
-usesName :: Name -> IntMap Inst -> Bool
-usesName name = allOf (each % instOperands % operandName) (/= name)
+usesName :: Name -> IntMap LL.Inst -> Bool
+usesName name = allOf (each % LL.instOperands % LL.operandName) (/= name)
 
-substInstInst :: Inst -> Inst -> Inst
-substInstInst inst inst' = inst' & instOperands %~ substInstOperand inst
+substInstInst :: LL.Inst -> LL.Inst -> LL.Inst
+substInstInst inst inst' = inst' & LL.instOperands %~ substInstOperand inst
 
-substInstOperand :: Inst -> Operand -> Operand
-substInstOperand inst operand = case (inst ^? instName, operand) of
-  (Just name, Temp name') | name == name' -> Nested inst
-  (Just _name, Nested inst') -> Nested $ inst' & instOperands %~ substInstOperand inst
+substInstOperand :: LL.Inst -> LL.Operand -> LL.Operand
+substInstOperand inst operand = case (inst ^? LL.instName, operand) of
+  (Just name, LL.Temp name') | name == name' -> LL.Nested inst
+  (Just _name, LL.Nested inst') -> LL.Nested $ inst' & LL.instOperands %~ substInstOperand inst
   (Just _name, other) -> other
   (Nothing, other) -> other
 
 -- for calls we also need to make sure that there aren't any calls in between
-getMoveStatus :: Inst -> MoveStatus
+getMoveStatus :: LL.Inst -> MoveStatus
 getMoveStatus = \case
-  Alloca _ -> Don'tMove
-  Call _ -> HardToMove
-  Store _ -> HardToMove
-  Load _ -> HardToMove
-  Gep _ -> EasilyMoved
-  BinOp _ -> EasilyMoved
-  Bitcast _ -> EasilyMoved
-  Icmp _ -> EasilyMoved
+  LL.Alloca _ -> Don'tMove
+  LL.Call _ -> HardToMove
+  LL.Store _ -> HardToMove
+  LL.Load _ -> HardToMove
+  LL.Gep _ -> EasilyMoved
+  LL.BinOp _ -> EasilyMoved
+  LL.Bitcast _ -> EasilyMoved
+  LL.Icmp _ -> EasilyMoved
 
 data MoveStatus
   = EasilyMoved
@@ -129,7 +128,7 @@ data MoveStatus
 --   where
 --     between = inBetween idT
 
-stateFromBlock :: Block -> CombineState
+stateFromBlock :: LL.Block -> CombineState
 stateFromBlock block =
   CombineState
     { idToInst,
@@ -143,19 +142,38 @@ stateFromBlock block =
     nameToInst = HashMap.toMapOf (folded % _Just % ifolded) instWithName
     instWithName =
       ( \(id, inst) -> do
-          name <- inst ^? instName
+          name <- inst ^? LL.instName
           pure (name, (id, inst))
       )
         <$> instWithId
     instWithId = zip [1 :: Int ..] (block ^. #insts)
     idToUses = foldl' go Empty instWithId
       where
-        go :: IntMap Int -> (Int, Inst) -> IntMap Int
+        go :: IntMap Int -> (Int, LL.Inst) -> IntMap Int
         go uses (id, inst) = uses & at id .~ firstSingle
           where
-            names = inst ^.. instOperands % operandName
+            names = inst ^.. LL.instOperands % LL.operandName
             ids = (\name -> nameToInst ^?! at name % _Just % _1) <$> names
             first = getFirst $ foldMap (First . Just) ids
             firstSingle = case ids of
               _ : _ : _ -> Nothing
               _ -> first
+
+-- probably not the fastest
+-- removeAlloca :: LL.FunBody -> (LL.FunBody, InsOrdHashSet Name)
+-- removeAlloca body = undefined
+--   where
+--     -- body' =
+--     --   body & LL.bodyInsts % LL.instOperands
+--     --     %~ ( \case
+--     --            LL.Temp name | has (ix name) allocaNameSet -> LL.MemTemp name
+--     --            other -> other
+--     --        )
+--     body' = foldlOf' LL.bodyInsts (_) (mempty)
+--       body & LL.bodyInsts %~ (\case
+--       )
+--         -- %~ ( \case
+--         --        LL.Temp name | has (ix name) allocaNameSet -> LL.MemTemp name
+--         --        other -> other
+--         --    )
+--     -- allocaNameSet = insOrdSetOf (LL.bodyInsts % #_Alloca % #name) body

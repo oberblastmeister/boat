@@ -18,12 +18,12 @@ module Data.Range
 where
 
 import Data.Data (Data)
-import qualified Data.Vector.Generic as V
-import qualified Data.Vector.Generic.Mutable as VM
+import Data.Vector.Generic qualified as V
+import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Unboxed (Unbox)
-import qualified Data.Vector.Unboxed as VU
-import qualified Data.Vector.Unboxed.Mutable as VUM
-import Prelude hiding (contains, empty, length)
+import Data.Vector.Unboxed qualified as VU
+import Data.Vector.Unboxed.Mutable qualified as VUM
+import Prelude hiding (contains, length)
 
 data Range = Range
   { start :: !Int,

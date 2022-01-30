@@ -1,18 +1,20 @@
 module Oat.Common
-  ( 
-    internalError,
+  ( internalError,
     unwrap,
     unreachable,
     hashSetOf,
     makeFieldGetterLabelsNoPrefix,
     inBetween,
+    insOrdSetOf,
   )
 where
 
-import qualified Data.HashSet as HashSet
-import qualified Data.IntMap as IntMap
+import Data.HashSet qualified as HashSet
+import Data.HashSet.InsOrd (InsOrdHashSet)
+import Data.HashSet.InsOrd qualified as InsOrdHashSet
+import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
-import qualified Language.Haskell.TH as TH
+import Language.Haskell.TH qualified as TH
 
 internalError :: forall a. HasCallStack => Text -> a
 internalError t = error $ "Internal compiler error: " <> t
@@ -44,3 +46,6 @@ inBetween (RangeP start end) imap = imap''
   where
     (imap'', _) = IntMap.split end imap'
     (_, imap') = IntMap.split start imap
+
+insOrdSetOf :: (Is k A_Fold, Eq a, Hashable a) => Optic' k is s a -> s -> InsOrdHashSet a
+insOrdSetOf o = foldlOf' o (flip InsOrdHashSet.insert) mempty

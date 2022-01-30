@@ -14,6 +14,7 @@ module Oat.X86.AST
     Prog,
     Operand,
     Mem (.., MemImm, MemReg),
+    Frame (..),
     pattern ImmLit,
     pattern ImmLab,
     -- (@@),
@@ -25,18 +26,12 @@ module Oat.X86.AST
   )
 where
 
-import Data.ASCII (ASCII, ToASCII (toASCII))
+import Data.ASCII (ASCII)
 import Data.Int (Int64)
-import Data.Text.Encoding qualified as T
 import Oat.Asm.AST qualified as Asm
-import Oat.Frame (Frame)
 import Oat.Frame qualified as Frame
-import Optics
-import Optics.Operators.Unsafe ((^?!))
-import Prettyprinter (Doc, Pretty (pretty))
-import Prettyprinter qualified as P
 
-data X86Frame = X86Frame
+data Frame = X86Frame
   { stack :: !Int
   }
 
@@ -73,11 +68,11 @@ pattern MemReg reg =
       scale = Nothing
     }
 
-instance Frame X86Frame where
-  type Reg X86Frame = Reg
-  type Mem X86Frame = Mem
-  type Imm X86Frame = Imm
-  type OpCode X86Frame = OpCode
+instance Frame.Frame Frame where
+  type Reg Frame = Reg
+  type Mem Frame = Mem
+  type Imm Frame = Imm
+  type OpCode Frame = OpCode
   newFrame = undefined
   allocLocalWith = undefined
   allocGlobal = undefined
@@ -89,10 +84,10 @@ data Imm
   | Lab !ByteString
   deriving (Show, Eq)
 
-pattern ImmLit :: (Frame.Imm a ~ Imm) => Int64 -> Asm.Operand a
+pattern ImmLit :: Int64 -> Operand
 pattern ImmLit i = Asm.Imm (Lit i)
 
-pattern ImmLab :: (Frame.Imm a ~ Imm) => ByteString -> Asm.Operand a
+pattern ImmLab :: ByteString -> Operand
 pattern ImmLab l = Asm.Imm (Lab l)
 
 data Reg
@@ -174,9 +169,9 @@ data OpCode
 -- (@@) opcode operands = Inst {opcode, operands}
 
 -- infix 9 @@
-type Inst = Asm.Inst X86Frame
+type Inst = Asm.Inst Frame
 
-type Operand = Asm.Operand X86Frame
+type Operand = Asm.Operand Frame
 
 data Data
   = Asciz !Text
@@ -197,7 +192,7 @@ data Elem = Elem
 
 type Prog = [Elem]
 
-makeFieldLabelsNoPrefix ''X86Frame
+makeFieldLabelsNoPrefix ''Frame
 makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
 

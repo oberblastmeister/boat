@@ -4,11 +4,11 @@
 
 module Oat.LL.AST where
 
-import Data.ASCII (ASCII, ToASCII (toASCII))
+import Data.ASCII (ASCII)
 import Data.Data (Data)
 import Data.Int (Int64)
 import Data.Text qualified as T
-import Oat.Common
+import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 
 data Ty
@@ -93,6 +93,8 @@ data Operand where
   Temp :: !Name -> Operand
   -- invariant, some instructions cannot be nested
   Nested :: Inst -> Operand
+  -- equivalent to just imm(%rsp)
+  MemTemp :: !Name -> Operand
   deriving (Show, Eq)
 
 data BinOpInst = BinOpInst
@@ -232,6 +234,7 @@ data Prog = Prog
   }
 
 $(makeFieldLabelsNoPrefix ''LoadInst)
+$(makeFieldLabelsNoPrefix ''AllocaInst)
 $(makeFieldLabelsNoPrefix ''BinOpInst)
 $(makeFieldLabelsNoPrefix ''StoreInst)
 $(makeFieldLabelsNoPrefix ''IcmpInst)
@@ -268,6 +271,19 @@ bodyBlocks = traversalVL $ \f body -> do
   labeled <- traverseOf (each % #block) f (body ^. #labeled)
   pure $ FunBody {entry, labeled}
 
+bodyInsts :: Traversal' FunBody Inst
+bodyInsts = bodyBlocks % #insts % traversed
+
+data Person = MkPerson {name :: String, pets :: [Pet]}
+
+data Pet = MkPet {name :: Int}
+
+getPersonName :: Person -> String
+getPersonName p = p.name
+
+setPersonName :: String -> Person -> Person
+setPersonName n p = p {name = n}
+
 instOperands :: Traversal' Inst Operand
 instOperands = traversalVL go
   where
@@ -276,6 +292,7 @@ instOperands = traversalVL go
       BinOp inst@BinOpInst {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
+        -- pure $ BinOp $ inst & #arg1 .~ arg1 & #arg1 .~ arg2
         pure $ BinOp inst {arg1, arg2}
       Alloca inst -> pure $ Alloca inst
       Load inst@LoadInst {arg} -> do
@@ -317,9 +334,28 @@ operandName = atraversalVL go
     go point f = \case
       Gid name -> Gid <$> f name
       Temp name -> Temp <$> f name
+      MemTemp name -> MemTemp <$> f name
       other -> point other
 
 doesInsAssign :: Inst -> Bool
 doesInsAssign (Call CallInst {ty = Void}) = False
 doesInsAssign (Store _) = False
 doesInsAssign _ = True
+
+tySize :: TyMap -> Ty -> Int
+tySize tyDecls =
+  paraOf (plateTy tyDecls) go
+  where
+    go ty rs =
+      case ty of
+        Void -> 0
+        I8 -> 0
+        I1 -> 8
+        I64 -> 8
+        TyFun _ -> 0
+        TyNamed _ -> size
+        TyPtr _ -> 8
+        TyArray n _ -> n * size
+        TyStruct _ -> size
+      where
+        size = sum rs

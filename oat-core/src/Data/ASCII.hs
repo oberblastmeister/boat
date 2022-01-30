@@ -13,7 +13,6 @@ import Data.ByteString qualified as ByteString
 import Data.Char qualified as Char
 import Data.Data (Data)
 import Data.Word (Word8)
-import Text.Show qualified
 
 class ToASCII s where
   toASCII :: s -> Maybe (ASCII s)

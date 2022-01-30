@@ -3,10 +3,8 @@
 
 module Oat.Asm.AST where
 
-import Oat.Frame (Frame (..), HasFrame (..))
+import Oat.Frame (Frame (..))
 import qualified Oat.LL as LL
-import Optics
-import Optics.State.Operators
 
 type AsmConstraint :: (Type -> Constraint) -> Type -> Constraint
 type AsmConstraint c a = (c (Reg a), c (Mem a), c (Imm a), c (OpCode a))

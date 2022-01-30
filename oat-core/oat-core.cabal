@@ -43,6 +43,8 @@ common common-options
     -Wincomplete-record-updates
     -Wredundant-constraints
     -Wno-name-shadowing
+    -- until OverloadedRecordUpdate stabilizes
+    -Wno-ambiguous-fields
     -Werror=incomplete-patterns
     -Werror=incomplete-uni-patterns
     -Werror=missing-methods
@@ -50,11 +52,12 @@ common common-options
     base >=4.12 && <5,
     oat-prelude,
     template-haskell >= 2.16.0.0 && < 2.19.0.0,
-    optics ^>= 0.4,
-    optics-extra ^>= 0.4,
+    optics,
+    optics-extra,
     mtl ^>= 2.2.2,
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
+    insert-ordered-containers ^>= 0.2.5.1,
     fgl ^>= 5.7.0.3,
     text ^>= 1.2.5.0,
     text-builder ^>= 0.6.6.3,
@@ -62,6 +65,7 @@ common common-options
     hashable >= 1.2 && <1.4,
     bytestring ^>= 0.11.2.0,
     filepath ^>= 1.4.2.1,
+    strict-wrapper ^>= 0.0.0.0,
     -- needed for alex
     array ^>= 0.5.4.0,
     vector ^>= 0.12.3.1,
@@ -93,7 +97,6 @@ library
     Data.Range
     Oat
     Oat.Frame
-    Oat.Fold
     Oat.Interned
     Oat.Interned.Internal
     Oat.Interned.Text
