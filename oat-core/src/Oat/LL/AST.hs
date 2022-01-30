@@ -10,9 +10,6 @@ import Data.Int (Int64)
 import Data.Text qualified as T
 import Oat.Common
 import Oat.LL.Name (Name)
-import Optics
-import Optics.Operators.Unsafe ((^?!))
-import Prelude hiding (Const)
 
 data Ty
   = Void
@@ -223,13 +220,6 @@ data GlobalInit
 
 data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
   deriving (Show, Eq)
-
--- data FunDecl = FunDecl {name :: Name, FunDecl}
--- data DeclKind
---   = DeclTy
---   | DeclGlobal
---   | DeclFun
---   | DeclExtern
 
 data Decl
   = DeclTy {name :: Name, ty :: Ty}

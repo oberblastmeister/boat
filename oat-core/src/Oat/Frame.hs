@@ -2,8 +2,6 @@
 
 module Oat.Frame where
 
-import Optics.State.Operators
-
 class Frame a where
   type Reg a :: Type
   type Mem a :: Type

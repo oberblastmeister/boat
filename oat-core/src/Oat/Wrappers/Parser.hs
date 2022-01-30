@@ -7,5 +7,3 @@ import OldPrelude
 
 hello :: a -> b -> [a]
 hello = undefined
-
-test = fmap @[]

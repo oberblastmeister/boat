@@ -17,9 +17,7 @@ import Oat.LL.AST
     operandName,
   )
 import Oat.LL.Name (Name)
-import Optics
 import Optics.Operators.Unsafe ((^?!))
-import Optics.State.Operators
 
 data CombineState = CombineState
   { -- this serves to purposes:

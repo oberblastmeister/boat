@@ -3,7 +3,6 @@
 
 module Oat.LL.ParserWrapper where
 
-import Control.Monad.Identity
 import Data.List qualified as List
 import Oat.LL.Lexer (alexMonadScan)
 import Oat.LL.LexerWrapper (Alex (..), AlexState (..))

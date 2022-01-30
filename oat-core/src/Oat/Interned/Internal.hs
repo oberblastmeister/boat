@@ -6,11 +6,10 @@ module Oat.Interned.Internal
   )
 where
 
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.IORef as IORef
-import qualified GHC.IO.Unsafe
+import Data.HashMap.Strict qualified as HashMap
 import Data.IORef (IORef)
-import qualified Data.IORef as IORef
+import Data.IORef qualified as IORef
+import GHC.IO.Unsafe qualified
 
 data CacheState a = CacheState
   { id :: {-# UNPACK #-} !Int,
