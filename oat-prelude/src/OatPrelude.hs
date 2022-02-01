@@ -4,6 +4,7 @@ module OatPrelude
   )
 where
 
+import Control.Applicative as X (Alternative (..))
 import Data.ByteString as X (ByteString)
 import Data.ByteString.Short as X (ShortByteString)
 import Data.Coerce as X

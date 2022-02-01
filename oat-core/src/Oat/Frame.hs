@@ -1,39 +1,45 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Oat.Frame where
+module Oat.Frame
+  ( Frame (..),
+    HasFrame (..),
+    allocLocal,
+    allocLocalM,
+    framePointerM,
+    returnRegM,
+  )
+where
+
+import Oat.Asm.AST qualified as Asm
 
 class Frame a where
-  type Reg a :: Type
-  type Mem a :: Type
-  type Imm a :: Type
-  type OpCode a :: Type
-
   newFrame :: Int -> a
-  allocLocalWith :: Int -> a -> (Mem a, a)
-  allocGlobal :: ByteString -> a -> Mem a
-  framePointer :: Reg a
-  returnReg :: Reg a
+  allocLocalWith :: Int -> a -> (Asm.Mem a, a)
+  allocGlobal :: ByteString -> a -> Asm.Mem a
+  framePointer :: Asm.Reg a
+  returnReg :: Asm.Reg a
+  prologue :: Int -> Asm.Inst a
 
 class HasFrame a b | a -> b where
-  frameLens :: Optic' A_Lens NoIx a b
+  frame :: Optic' A_Lens NoIx a b
 
 type UseFrame a b m = (Frame b, HasFrame a b, MonadState a m)
 
-allocLocal :: (Frame a) => a -> (Mem a, a)
+allocLocal :: (Frame a) => a -> (Asm.Mem a, a)
 allocLocal = allocLocalWith 8
 
-allocLocalWithM :: forall a b m. UseFrame a b m => Int -> m (Mem b)
+allocLocalWithM :: forall a b m. UseFrame a b m => Int -> m (Asm.Mem b)
 allocLocalWithM i = do
-  frame <- use frameLens
-  let (mem, frame') = allocLocalWith i frame
-  frameLens .= frame'
+  fr <- use frame
+  let (mem, fr') = allocLocalWith i fr
+  frame .= fr'
   pure mem
 
-allocLocalM :: forall a b m. UseFrame a b m => m (Mem b)
+allocLocalM :: forall a b m. UseFrame a b m => m (Asm.Mem b)
 allocLocalM = allocLocalWithM 8
 
-framePointerM :: forall a b m. UseFrame a b m => m (Reg b)
+framePointerM :: forall a b m. UseFrame a b m => m (Asm.Reg b)
 framePointerM = pure $ framePointer @b
 
-returnRegM :: forall a b m. UseFrame a b m => m (Reg b)
+returnRegM :: forall a b m. UseFrame a b m => m (Asm.Reg b)
 returnRegM = pure $ returnReg @b

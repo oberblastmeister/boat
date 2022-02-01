@@ -13,7 +13,7 @@ module Oat.X86.AST
     Elem (..),
     Prog,
     Operand,
-    Mem (.., MemImm, MemReg),
+    Mem (.., MemImm, MemLoc),
     Frame (..),
     pattern ImmLit,
     pattern ImmLab,
@@ -31,21 +31,16 @@ import Data.Int (Int64)
 import Oat.Asm.AST qualified as Asm
 import Oat.Frame qualified as Frame
 
-data Frame = X86Frame
+data Frame = Frame
   { stack :: !Int
   }
 
--- data Operand
---   = Imm !Imm
---   | Reg !Reg
---   | Ind1 !Imm
---   | Ind2 !Reg
---   | Ind3 !Imm !Reg --indirect: displacement(%reg)
---   deriving (Show, Eq)
+type Loc = Asm.Loc Frame
+
 data Mem = Mem
   { displace :: Maybe Imm,
-    first :: Maybe Reg,
-    second :: Maybe Reg,
+    first :: Maybe Loc,
+    second :: Maybe Loc,
     scale :: Maybe Imm
   }
   deriving (Show, Eq)
@@ -59,25 +54,30 @@ pattern MemImm imm =
       scale = Nothing
     }
 
-pattern MemReg :: Reg -> Mem
-pattern MemReg reg =
+pattern MemLoc :: Loc -> Mem
+pattern MemLoc loc =
   Mem
     { displace = Nothing,
-      first = Just reg,
+      first = Just loc,
       second = Nothing,
       scale = Nothing
     }
 
 instance Frame.Frame Frame where
-  type Reg Frame = Reg
-  type Mem Frame = Mem
-  type Imm Frame = Imm
-  type OpCode Frame = OpCode
   newFrame = undefined
   allocLocalWith = undefined
   allocGlobal = undefined
   framePointer = undefined
   returnReg = undefined
+  prologue = undefined
+
+type instance Asm.Reg Frame = Reg
+
+type instance Asm.Mem Frame = Mem
+
+type instance Asm.Imm Frame = Imm
+
+type instance Asm.OpCode Frame = OpCode
 
 data Imm
   = Lit !Int64
@@ -134,8 +134,8 @@ data Cond
   deriving (Show, Eq)
 
 data OpCode
-  = Movq
-  | Pushq
+  = -- no movq because covered with move instruction
+    Pushq
   | Popq
   | Leaq
   | Incq

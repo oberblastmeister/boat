@@ -1,7 +1,18 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.LL.ParserWrapper where
+module Oat.LL.ParserWrapper
+  ( ParseError (..),
+    ParseState (..),
+    Parser (..),
+    runParser,
+    evalParser,
+    liftAlex,
+    tellErrors,
+    lexer,
+    parseError,
+  )
+where
 
 import Data.List qualified as List
 import Oat.LL.Lexer (alexMonadScan)

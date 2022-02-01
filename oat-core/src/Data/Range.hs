@@ -23,7 +23,7 @@ import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Unboxed (Unbox)
 import Data.Vector.Unboxed qualified as VU
 import Data.Vector.Unboxed.Mutable qualified as VUM
-import Prelude hiding (contains, length)
+import Prelude hiding (contains, length, empty)
 
 data Range = Range
   { start :: !Int,

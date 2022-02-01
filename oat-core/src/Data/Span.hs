@@ -14,7 +14,7 @@ where
 
 import Data.Pos (Pos (..))
 import Oat.Common (makeFieldGetterLabelsNoPrefix)
-import Prelude hiding (contains)
+import Prelude hiding (contains, empty)
 
 data Span = Span
   { start :: !Pos,

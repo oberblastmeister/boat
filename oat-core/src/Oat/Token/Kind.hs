@@ -1,4 +1,6 @@
-module Oat.Token.Kind where
+module Oat.Token.Kind (Kind (..)) where
+
+import Data.Int (Int64)
 
 data Kind
   = Int !Int64

@@ -1,4 +1,4 @@
-module Oat.LL.Token where
+module Oat.LL.Token (Token (..)) where
 
 import Oat.LL.Token.Kind (Kind)
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 -- you need to define alexEOF and also import this wrapper
 module Oat.LL.LexerWrapper

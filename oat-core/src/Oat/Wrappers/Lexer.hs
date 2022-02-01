@@ -67,11 +67,14 @@ makeLexer name defUserState = do
         & (`evalStateT` alexState)
         & runIdentity
 
+    alexDefaultPos :: Pos
+    alexDefaultPos = Pos 1 1
+
     defaultAlexState :: Text -> AlexState
     defaultAlexState stateText =
       AlexState
         { stateBytes = Empty,
-          statePos = Pos 1 1,
+          statePos = alexDefaultPos,
           stateText,
           stateCh = '\n',
           stateScd = 0,

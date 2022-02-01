@@ -93,8 +93,6 @@ data Operand where
   Temp :: !Name -> Operand
   -- invariant, some instructions cannot be nested
   Nested :: Inst -> Operand
-  -- equivalent to just imm(%rsp)
-  MemTemp :: !Name -> Operand
   deriving (Show, Eq)
 
 data BinOpInst = BinOpInst
@@ -334,7 +332,6 @@ operandName = atraversalVL go
     go point f = \case
       Gid name -> Gid <$> f name
       Temp name -> Temp <$> f name
-      MemTemp name -> MemTemp <$> f name
       other -> point other
 
 doesInsAssign :: Inst -> Bool
