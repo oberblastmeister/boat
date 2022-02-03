@@ -13,6 +13,7 @@ import Data.ByteString qualified as ByteString
 import Data.Char qualified as Char
 import Data.Data (Data)
 import Data.Word (Word8)
+import Prettyprinter (Pretty (pretty))
 
 class ToASCII s where
   toASCII :: s -> Maybe (ASCII s)
@@ -34,6 +35,9 @@ instance ToASCII String where
     if all Char.isAscii s
       then Just $ ASCII s
       else Nothing
+
+instance Pretty s => Pretty (ASCII s) where
+  pretty = pretty . unASCII
 
 isByteStringASCII :: ByteString -> Bool
 isByteStringASCII = ByteString.foldr (\b z -> isWordASCII b && z) True

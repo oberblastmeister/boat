@@ -272,16 +272,6 @@ bodyBlocks = traversalVL $ \f body -> do
 bodyInsts :: Traversal' FunBody Inst
 bodyInsts = bodyBlocks % #insts % traversed
 
-data Person = MkPerson {name :: String, pets :: [Pet]}
-
-data Pet = MkPet {name :: Int}
-
-getPersonName :: Person -> String
-getPersonName p = p.name
-
-setPersonName :: String -> Person -> Person
-setPersonName n p = p {name = n}
-
 instOperands :: Traversal' Inst Operand
 instOperands = traversalVL go
   where
@@ -290,7 +280,6 @@ instOperands = traversalVL go
       BinOp inst@BinOpInst {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
-        -- pure $ BinOp $ inst & #arg1 .~ arg1 & #arg1 .~ arg2
         pure $ BinOp inst {arg1, arg2}
       Alloca inst -> pure $ Alloca inst
       Load inst@LoadInst {arg} -> do
@@ -356,3 +345,13 @@ tySize tyDecls =
         TyStruct _ -> size
       where
         size = sum rs
+
+maxCallSize :: TyMap -> FunBody -> Maybe Int
+maxCallSize tyMap =
+  maximumOf $
+    bodyInsts
+      % #_Call
+      % #args
+      % each
+      % _1
+      % to (tySize tyMap)

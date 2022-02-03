@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 -- the abstract assembly within a function body
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Asm.AST
@@ -9,9 +9,9 @@ module Oat.Asm.AST
     OpCode,
     Loc (..),
     Operand (.., Reg, Temp),
-    Inst (.., Move, Op),
-    OpIns (..),
-    MoveIns (..),
+    Inst (..),
+    OpInst (..),
+    MoveInst (..),
   )
 where
 
@@ -51,33 +51,36 @@ pattern Reg r = Loc (LReg r)
 pattern Temp :: LL.Name -> Operand a
 pattern Temp t = Loc (LTemp t)
 
-data Inst a
-  = InsOp (OpIns a)
-  | InsLabel !LL.Name
-  | InsMove (MoveIns a)
+{-# COMPLETE Reg, Temp, Imm, Mem #-}
 
-pattern Move :: Operand a -> Operand a -> Inst a
-pattern Move src dst = InsMove MoveIns {src, dst}
+data Inst a = Inst {opcode :: !(OpCode a), args :: [Operand a]}
 
-pattern Op :: OpCode a -> [Operand a] -> Inst a
-pattern Op op args = InsOp OpIns {op, args}
+data Info a = Info
+  { kind :: !InfoKind,
+    src :: [Operand a],
+    dst :: [Operand a]
+  }
+
+data InfoKind
+  = IsCall
+  | IsMove
 
 deriving instance AsmConstraint Show a => Show (Inst a)
 
 deriving instance AsmConstraint Eq a => Eq (Inst a)
 
-data OpIns a = OpIns {op :: !(OpCode a), args :: [Operand a]}
+data OpInst a = OpIns {op :: !(OpCode a), args :: [Operand a]}
 
-deriving instance AsmConstraint Show a => Show (OpIns a)
+deriving instance AsmConstraint Show a => Show (OpInst a)
 
-deriving instance AsmConstraint Eq a => Eq (OpIns a)
+deriving instance AsmConstraint Eq a => Eq (OpInst a)
 
 -- invariant, both must not be memory locations
-data MoveIns a = MoveIns {src :: Operand a, dst :: Operand a}
+data MoveInst a = MoveIns {src :: Operand a, dst :: Operand a}
 
-deriving instance AsmConstraint Show a => Show (MoveIns a)
+deriving instance AsmConstraint Show a => Show (MoveInst a)
 
-deriving instance AsmConstraint Eq a => Eq (MoveIns a)
+deriving instance AsmConstraint Eq a => Eq (MoveInst a)
 
-$(makeFieldLabelsNoPrefix ''MoveIns)
-$(makeFieldLabelsNoPrefix ''OpIns)
+$(makeFieldLabelsNoPrefix ''MoveInst)
+$(makeFieldLabelsNoPrefix ''OpInst)

@@ -7,8 +7,6 @@ import Control.Exception (assert)
 import Control.Monad qualified as Monad
 import Data.ASCII (ASCII)
 import Data.List ((!!))
-import Oat.Alloc (Loc (..), Operand (..))
-import Oat.Alloc qualified as Alloc
 import Oat.Common (internalError, unreachable)
 import Oat.LL qualified as LL
 import Oat.LL.AST (Named (Do), pattern (:=))

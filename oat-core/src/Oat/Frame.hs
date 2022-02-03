@@ -12,6 +12,7 @@ where
 
 import Oat.Asm.AST qualified as Asm
 
+-- type HasAsm
 class Frame a where
   newFrame :: Int -> a
   allocLocalWith :: Int -> a -> (Asm.Mem a, a)

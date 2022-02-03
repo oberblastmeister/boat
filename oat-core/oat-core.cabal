@@ -105,7 +105,6 @@ library
     Oat.Wrappers.Parser
     Oat.Common
     Oat.Backend
-    Oat.Alloc
     Oat.RegAlloc
     Oat.LL
     Oat.LL.Token
