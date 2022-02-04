@@ -25,15 +25,16 @@ type Rec :: (k -> Type) -> [(Symbol, k)] -> Type
 data Rec f ts where
   Rec :: {-# UNPACK #-} !(VB.Vector Any) -> Rec f ts
 
---   ( is ~ NoIx,
---     k ~ A_Lens,
---     KnownNat (FindElem name ts),
---     t ~ Eval (LookupType name ts),
---     ts' ~ Eval (UpdateElem name t' ts)
---   ) =>
---   IsLabel name (Optic k is (Rec f ts) (Rec f ts') (f t) (f t'))
---   where
---   fromLabel = lens (lookup (Key @name)) (flip $ update $ Key @name)
+instance
+  ( is ~ NoIx,
+    k ~ A_Lens,
+    KnownNat (FindElem name ts),
+    t ~ Eval (LookupType name ts),
+    ts' ~ Eval (UpdateElem name t' ts)
+  ) =>
+  IsLabel name (Optic k is (Rec f ts) (Rec f ts') (f t) (f t'))
+  where
+  fromLabel = lens (lookup (Key @name)) (flip $ update $ Key @name)
 
 type Key :: Symbol -> Type
 data Key key = Key
@@ -105,3 +106,6 @@ removeVecIndex a v = case VB.uncons back of
 
 remove :: forall key ts f. KnownNat (FindElem key ts) => Key key -> Rec f ts -> Rec f (Eval (RemoveAt (FindElem key ts) ts))
 remove _ (Rec v) = Rec $ removeVecIndex (findElem @key @ts) v
+
+-- test :: Rec Maybe '[ '("test", Int)]
+-- test = empty & (#test) .~ (Just (5 :: Int))

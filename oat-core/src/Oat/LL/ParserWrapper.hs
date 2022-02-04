@@ -18,6 +18,9 @@ import Data.List qualified as List
 import Oat.LL.Lexer (alexMonadScan)
 import Oat.LL.LexerWrapper (Alex (..), AlexState (..))
 import Oat.LL.Token (Token (..))
+import Control.Monad.Except
+import Control.Monad.State
+import Optics.State.Operators
 
 data ParseError
   = LexerError Text
@@ -45,13 +48,13 @@ runParser :: Parser a -> ParseState -> (Either [ParseError] a, ParseState)
 runParser parser state = (res & _Left .~ (state'' ^. #errors), state'')
   where
     state'' = state' & #errors %~ (res ^.. _Left ++)
-    (res, state') = parser.unParser & runExceptT & usingState state
+    (res, state') = parser & unParser & runExceptT & (`runState` state)
 
 evalParser :: Parser a -> ParseState -> Either [ParseError] a
 evalParser parser state = runParser parser state ^. _1
 
 liftAlex :: Alex a -> Parser a
-liftAlex alex = Parser $ zoom #alexState $ lift $ alex.unAlex
+liftAlex alex = Parser $ zoom #alexState $ lift $ unAlex alex
 
 tellErrors :: [ParseError] -> Parser ()
 tellErrors es = #errors %= (es ++)

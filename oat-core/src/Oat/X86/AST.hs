@@ -23,6 +23,7 @@ module Oat.X86.AST
     gText,
     text,
     memLocs,
+    operandTemps,
   )
 where
 
@@ -67,6 +68,16 @@ pattern MemLoc loc =
       second = Nothing,
       scale = Nothing
     }
+
+operandTemps :: Traversal' Operand LL.Name
+operandTemps = traversalVL $ \f -> \case
+  Asm.Mem mem -> do
+    mem <- traverseOf (memLocs % #_LTemp) f mem
+    pure $ Asm.Mem mem
+  Asm.Loc (Asm.LTemp name) -> do
+    name <- f name
+    pure $ Asm.Loc $ Asm.LTemp name
+  other -> pure other
 
 memLocs :: Traversal' Mem Loc
 memLocs = traversalVL $ \f mem@Mem {first, second} -> do

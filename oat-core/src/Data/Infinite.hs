@@ -40,5 +40,7 @@ pattern a ::> as <-
   where
     a ::> as = cons a as
 
+{-# COMPLETE (::>) #-}
+
 -- instance Cons (Infinite a) (Infinite a) a a where
 --   _Cons = prism' (_) uncons

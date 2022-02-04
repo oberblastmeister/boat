@@ -4,33 +4,28 @@
 
 module Data.Source
   ( Source,
-    HasSource,
-    MonadSource,
-    new,
     fresh,
+    runSource,
   )
 where
 
-import Data.Infinite (Infinite)
-import Data.Infinite qualified as Infinite
+import Data.Infinite (Infinite ((::>)))
+import Effectful (Eff, type (:>))
+import Effectful qualified
+import Effectful.Dispatch.Static
 
-newtype Source a = Source {source :: Infinite a}
-  deriving (Functor)
+data Source :: Type -> Effectful.Effect
 
-makeFieldLabelsNoPrefix ''Source
+type instance Effectful.DispatchOf (Source a) = 'Effectful.Static
 
-type HasSource s a = LabelOptic' "source" A_Lens s (Source a)
+newtype instance StaticRep (Source a) = Source (Infinite a)
 
-type MonadSource s m a =
-  ( MonadState s m,
-    HasSource s a
-  )
-
-new :: Infinite a -> Source a
-new = Source
-
-fresh :: MonadSource s m a => m a
+fresh :: (Source a :> es) => Eff es a
 fresh = do
-  as <- use (#source % #source)
-  #source % #source .= as
-  pure $ Infinite.head as
+  Source inf <- getStaticRep
+  let a ::> as = inf
+  putStaticRep $ Source $ as
+  pure a
+
+runSource :: Infinite a -> Eff (Source a ': es) a -> Eff es a
+runSource infinite = evalStaticRep (Source infinite)

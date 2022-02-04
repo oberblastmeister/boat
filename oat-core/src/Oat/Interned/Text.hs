@@ -15,29 +15,29 @@ data IText = IText
   }
 
 instance Show IText where
-  show = Text.Show.show . (.unIText)
+  show = Text.Show.show . (unIText)
 
 instance Pretty IText where
-  pretty = pretty . (.unIText)
+  pretty = pretty . (unIText)
 
 instance Eq IText where
-  (==) = (==) `on` (.iTextId)
+  (==) = (==) `on` (iTextId)
 
 instance Ord IText where
-  compare = compare `on` (.iTextId)
+  compare = compare `on` (iTextId)
 
 instance IsString IText where
   fromString = fromText . T.pack
 
 instance Hashable IText where
-  hashWithSalt salt = hashWithSalt salt . (.iTextId)
+  hashWithSalt salt = hashWithSalt salt . (iTextId)
 
 instance Interned IText where
   type Uninterned IText = Text
 
   toInterned = IText
   intern = fromText
-  unintern = (.unIText)
+  unintern = (unIText)
 
 fromText :: Text -> IText
 fromText = intern' cache

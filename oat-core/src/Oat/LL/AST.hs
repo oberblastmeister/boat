@@ -9,6 +9,7 @@ import Data.Int (Int64)
 import Data.Text qualified as T
 import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
+import Optics as O
 
 data Ty
   = Void
@@ -353,4 +354,4 @@ maxCallSize tyMap =
       % #args
       % each
       % _1
-      % to (tySize tyMap)
+      % O.to (tySize tyMap)

@@ -10,6 +10,9 @@ where
 import Data.HashMap.Optics qualified as HashMap
 import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
+import Effectful (Eff, runPureEff, type (:>))
+import Effectful.State.Static.Local
+import Effectful.State.Static.Local.Optics
 import Oat.Common (inBetween)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name (Name)
@@ -38,7 +41,7 @@ data InstWithInfo = InstWithInfo
 $(makeFieldLabelsNoPrefix ''CombineState)
 $(makeFieldLabelsNoPrefix ''InstWithInfo)
 
-type MonadCombine = MonadState CombineState
+-- type MonadCombine = MonadState CombineState
 
 combineBody :: LL.FunBody -> LL.FunBody
 combineBody = over LL.bodyBlocks combineBlock
@@ -47,13 +50,13 @@ combineBlock :: LL.Block -> LL.Block
 combineBlock block = block'
   where
     block' = LL.Block {insts = combineState' ^.. #idToInst % each % #inst, term = combineState' ^. #term}
-    ((), combineState') = runState combineLoop combineState
+    ((), combineState') = runPureEff $ runState combineState combineLoop
     combineState = stateFromBlock block
 
-combineLoop :: MonadCombine m => m ()
+combineLoop :: (State CombineState :> es) => Eff es ()
 combineLoop = do
-  prevId <- use #prevId
-  idToInst <- use #idToInst
+  prevId <- use @CombineState #prevId
+  idToInst <- use @CombineState #idToInst
   case IntMap.lookupGT prevId idToInst of
     Just (currId, inst) -> do
       combineInst currId inst
@@ -61,7 +64,7 @@ combineLoop = do
       combineLoop
     Nothing -> pure ()
 
-combineInst :: MonadCombine m => Int -> InstWithInfo -> m ()
+combineInst :: (State CombineState :> es) => Int -> InstWithInfo -> Eff es ()
 combineInst id inst = do
   st <- get
   case combineInst' id inst st of
@@ -73,7 +76,7 @@ combineInst id inst = do
 combineInst' :: Int -> InstWithInfo -> CombineState -> Maybe (Int, Int, InstWithInfo)
 combineInst' id inst st = do
   -- don't move alloca around
-  guard $ not $ has #_Alloca inst.inst
+  guard $ not $ has #_Alloca $ inst ^. #inst
   -- TODO: for now stuff without names cannot be combined
   name <- inst ^? #inst % LL.instName
   useId <- st ^. #idToUses % at id

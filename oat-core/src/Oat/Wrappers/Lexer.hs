@@ -1,9 +1,7 @@
 -- need these record extensions to not get errors about invalid variables because of record selectors
-{-# LANGUAGE FieldSelectors #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoDuplicateRecordFields #-}
-{-# LANGUAGE NoOverloadedRecordDot #-}
 
 -- you need to define alexEOF and also import this wrapper
 module Oat.Wrappers.Lexer
@@ -19,6 +17,8 @@ import Data.Text.Encoding qualified as Text.Encoding
 import Data.Word (Word8)
 import Language.Haskell.TH qualified as TH
 import OatPrelude.Unsafe qualified as Unsafe
+import Control.Monad.State
+import Control.Monad.Reader
 
 makeLexer :: TH.Name -> TH.Name -> TH.DecsQ
 makeLexer name defUserState = do

@@ -29,6 +29,5 @@ import GHC.Stack as X (HasCallStack)
 import OatPrelude.Debug as X
 import OatPrelude.Maybe as X
 import OatPrelude.Monad as X
-import Optics as X
-import Optics.State.Operators as X
+import Optics as X hiding (assign, assign', modifying, modifying', preuse, use)
 import Prelude as P hiding (error, undefined)
