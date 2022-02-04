@@ -1,3 +1,5 @@
+{-# LANGUAGE QuantifiedConstraints #-}
+
 module Oat.Common
   ( internalError,
     unwrap,

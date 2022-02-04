@@ -1,8 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module Oat.Frame
-  ( Frame (..),
-    HasFrame (..),
+  ( IsFrame (..),
+    HasFrame,
+    MonadFrame,
     allocLocal,
     allocLocalM,
     framePointerM,
@@ -13,34 +15,39 @@ where
 import Oat.Asm.AST qualified as Asm
 
 -- type HasAsm
-class Frame a where
+class IsFrame a where
   newFrame :: Int -> a
   allocLocalWith :: Int -> a -> (Asm.Mem a, a)
   allocGlobal :: ByteString -> a -> Asm.Mem a
   framePointer :: Asm.Reg a
   returnReg :: Asm.Reg a
   prologue :: Int -> Asm.Inst a
+  _Call :: Prism' (Asm.OpCode a) ()
+  _Move :: Prism' (Asm.OpCode a) ()
 
-class HasFrame a b | a -> b where
-  frame :: Optic' A_Lens NoIx a b
+-- needTemps :: Traversal (Asm.Inst a) (Asm.Inst a) (Asm.Mem a, Bool) LL.Name
+-- makeMove :: (Asm.Operand a) -> (Asm.Operand a) -> [Asm.Inst a]
 
-type UseFrame a b m = (Frame b, HasFrame a b, MonadState a m)
+type HasFrame :: Type -> Type -> Constraint
+type HasFrame s f = LabelOptic' "frame" A_Lens s f
 
-allocLocal :: (Frame a) => a -> (Asm.Mem a, a)
+type MonadFrame s m f = (MonadState s m, IsFrame f, HasFrame s f)
+
+allocLocal :: (IsFrame a) => a -> (Asm.Mem a, a)
 allocLocal = allocLocalWith 8
 
-allocLocalWithM :: forall a b m. UseFrame a b m => Int -> m (Asm.Mem b)
+allocLocalWithM :: forall s m f. MonadFrame s m f => Int -> m (Asm.Mem f)
 allocLocalWithM i = do
-  fr <- use frame
+  fr :: a <- use #frame
   let (mem, fr') = allocLocalWith i fr
-  frame .= fr'
+  #frame .= fr'
   pure mem
 
-allocLocalM :: forall a b m. UseFrame a b m => m (Asm.Mem b)
+allocLocalM :: forall s m a. MonadFrame s m a => m (Asm.Mem a)
 allocLocalM = allocLocalWithM 8
 
-framePointerM :: forall a b m. UseFrame a b m => m (Asm.Reg b)
-framePointerM = pure $ framePointer @b
+framePointerM :: forall s m f. MonadFrame s m f => m (Asm.Reg f)
+framePointerM = pure $ framePointer @f
 
-returnRegM :: forall a b m. UseFrame a b m => m (Asm.Reg b)
-returnRegM = pure $ returnReg @b
+returnRegM :: forall s m f. MonadFrame s m f => m (Asm.Reg f)
+returnRegM = pure $ returnReg @f

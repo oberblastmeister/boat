@@ -1,6 +1,3 @@
-{-# LANGUAGE FieldSelectors #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module Data.Range
   ( Range (RangeP),
     length,
@@ -32,10 +29,10 @@ data Range = Range
   deriving (Show, Eq, Ord, Data, Typeable, Generic)
 
 instance LabelOptic "start" A_Lens Range Range Int Int where
-  labelOptic = lens start (flip setStart)
+  labelOptic = lens (.start) (flip setStart)
 
 instance LabelOptic "end" A_Lens Range Range Int Int where
-  labelOptic = lens end (flip setEnd)
+  labelOptic = lens (.end) (flip setEnd)
 
 instance Semigroup Range where
   Range {start, end} <> Range {start = start', end = end'} =

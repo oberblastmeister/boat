@@ -1,5 +1,3 @@
-{-# LANGUAGE FieldSelectors #-}
-
 module Oat.Interned.ShortByteString where
 
 import Oat.Interned.Internal
@@ -11,26 +9,26 @@ data IShortByteString = IShortByteString
   }
 
 instance Show IShortByteString where
-  show = Text.Show.show . unIShortByteString
+  show = Text.Show.show . (.unIShortByteString)
 
 instance Eq IShortByteString where
-  (==) = (==) `on` iShortByteStringId
+  (==) = (==) `on` (.iShortByteStringId)
 
 instance Ord IShortByteString where
-  compare = compare `on` iShortByteStringId
+  compare = compare `on` (.iShortByteStringId)
 
 instance IsString IShortByteString where
   fromString = fromShortByteString . fromString
 
 instance Hashable IShortByteString where
-  hashWithSalt salt = hashWithSalt salt . iShortByteStringId
+  hashWithSalt salt = hashWithSalt salt . (.iShortByteStringId)
 
 instance Interned IShortByteString where
   type Uninterned IShortByteString = ShortByteString
 
   toInterned = IShortByteString
   intern = fromShortByteString
-  unintern = unIShortByteString
+  unintern = (.unIShortByteString)
 
 fromShortByteString :: ShortByteString -> IShortByteString
 fromShortByteString = intern' cache

@@ -58,6 +58,7 @@ common common-options
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
     insert-ordered-containers ^>= 0.2.5.1,
+    dlist ^>= 1.0,
     fgl ^>= 5.7.0.3,
     text ^>= 1.2.5.0,
     text-builder ^>= 0.6.6.3,
@@ -76,7 +77,8 @@ common common-options
     prettyprinter ^>= 1.7.1,
     pretty-simple ^>= 4.0.0.0,
     typed-process ^>= 0.2.8.0,
-    optparse-applicative ^>= 0.16.1.0
+    optparse-applicative ^>= 0.16.1.0,
+    first-class-families ^>= 0.8.0.1
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -91,10 +93,12 @@ library
   import: common-options
   hs-source-dirs: src
   exposed-modules:
-    Data.ASCII
     Data.Pos
     Data.Span
     Data.Range
+    Data.Infinite
+    Data.Source
+    Data.Rec
     Oat
     Oat.Frame
     Oat.Interned
@@ -105,7 +109,6 @@ library
     Oat.Wrappers.Parser
     Oat.Common
     Oat.Backend
-    Oat.RegAlloc
     Oat.LL
     Oat.LL.Token
     Oat.LL.Token.Kind
@@ -118,6 +121,8 @@ library
     Oat.LL.Name
     Oat.Asm.AST
     Oat.X86.AST
+    Oat.Backend.X86.Codegen
+    Oat.Backend.X86.RegAlloc
 
 common rtsopts
   ghc-options:

@@ -9,13 +9,15 @@ module Oat.Asm.AST
     OpCode,
     Loc (..),
     Operand (.., Reg, Temp),
-    Inst (..),
-    OpInst (..),
-    MoveInst (..),
+    Inst (.., (:@)),
+    InstLab,
+    instOperands,
   )
 where
 
 import Oat.LL qualified as LL
+
+type InstLab a = Either ByteString (Inst a)
 
 type family Reg a
 
@@ -31,6 +33,12 @@ type AsmConstraint c a = (c (Reg a), c (Mem a), c (Imm a), c (OpCode a))
 data Loc a
   = LReg !(Reg a)
   | LTemp !LL.Name
+
+instance (r ~ Reg a) => LabelOptic "_LReg" A_Prism (Loc a) (Loc a) r r where
+  labelOptic = prism LReg (\case LReg reg -> Right reg; other -> Left other)
+
+instance LabelOptic "_LTemp" A_Prism (Loc a) (Loc a) LL.Name LL.Name where
+  labelOptic = prism LTemp (\case LTemp name -> Right name; other -> Left other)
 
 deriving instance AsmConstraint Show a => Show (Loc a)
 
@@ -55,32 +63,19 @@ pattern Temp t = Loc (LTemp t)
 
 data Inst a = Inst {opcode :: !(OpCode a), args :: [Operand a]}
 
-data Info a = Info
-  { kind :: !InfoKind,
-    src :: [Operand a],
-    dst :: [Operand a]
-  }
-
-data InfoKind
-  = IsCall
-  | IsMove
-
 deriving instance AsmConstraint Show a => Show (Inst a)
 
 deriving instance AsmConstraint Eq a => Eq (Inst a)
 
-data OpInst a = OpIns {op :: !(OpCode a), args :: [Operand a]}
+makeFieldLabelsNoPrefix ''Inst
+makePrismLabels ''Operand
 
-deriving instance AsmConstraint Show a => Show (OpInst a)
+instOperands :: Traversal' (Inst a) (Operand a)
+instOperands = #args % traversed
 
-deriving instance AsmConstraint Eq a => Eq (OpInst a)
+pattern (:@) :: OpCode a -> [Operand a] -> Inst a
+pattern opcode :@ args = Inst {opcode, args}
 
--- invariant, both must not be memory locations
-data MoveInst a = MoveIns {src :: Operand a, dst :: Operand a}
+{-# COMPLETE (:@) #-}
 
-deriving instance AsmConstraint Show a => Show (MoveInst a)
-
-deriving instance AsmConstraint Eq a => Eq (MoveInst a)
-
-$(makeFieldLabelsNoPrefix ''MoveInst)
-$(makeFieldLabelsNoPrefix ''OpInst)
+infix 9 :@

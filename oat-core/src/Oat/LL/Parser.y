@@ -16,7 +16,6 @@ import qualified Data.Sequence as Seq
 import Optics
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import Data.ASCII (ASCII)
 import Data.ByteString (ByteString)
 }
 

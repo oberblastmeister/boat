@@ -4,7 +4,6 @@
 
 module Oat.LL.AST where
 
-import Data.ASCII (ASCII)
 import Data.Data (Data)
 import Data.Int (Int64)
 import Data.Text qualified as T
@@ -29,9 +28,9 @@ data FunTy = FunTy
   }
   deriving (Show, Eq)
 
-type TyMap = HashMap (ASCII ByteString) Ty
+type TyMap = HashMap Name Ty
 
-lookupTy :: ASCII ByteString -> TyMap -> Ty
+lookupTy :: Name -> TyMap -> Ty
 lookupTy name mp = mp ^. at name % unwrap (internalError $ "Could not find name " <> T.pack (show name) <> " in map")
 
 -- note, for this to be valid, you must not change the type for TyNamed
@@ -211,7 +210,7 @@ instance Hashable a => Hashable (Named a)
 
 data GlobalInit
   = GlobalNull
-  | GlobalGid !(ASCII ByteString)
+  | GlobalGid !Name
   | GlobalInt !Int64
   | GlobalString !ByteString
   | GlobalArray [GlobalDecl]

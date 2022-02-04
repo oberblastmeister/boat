@@ -26,6 +26,7 @@ import Optics.Operators.Unsafe ((^?!))
 import qualified Text.Builder
 import qualified Data.Text.Encoding as Text.Encoding
 import Optics.State.Operators
+import Data.ByteString qualified as ByteString
 }
 
 $digit = [0-9]
@@ -89,11 +90,11 @@ tokens :-
   <0> "external" { kind Kind.External }
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
-  <0> "%" "."? @ident { unsafeASCIIKind Kind.Uid }
-  <0> "@" "."? @ident { unsafeASCIIKind Kind.Gid }
+  <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.take 1 }
+  <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.take 1 }
   <0> "x" { kind Kind.Cross }
   <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
-  <0> @ident { unsafeASCIIKind $ Kind.Lab }
+  <0> @ident { bytesKind Kind.Lab }
   <0> ";" [^ \n \r]* $newline { skip }
   <0> "declare" [^ \n \r]* $newline { skip }
   <string> \\ { do #user % #stringBuilder %= (<> Text.Builder.char '\\'); skip }

@@ -1,3 +1,5 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -15,20 +17,28 @@ module Oat.X86.AST
     Mem (.., MemImm, MemLoc),
     Frame (..),
     Loc,
+    InstLab,
+    hasTwoOperands,
     dat,
     gText,
     text,
+    memLocs,
   )
 where
 
-import Data.ASCII (ASCII)
 import Data.Int (Int64)
+import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
 import Oat.Frame qualified as Frame
+import Oat.LL.Name qualified as LL
 
 data Frame = Frame
   { stack :: !Int
   }
+
+type InstLab = Asm.InstLab Frame
+
+type Inst = Asm.Inst Frame
 
 type Loc = Asm.Loc Frame
 
@@ -58,13 +68,26 @@ pattern MemLoc loc =
       scale = Nothing
     }
 
-instance Frame.Frame Frame where
-  newFrame = undefined
-  allocLocalWith = undefined
-  allocGlobal = undefined
-  framePointer = undefined
-  returnReg = undefined
-  prologue = undefined
+memLocs :: Traversal' Mem Loc
+memLocs = traversalVL $ \f mem@Mem {first, second} -> do
+  first <- traverse f first
+  second <- traverse f second
+  pure $ mem {first, second}
+
+hasTwoOperands :: OpCode -> Bool
+hasTwoOperands = \case
+  Movq -> True
+  Leaq -> True
+  Addq -> True
+  Subq -> True
+  Xorq -> True
+  Orq -> True
+  Andq -> True
+  Shlq -> True
+  Sarq -> True
+  Shrq -> True
+  Cmpq -> True
+  _ -> False
 
 type instance Asm.Reg Frame = Reg
 
@@ -134,8 +157,6 @@ data OpCode
   | Retq
   deriving (Show, Eq)
 
-type Inst = Asm.Inst Frame
-
 type Operand = Asm.Operand Frame
 
 data Data
@@ -149,7 +170,7 @@ data Asm
   deriving (Show, Eq)
 
 data Elem = Elem
-  { lab :: !(ASCII ByteString),
+  { lab :: !ByteString,
     global :: !Bool,
     asm :: !Asm
   }
@@ -160,14 +181,45 @@ type Prog = [Elem]
 makeFieldLabelsNoPrefix ''Frame
 makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
+makePrismLabels ''OpCode
 
-dat :: ASCII ByteString -> [Data] -> Elem
+instance Frame.IsFrame Frame where
+  newFrame = undefined
+  allocLocalWith = undefined
+  allocGlobal = undefined
+  framePointer = undefined
+  returnReg = undefined
+  prologue = prologue
+  _Call = #_Callq
+  _Move = #_Movq
+
+--   | hasTwoOperands opcode,
+--     [Asm.Temp name1, Asm.Temp name2] <- args = do
+--       mem1 <- allocLocalM
+--       mem2 <- allocLocalM
+--       pure undefined
+--       -- name1 <- f (mem1, False)
+--       -- pure $ inst {Asm.args = [Asm.Temp name1, Asm.Mem mem2]}
+--   | hasTwoOperands opcode, [_, _] <- args = pure inst
+--   | hasTwoOperands opcode = error "Instruction should have two operands"
+--   | Leaq <- opcode = error "todo"
+--   | otherwise = pure inst
+
+-- makeMove :: Operand -> Operand -> [Inst]
+-- makeMove (Asm.Mem _) (Asm.Mem _) = error "Can't both be mem for moves"
+-- makeMove arg1 arg2 = [Movq @ [arg1, arg2]]
+
+prologue :: a
+prologue = undefined
+
+-- needTemps :: Traversal Inst Inst (Mem, Bool) LL.Name
+-- needTemps = traversalVL go
 dat lab ds = Elem {lab, global = True, asm = Data ds}
 
-text :: ASCII ByteString -> [Inst] -> Elem
+--       | hasTwoOperands opcode,
 text lab is = Elem {lab, global = False, asm = Text is}
 
-gText :: ASCII ByteString -> [Inst] -> Elem
+gText :: ByteString -> [Inst] -> Elem
 gText lab is = Elem {lab, global = True, asm = Text is}
 
 regs :: [Reg]
