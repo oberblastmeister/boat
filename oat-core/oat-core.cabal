@@ -131,7 +131,7 @@ library
     Data.Source
     Data.Rec
     Oat
-    Oat.Frame
+    Oat.FrameAct
     Oat.Interned
     Oat.Interned.Internal
     Oat.Interned.Text

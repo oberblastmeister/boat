@@ -15,7 +15,8 @@ module Oat.X86.AST
     Prog,
     Operand,
     Mem (.., MemImm, MemLoc),
-    Frame (..),
+    Frame,
+    FrameAct,
     Loc,
     InstLab,
     hasTwoOperands,
@@ -23,19 +24,23 @@ module Oat.X86.AST
     gText,
     text,
     memLocs,
-    operandTemps,
+    operandLocs,
   )
 where
 
 import Data.Int (Int64)
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
-import Oat.Frame qualified as Frame
+import Oat.FrameAct qualified as FrameAct
 import Oat.LL.Name qualified as LL
 
-data Frame = Frame
+data FrameState = FrameSTate
   { stack :: !Int
   }
+
+data Frame
+
+type FrameAct = FrameAct.FrameAct Frame
 
 type InstLab = Asm.InstLab Frame
 
@@ -69,14 +74,12 @@ pattern MemLoc loc =
       scale = Nothing
     }
 
-operandTemps :: Traversal' Operand LL.Name
-operandTemps = traversalVL $ \f -> \case
+operandLocs :: Traversal' Operand Loc
+operandLocs = traversalVL $ \f -> \case
   Asm.Mem mem -> do
-    mem <- traverseOf (memLocs % #_LTemp) f mem
+    mem <- traverseOf memLocs f mem
     pure $ Asm.Mem mem
-  Asm.Loc (Asm.LTemp name) -> do
-    name <- f name
-    pure $ Asm.Loc $ Asm.LTemp name
+  Asm.Loc loc -> Asm.Loc <$> f loc
   other -> pure other
 
 memLocs :: Traversal' Mem Loc
@@ -194,15 +197,15 @@ makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
 makePrismLabels ''OpCode
 
-instance Frame.IsFrame Frame where
-  newFrame = undefined
-  allocLocalWith = undefined
-  allocGlobal = undefined
-  framePointer = undefined
-  returnReg = undefined
-  prologue = prologue
-  _Call = #_Callq
-  _Move = #_Movq
+-- instance Frame.IsFrame Frame where
+--   newFrame = undefined
+--   allocLocalWith = undefined
+--   allocGlobal = undefined
+--   framePointer = undefined
+--   returnReg = undefined
+--   prologue = prologue
+--   _Call = #_Callq
+--   _Move = #_Movq
 
 --   | hasTwoOperands opcode,
 --     [Asm.Temp name1, Asm.Temp name2] <- args = do

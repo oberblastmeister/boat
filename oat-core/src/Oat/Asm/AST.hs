@@ -12,6 +12,7 @@ module Oat.Asm.AST
     Inst (.., (:@)),
     InstLab,
     instOperands,
+    tempToReg,
   )
 where
 
@@ -28,6 +29,7 @@ type family Imm a
 type family OpCode a
 
 type AsmConstraint :: (Type -> Constraint) -> Type -> Constraint
+
 type AsmConstraint c a = (c (Reg a), c (Mem a), c (Imm a), c (OpCode a))
 
 data Loc a
@@ -43,6 +45,11 @@ instance LabelOptic "_LTemp" A_Prism (Loc a) (Loc a) LL.Name LL.Name where
 deriving instance AsmConstraint Show a => Show (Loc a)
 
 deriving instance AsmConstraint Eq a => Eq (Loc a)
+
+tempToReg :: Setter (Loc a) (Loc a) LL.Name (Reg a)
+tempToReg = sets $ \f -> \case
+  LTemp name -> LReg $ f name
+  LReg reg -> LReg reg
 
 data Operand a
   = Imm !(Imm a)

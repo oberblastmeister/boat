@@ -40,8 +40,8 @@ data BackendState = BackEndState
 makeFieldLabelsNoPrefix ''BackendState
 
 type BackendEffs =
-  '[ State BackendState,
-     Writer (Seq InstLab),
+  '[ Writer (Seq InstLab),
+     State BackendState,
      Source LL.Name
    ]
 
@@ -62,7 +62,7 @@ compileOperand' (LL.Gid i) =
     Asm.Mem $
       X86.Mem
         { displace = Just $ X86.Lab i,
-          first = Just $ Asm.LReg $ X86.Rip,
+          first = Just $ Asm.LReg X86.Rip,
           second = Nothing,
           scale = Nothing
         }
