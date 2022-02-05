@@ -1,5 +1,6 @@
 module Main where
 
+import Oat.Main qualified
+
 main :: IO ()
-main = do
-  pure ()
+main = Oat.Main.main

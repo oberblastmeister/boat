@@ -1,9 +1,8 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.X86.AST
+module Oat.Backend.X86.AST
   ( Imm (..),
     Reg (..),
     Cond (..),
@@ -14,8 +13,7 @@ module Oat.X86.AST
     Elem (..),
     Prog,
     Operand,
-    Mem (.., MemImm, MemLoc),
-    Frame,
+    Mem (.., MemImm, MemLoc, MemStack, MemStackSimple),
     Loc,
     InstLab,
     X86,
@@ -25,14 +23,18 @@ module Oat.X86.AST
     text,
     memLocs,
     operandLocs,
+    wordSize,
+    callDests,
+    callerSaves,
+    calleeSaves,
+    paramRegs,
+    regs,
   )
 where
 
 import Data.Int (Int64)
-import Oat.Asm (pattern (:@))
 import Oat.Asm qualified as Asm
-import Oat.Frame qualified as Frame
-import Oat.LL.Name qualified as LL
+import Prelude hiding (first, second)
 
 data X86
 
@@ -41,8 +43,6 @@ instance Asm.Asm X86 where
   type Mem X86 = Mem
   type Imm X86 = Imm
   type OpCode X86 = OpCode
-
-type Frame = Frame.Frame X86
 
 type InstLab = Asm.InstLab X86
 
@@ -57,6 +57,12 @@ data Mem = Mem
     scale :: Maybe Imm
   }
   deriving (Show, Eq)
+
+pattern MemStackSimple :: Int64 -> Mem
+pattern MemStackSimple displace = MemStack (Just (Lit displace)) Nothing Nothing
+
+pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Imm -> Mem
+pattern MemStack displace second scale = Mem {displace, first = Just (Asm.LReg Rsp), second, scale}
 
 pattern MemImm :: Imm -> Mem
 pattern MemImm imm =
@@ -186,11 +192,6 @@ data Elem = Elem
 
 type Prog = [Elem]
 
-data FrameState = FrameSTate
-  { stack :: !Int
-  }
-
-makeFieldLabelsNoPrefix ''FrameState
 makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
 makePrismLabels ''OpCode
@@ -221,9 +222,6 @@ makePrismLabels ''OpCode
 -- makeMove (Asm.Mem _) (Asm.Mem _) = error "Can't both be mem for moves"
 -- makeMove arg1 arg2 = [Movq @ [arg1, arg2]]
 
-prologue :: a
-prologue = undefined
-
 -- needTemps :: Traversal Inst Inst (Mem, Bool) LL.Name
 -- needTemps = traversalVL go
 dat lab ds = Elem {lab, global = True, asm = Data ds}
@@ -248,3 +246,7 @@ callerSaves = [Rax, Rcx, Rdx, Rsi, Rdi, R8, R9, R10, R11]
 
 callDests :: [Reg]
 callDests = [Rax, Rdx]
+
+-- the number of bytes for a word
+wordSize :: Int
+wordSize = 8

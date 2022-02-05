@@ -44,10 +44,10 @@ deriving instance AsmConstraint Show a => Show (Operand a)
 
 deriving instance AsmConstraint Eq a => Eq (Operand a)
 
-pattern Reg :: Reg a -> Operand a
+pattern Reg :: Asm a => Reg a -> Operand a
 pattern Reg r = Loc (LReg r)
 
-pattern Temp :: LL.Name -> Operand a
+pattern Temp :: Asm a => LL.Name -> Operand a
 pattern Temp t = Loc (LTemp t)
 
 {-# COMPLETE Reg, Temp, Imm, Mem #-}
@@ -64,7 +64,7 @@ makePrismLabels ''Operand
 instOperands :: Traversal' (Inst a) (Operand a)
 instOperands = #args % traversed
 
-pattern (:@) :: OpCode a -> [Operand a] -> Inst a
+pattern (:@) :: Asm a => OpCode a -> [Operand a] -> Inst a
 pattern opcode :@ args = Inst {opcode, args}
 
 {-# COMPLETE (:@) #-}

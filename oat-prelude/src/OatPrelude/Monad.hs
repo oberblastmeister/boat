@@ -4,4 +4,4 @@ module OatPrelude.Monad
 where
 
 import Control.Monad.Identity as X
-import Prelude (flip)
+import Control.Monad.IO.Class as X (MonadIO(liftIO))

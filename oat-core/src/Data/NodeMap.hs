@@ -17,7 +17,7 @@ import Data.Graph.Inductive (DynGraph)
 import qualified Data.Graph.Inductive as Graph
 import qualified Data.HashMap.Strict as HashMap
 import Optics
-import Prelude hiding (State, map, runState)
+import Prelude hiding (map)
 
 type NodeMapM a = State (NodeMap a)
 

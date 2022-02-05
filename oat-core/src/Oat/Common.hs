@@ -1,4 +1,6 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Common
   ( internalError,
@@ -9,15 +11,21 @@ module Oat.Common
     inBetween,
     insOrdSetOf,
     swap,
+    ShowableException,
+    runErrorIO,
+    liftEither,
   )
 where
 
+import Control.Exception.Safe qualified as Exception
 import Data.HashSet qualified as HashSet
 import Data.HashSet.InsOrd (InsOrdHashSet)
 import Data.HashSet.InsOrd qualified as InsOrdHashSet
 import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
+import Effectful.Error.Static (Error, runError, throwError)
 import Language.Haskell.TH qualified as TH
+import Prelude hiding (Map)
 
 internalError :: forall a. HasCallStack => Text -> a
 internalError t = error $ "Internal compiler error: " <> t
@@ -57,3 +65,22 @@ swap :: (Is k An_AffineFold, Is k' A_Review) => Optic' k is t a -> Optic' k' is'
 swap o o' = sets $ \f x -> case x ^? o of
   Nothing -> x
   Just y -> o' # f y
+
+data ShowableException = forall e. Show e => ShowableException e
+  deriving (Typeable)
+
+instance Exception.Exception ShowableException
+
+instance Show ShowableException where
+  show (ShowableException e) = show e
+
+runErrorIO :: forall e es a. (Show e) => Eff (Error e ': es) a -> Eff es a
+runErrorIO m = do
+  res <- runError m
+  case res of
+    Left e -> Exception.throw $ ShowableException e
+    Right a -> pure a
+
+liftEither :: (Error e :> es) => Either e a -> Eff es a
+liftEither (Left e) = throwError e
+liftEither (Right a) = pure a

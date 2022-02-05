@@ -73,6 +73,9 @@ common common-options
   build-depends:
     base >= 4.12 && < 5,
     mtl ^>= 2.2.2,
+    effectful,
+    effectful-core,
+    effectful-plugin,
     containers ^>= 0.6.5.1,
     unordered-containers ^>= 0.2.16.0,
     text ^>= 1.2.5.0,
@@ -90,3 +93,4 @@ library
     OatPrelude.Monad
     OatPrelude.Unsafe
     OatPrelude.Maybe
+    OatPrelude.Effectful

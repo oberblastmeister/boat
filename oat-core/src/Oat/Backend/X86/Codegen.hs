@@ -3,38 +3,39 @@
 {-# OPTIONS_GHC -fplugin=Effectful.Plugin #-}
 
 module Oat.Backend.X86.Codegen
-  ( munchBody,
-    emit,
+  ( emit,
     emitLabel,
     emitInst,
     emitInsts,
     emitMove,
+    compileFunDecl,
   )
 where
 
+import Data.Int (Int64)
 import Data.Sequence qualified as Seq
-import Data.Source (Source)
-import Data.Source qualified as Source
-import Effectful (Eff, type (:>), type (:>>))
+import Control.Source (Source)
+import Control.Source qualified as Source
 import Effectful.Reader.Static
+import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern Reg, pattern Temp, pattern (:@))
 import Oat.Asm.AST qualified as Asm
+import Oat.Backend.X86.AST (InstLab, Reg (..))
+import Oat.Backend.X86.AST qualified as X86
+import Oat.Backend.X86.Frame as X86
 import Oat.Frame qualified as Frame
 import Oat.LL qualified as LL
-import Oat.X86.AST (InstLab, Reg (..))
-import Oat.X86.AST qualified as X86
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
-import Effectful.Reader.Static.Optics
 
 pattern With :: LL.Inst -> LL.Operand
 pattern With inst <- LL.Nested inst
 
 data BackendEnv = BackendEnv
-  { tyDecls :: !LL.TyMap
+  { declMap :: !LL.DeclMap
   }
 
 data BackendState = BackEndState
@@ -53,14 +54,44 @@ type BackendEffs =
      X86.Frame
    ]
 
-tySize :: BackendEffs :>> es => LL.Ty -> Eff es Int
+compileFunDecl :: '[Source LL.Name] :>> es => BackendEnv -> LL.FunDecl -> Eff es (Seq InstLab)
+compileFunDecl env funDecl = do
+  ((), insts) <-
+    compileFunDecl' funDecl
+      & evalState defBackendState
+      & runReader env
+      & runWriter @(Seq X86.InstLab)
+  pure insts
+
+compileFunDecl' ::
+  '[ Writer (Seq InstLab),
+     State BackendState,
+     Reader BackendEnv,
+     Source LL.Name
+   ]
+    :>> es =>
+  LL.FunDecl ->
+  Eff es ()
+compileFunDecl' funDecl = do
+  tyMap <- rview $ #declMap % #tyDecls
+  emitInsts $ viewShift $ funDecl ^. #params
+  ((), frameState) <- X86.runFrame $ munchBody (funDecl ^. #body)
+  let maxCall = LL.maxCallSize tyMap (funDecl ^. #body)
+      (prologue, epilogue) = prologueEpilogue maxCall frameState
+  #insts %= (fmap Right prologue <>)
+  #insts %= (<> fmap Right epilogue)
+
+defBackendState :: BackendState
+defBackendState = BackEndState {insts = mempty, allocaMems = mempty}
+
+tySize :: Reader BackendEnv :> es => LL.Ty -> Eff es Int
 tySize ty = do
-  tyDecls <- rview #tyDecls
+  tyDecls <- rview $ #declMap % #tyDecls
   pure $ LL.tySize tyDecls ty
 
-lookupTy :: BackendEffs :>> es => LL.Name -> Eff es LL.Ty
+lookupTy :: Reader BackendEnv :> es => LL.Name -> Eff es LL.Ty
 lookupTy name = do
-  mp <- asks (^. #tyDecls)
+  mp <- rview $ #declMap % #tyDecls
   pure $ LL.lookupTy name mp
 
 compileOperand' :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand
@@ -111,7 +142,12 @@ toMem (Asm.Loc loc) = Asm.Mem $ X86.MemLoc loc
 toMem other = other
 
 munchBody :: BackendEffs :>> es => LL.FunBody -> Eff es ()
-munchBody = traverseOf_ LL.bodyInsts munchInst
+munchBody = traverseOf_ LL.bodyBlocks munchBlock
+
+munchBlock :: BackendEffs :>> es => LL.Block -> Eff es ()
+munchBlock block = do
+  traverseOf_ (#insts % traversed) munchInst block
+  munchTerm $ block ^. #term
 
 munchInst :: BackendEffs :>> es => LL.Inst -> Eff es ()
 munchInst = \case
@@ -132,6 +168,15 @@ munchInst = \case
     arg <- compileOperand arg
     emitMove arg (Asm.Temp name)
   LL.Gep inst -> undefined
+
+munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()
+munchTerm = \case
+  LL.Ret LL.RetTerm {arg = Just arg} -> do
+    arg <- compileOperand arg
+    emitInsts [X86.Movq :@ [arg, Asm.Reg Rax]]
+  LL.Ret LL.RetTerm {arg = Nothing} -> pure ()
+  LL.Br name -> emitInsts [X86.Jmp :@ [Asm.Imm $ X86.Lab name]]
+  LL.Cbr ct -> undefined
 
 munchNested :: BackendEffs :>> es => LL.Operand -> Eff es ()
 munchNested (LL.Nested inst) = munchInst inst
@@ -186,3 +231,47 @@ mapCmpOp = \case
   LL.Sle -> X86.Set X86.Le
   LL.Sgt -> X86.Set X86.Gt
   LL.Sge -> X86.Set X86.Ge
+
+viewShift :: [LL.Name] -> [X86.Inst]
+viewShift args = insts
+  where
+    insts :: [X86.Inst]
+    insts =
+      -- it starts from two because we need to skip the implicitly pushed %rip from callq and also skip the pushed %rbp
+      fmap Left X86.paramRegs ++ fmap Right [2 :: Int64 ..]
+        & zip args
+        & fmap
+          ( \case
+              (name, Left reg) ->
+                X86.Movq :@ [Asm.Reg reg, Asm.Temp name]
+              (name, Right n) ->
+                X86.Movq :@ [Asm.Mem $ X86.MemStackSimple n, Asm.Temp name]
+          )
+
+prologueEpilogue :: Maybe Int -> X86.FrameState -> (Seq X86.Inst, Seq X86.Inst)
+prologueEpilogue maxCall frameState = (prologue, epilogue)
+  where
+    prologue =
+      Seq.fromList
+        [ X86.Pushq :@ [Asm.Reg Rbp],
+          X86.Movq :@ [Asm.Reg Rsp, Asm.Reg Rbp]
+        ]
+        <> subStack
+    epilogue =
+      Seq.fromList
+        [ X86.Movq :@ [Asm.Reg Rbp, Asm.Reg Rsp],
+          X86.Popq :@ [Asm.Reg Rbp],
+          X86.Retq :@ []
+        ]
+        <> addStack
+    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg] | stackSize /= 0]
+    addStack = Seq.fromList [X86.Addq :@ [stackSizeArg] | stackSize /= 0]
+    stackSize =
+      nextMultipleOf16 $
+        X86.wordSize * (fromIntegral callSize + (frameState ^. #stack))
+    stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
+    callSize = case maxCall of
+      Just maxCall -> maxCall - X86.wordSize * length X86.paramRegs
+      Nothing -> 0
+    nextMultipleOf16 :: Int -> Int
+    nextMultipleOf16 n = 16 * ((n + 15) `div` 16)

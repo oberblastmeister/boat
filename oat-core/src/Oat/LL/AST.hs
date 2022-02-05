@@ -191,7 +191,7 @@ data FunBody = FunBody
 data FunDecl = FunDecl
   { funTy :: FunTy,
     params :: [Name],
-    cfg :: FunBody
+    body :: FunBody
   }
   deriving (Show, Eq)
 
@@ -251,9 +251,9 @@ $(makeFieldLabelsNoPrefix ''FunDecl)
 $(makeFieldLabelsNoPrefix ''LabBlock)
 $(makeFieldLabelsNoPrefix ''RetTerm)
 $(makeFieldLabelsNoPrefix ''CbrTerm)
+$(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
-$(makeFieldLabelsNoPrefix ''DeclMap)
 
 progToDeclMap :: Prog -> DeclMap
 progToDeclMap =
@@ -344,6 +344,7 @@ doesInsAssign (Call CallInst {ty = Void}) = False
 doesInsAssign (Store _) = False
 doesInsAssign _ = True
 
+-- the size of the type in bytes
 tySize :: TyMap -> Ty -> Int
 tySize tyDecls =
   paraOf (plateTy tyDecls) go
@@ -351,6 +352,7 @@ tySize tyDecls =
     go ty rs =
       case ty of
         Void -> 0
+        -- this is not a valid type, we must only operate on i8* types
         I8 -> 0
         I1 -> 8
         I64 -> 8
@@ -362,6 +364,7 @@ tySize tyDecls =
       where
         size = sum rs
 
+-- maximum call size of them in bytes
 maxCallSize :: TyMap -> FunBody -> Maybe Int
 maxCallSize tyMap =
   maximumOf $

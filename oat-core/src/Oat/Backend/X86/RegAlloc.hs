@@ -7,18 +7,17 @@ module Oat.Backend.X86.RegAlloc
 where
 
 import Data.HashMap.Strict qualified as HashMap
-import Data.Source qualified as Source
-import Data.Traversable (for)
-import Effectful
+import Control.Source qualified as Source
 import Effectful.Reader.Static
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
+import Oat.Backend.X86.AST (Reg (..))
+import Oat.Backend.X86.AST qualified as X86
 import Oat.Backend.X86.Codegen qualified as Codegen
+import Oat.Backend.X86.Frame qualified as X86
 import Oat.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
-import Oat.X86.AST (Reg (..))
-import Oat.X86.AST qualified as X86
 
 noReg :: '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
 noReg insts = do

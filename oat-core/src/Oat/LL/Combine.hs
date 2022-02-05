@@ -10,7 +10,6 @@ where
 import Data.HashMap.Optics qualified as HashMap
 import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
-import Effectful (Eff, runPureEff, type (:>))
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Oat.Common (inBetween)

@@ -1,8 +1,4 @@
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE UndecidableInstances #-}
-
-module Data.Source
+module Control.Source
   ( Source,
     fresh,
     runSource,
@@ -11,13 +7,10 @@ module Data.Source
 where
 
 import Data.Infinite (Infinite ((::>)))
-import Effectful (Eff, type (:>))
-import Effectful qualified
-import Effectful.Dispatch.Static
 
-data Source :: Type -> Effectful.Effect
+data Source :: Type -> Effect
 
-type instance Effectful.DispatchOf (Source a) = 'Effectful.Static
+type instance DispatchOf (Source a) = 'Static
 
 newtype instance StaticRep (Source a) = Source (Infinite a)
 
@@ -28,7 +21,6 @@ fresh = do
   putStaticRep $ Source as
   pure a
 
--- runSource :: Infinite a -> Eff (Source a ': es) a -> (Eff es a, Infinite a)
 runSource :: Infinite a -> Eff (Source a : es) b -> Eff es (b, StaticRep (Source a))
 runSource infinite = runStaticRep (Source infinite)
 

@@ -6,11 +6,11 @@ module Oat.LL.Name
 where
 
 import Data.Infinite qualified as Infinite
-import Data.Source (Source)
+import Control.Source (Source)
 
 type Name = ByteString
 
 type NameSource = Source Name
 
 infiniteNames :: Infinite.Infinite String
-infiniteNames = (fromString . show) <$> Infinite.from (0 :: Int)
+infiniteNames = fromString . show <$> Infinite.from (0 :: Int)

@@ -86,7 +86,7 @@ import Data.ByteString (ByteString)
 %%
 
 Prog :: { Prog }
-  : List(Decl) { Prog {decls = $1} }
+  : List(Decl) { $1 }
   
 Decl :: { Decl }
   : GlobalDecl { $1 }
@@ -97,14 +97,12 @@ Decl :: { Decl }
 FunDecl :: { Decl }
   : define Ty gid '(' ParamList ')' '{' EntryBlock List(LabBlock) '}'
     { DeclFun
-        { name = $3,
-          funDecl = 
-            FunDecl
-              { funTy = FunTy {args = map fst $5, ret = $2},
-                params = map snd $5,
-                cfg = FunBody {entry = $8, labeled = $9}
-              }
-        }
+        $3
+        FunDecl
+          { funTy = FunTy {args = map fst $5, ret = $2},
+            params = map snd $5,
+            body = FunBody {entry = $8, labeled = $9}
+          }
     }
 
 ParamList :: { [(Ty, Name)] }
@@ -114,16 +112,11 @@ Param :: { (Ty, Name) }
   : Ty uid { ($1, $2) }
 
 ExternDecl :: { Decl }
-  : declare Ty gid '(' TyList ')' { DeclExtern {name = $3, ty = TyFun FunTy {args = $5, ret = $2}}}
-  | gid '=' external global Ty { DeclExtern {name = $1, ty = $5} }
+  : declare Ty gid '(' TyList ')' { DeclExtern $3 (TyFun FunTy {args = $5, ret = $2}) }
+  | gid '=' external global Ty { DeclExtern $1 $5 }
 
 GlobalDecl :: { Decl }
-  : gid '=' global Ty GlobalInit
-    { DeclGlobal
-        { name = $1,
-          globalDecl = GlobalDecl {ty = $4, globalInit = $5}
-        }
-    }
+  : gid '=' global Ty GlobalInit { DeclGlobal $1 GlobalDecl {ty = $4, globalInit = $5} }
   
 GlobalInit :: { GlobalInit }
   : null { GlobalNull }
@@ -140,7 +133,7 @@ InstideArrayGlobalDecl :: { GlobalDecl }
   : Ty GlobalInit { GlobalDecl {ty = $1, globalInit = $2} }
 
 TyDecl :: { Decl }
-  : uid '=' type Ty { DeclTy {name = $1, ty = $4} }
+  : uid '=' type Ty { DeclTy $1 $4 }
 
 Ty :: { Ty }
   : Ty '*' { TyPtr $1 }

@@ -19,7 +19,7 @@ repeat :: a -> Infinite a
 repeat = Infinite . Prelude.repeat
 
 from :: Enum a => a -> Infinite a
-from a = Infinite $ [a ..]
+from a = Infinite [a ..]
 
 uncons :: Infinite a -> (a, Infinite a)
 uncons (Infinite (a : as)) = (a, Infinite as)
@@ -41,6 +41,3 @@ pattern a ::> as <-
     a ::> as = cons a as
 
 {-# COMPLETE (::>) #-}
-
--- instance Cons (Infinite a) (Infinite a) a a where
---   _Cons = prism' (_) uncons

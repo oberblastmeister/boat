@@ -108,7 +108,8 @@ common common-options
     pretty-simple ^>= 4.0.0.0,
     typed-process ^>= 0.2.8.0,
     optparse-applicative ^>= 0.16.1.0,
-    first-class-families ^>= 0.8.0.1
+    first-class-families ^>= 0.8.0.1,
+    safe-exceptions ^>= 0.1.7.2
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -124,13 +125,16 @@ library
   hs-source-dirs: src
   exposed-modules:
     Effectful.State.Static.Local.Optics
+    Effectful.Reader.Static.Optics
+    Control.Source
+    Control.Fuel
     Data.Pos
     Data.Span
     Data.Range
     Data.Infinite
-    Data.Source
-    Data.Rec
     Oat
+    Oat.Main
+    Oat.Opt
     Oat.Frame
     Oat.Interned
     Oat.Interned.Internal
@@ -138,7 +142,6 @@ library
     Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
     Oat.Common
-    Oat.Backend
     Oat.LL
     Oat.LL.Token
     Oat.LL.Token.Kind
@@ -152,7 +155,9 @@ library
     Oat.Asm
     Oat.Asm.AST
     Oat.Asm.Class
-    Oat.X86.AST
+    Oat.Backend.X86
+    Oat.Backend.X86.Frame
+    Oat.Backend.X86.AST
     Oat.Backend.X86.Codegen
     Oat.Backend.X86.RegAlloc
 

@@ -1,7 +1,7 @@
 module Oat.X86.Pretty (prettyProg) where
 
 import Oat.Asm.AST qualified as Asm
-import Oat.X86.AST
+import Oat.Backend.X86.AST
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified as Pretty
 
