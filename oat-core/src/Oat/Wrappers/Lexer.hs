@@ -87,8 +87,8 @@ makeLexer name defUserState = do
     alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
     alexGetByte AlexInput {inpPos, inpPrev, inpBytes = b :< bs, inpText} =
       Just (b, AlexInput {inpPos, inpPrev, inpBytes = bs, inpText})
-    alexGetByte AlexInput {inpText = Empty} = Nothing
-    alexGetByte AlexInput {inpPos, inpText} =
+    alexGetByte AlexInput {inpText = Empty, inpBytes = Empty} = Nothing
+    alexGetByte AlexInput {inpPos, inpText, inpBytes = Empty} =
       Just (b, AlexInput {inpPos = inpPos', inpPrev = c, inpBytes = bs, inpText = text'})
       where
         inpPos' = alexMove inpPos c

@@ -15,12 +15,12 @@ import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.Codegen qualified as Codegen
-import Oat.FrameAct qualified as FrameAct
+import Oat.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
 import Oat.X86.AST (Reg (..))
 import Oat.X86.AST qualified as X86
 
-noReg :: '[X86.FrameAct, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
+noReg :: '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
 noReg insts = do
   let spills =
         insts
@@ -30,7 +30,7 @@ noReg insts = do
                   % #_LTemp
               )
   spillsMem <- for spills $ \spill -> do
-    mem <- FrameAct.allocLocal
+    mem <- Frame.allocLocal
     pure (spill, mem)
   let spillsMap = HashMap.fromList spillsMem
   spilledInsts <- spill spillsMap insts

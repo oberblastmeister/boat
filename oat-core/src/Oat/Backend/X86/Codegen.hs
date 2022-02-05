@@ -16,43 +16,51 @@ import Data.Sequence qualified as Seq
 import Data.Source (Source)
 import Data.Source qualified as Source
 import Effectful (Eff, type (:>), type (:>>))
+import Effectful.Reader.Static
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern Reg, pattern Temp, pattern (:@))
 import Oat.Asm.AST qualified as Asm
+import Oat.Frame qualified as Frame
 import Oat.LL qualified as LL
 import Oat.X86.AST (InstLab, Reg (..))
 import Oat.X86.AST qualified as X86
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
+import Effectful.Reader.Static.Optics
 
 pattern With :: LL.Inst -> LL.Operand
 pattern With inst <- LL.Nested inst
 
+data BackendEnv = BackendEnv
+  { tyDecls :: !LL.TyMap
+  }
+
 data BackendState = BackEndState
   { insts :: !(Seq InstLab),
-    frame :: !X86.Frame,
-    tyDecls :: !LL.TyMap,
     allocaMems :: !(HashMap LL.Name X86.Mem)
   }
 
 makeFieldLabelsNoPrefix ''BackendState
+makeFieldLabelsNoPrefix ''BackendEnv
 
 type BackendEffs =
   '[ Writer (Seq InstLab),
      State BackendState,
-     Source LL.Name
+     Reader BackendEnv,
+     Source LL.Name,
+     X86.Frame
    ]
 
 tySize :: BackendEffs :>> es => LL.Ty -> Eff es Int
 tySize ty = do
-  tyDecls <- use #tyDecls
+  tyDecls <- rview #tyDecls
   pure $ LL.tySize tyDecls ty
 
 lookupTy :: BackendEffs :>> es => LL.Name -> Eff es LL.Ty
 lookupTy name = do
-  mp <- use #tyDecls
+  mp <- asks (^. #tyDecls)
   pure $ LL.lookupTy name mp
 
 compileOperand' :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand
@@ -110,8 +118,7 @@ munchInst = \case
   LL.BinOp inst -> munchBinOp inst
   LL.Icmp inst -> munchIcmp inst
   LL.Alloca inst -> do
-    -- mem <- Frame.allocLocalM
-    mem <- undefined
+    mem <- Frame.allocLocal
     #allocaMems % at (inst ^. #name) ?= mem
   LL.Load LL.LoadInst {name, arg} -> do
     arg <- compileOperand arg

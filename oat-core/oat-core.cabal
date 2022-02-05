@@ -131,13 +131,12 @@ library
     Data.Source
     Data.Rec
     Oat
-    Oat.FrameAct
+    Oat.Frame
     Oat.Interned
     Oat.Interned.Internal
     Oat.Interned.Text
     Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
-    Oat.Wrappers.Parser
     Oat.Common
     Oat.Backend
     Oat.LL
@@ -150,7 +149,9 @@ library
     Oat.LL.LexerWrapper
     Oat.LL.ParserWrapper
     Oat.LL.Name
+    Oat.Asm
     Oat.Asm.AST
+    Oat.Asm.Class
     Oat.X86.AST
     Oat.Backend.X86.Codegen
     Oat.Backend.X86.RegAlloc

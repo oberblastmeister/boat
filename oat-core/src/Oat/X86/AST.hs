@@ -16,9 +16,9 @@ module Oat.X86.AST
     Operand,
     Mem (.., MemImm, MemLoc),
     Frame,
-    FrameAct,
     Loc,
     InstLab,
+    X86,
     hasTwoOperands,
     dat,
     gText,
@@ -29,24 +29,26 @@ module Oat.X86.AST
 where
 
 import Data.Int (Int64)
-import Oat.Asm.AST (pattern (:@))
-import Oat.Asm.AST qualified as Asm
-import Oat.FrameAct qualified as FrameAct
+import Oat.Asm (pattern (:@))
+import Oat.Asm qualified as Asm
+import Oat.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
 
-data FrameState = FrameSTate
-  { stack :: !Int
-  }
+data X86
 
-data Frame
+instance Asm.Asm X86 where
+  type Reg X86 = Reg
+  type Mem X86 = Mem
+  type Imm X86 = Imm
+  type OpCode X86 = OpCode
 
-type FrameAct = FrameAct.FrameAct Frame
+type Frame = Frame.Frame X86
 
-type InstLab = Asm.InstLab Frame
+type InstLab = Asm.InstLab X86
 
-type Inst = Asm.Inst Frame
+type Inst = Asm.Inst X86
 
-type Loc = Asm.Loc Frame
+type Loc = Asm.Loc X86
 
 data Mem = Mem
   { displace :: Maybe Imm,
@@ -102,14 +104,6 @@ hasTwoOperands = \case
   Shrq -> True
   Cmpq -> True
   _ -> False
-
-type instance Asm.Reg Frame = Reg
-
-type instance Asm.Mem Frame = Mem
-
-type instance Asm.Imm Frame = Imm
-
-type instance Asm.OpCode Frame = OpCode
 
 data Imm
   = Lit !Int64
@@ -171,7 +165,7 @@ data OpCode
   | Retq
   deriving (Show, Eq)
 
-type Operand = Asm.Operand Frame
+type Operand = Asm.Operand X86
 
 data Data
   = Asciz !ByteString
@@ -192,7 +186,11 @@ data Elem = Elem
 
 type Prog = [Elem]
 
-makeFieldLabelsNoPrefix ''Frame
+data FrameState = FrameSTate
+  { stack :: !Int
+  }
+
+makeFieldLabelsNoPrefix ''FrameState
 makeFieldLabelsNoPrefix ''Mem
 makeFieldLabelsNoPrefix ''Elem
 makePrismLabels ''OpCode

@@ -222,14 +222,19 @@ data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
   deriving (Show, Eq)
 
 data Decl
-  = DeclTy {name :: Name, ty :: Ty}
-  | DeclGlobal {name :: Name, globalDecl :: GlobalDecl}
-  | DeclFun {name :: Name, funDecl :: FunDecl}
-  | DeclExtern {name :: Name, ty :: Ty}
+  = DeclTy !Name Ty
+  | DeclGlobal !Name GlobalDecl
+  | DeclFun !Name FunDecl
+  | DeclExtern !Name Ty
 
-data Prog = Prog
-  { decls :: [Decl]
+data DeclMap = DeclMap
+  { tyDecls :: !(HashMap Name Ty),
+    globalDecls :: !(HashMap Name GlobalDecl),
+    funDecls :: !(HashMap Name FunDecl),
+    externDecls :: !(HashMap Name Ty)
   }
+
+type Prog = [Decl]
 
 $(makeFieldLabelsNoPrefix ''LoadInst)
 $(makeFieldLabelsNoPrefix ''AllocaInst)
@@ -243,12 +248,23 @@ $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
 $(makeFieldLabelsNoPrefix ''FunBody)
 $(makeFieldLabelsNoPrefix ''FunDecl)
-$(makeFieldLabelsNoPrefix ''Prog)
 $(makeFieldLabelsNoPrefix ''LabBlock)
 $(makeFieldLabelsNoPrefix ''RetTerm)
 $(makeFieldLabelsNoPrefix ''CbrTerm)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
+$(makeFieldLabelsNoPrefix ''DeclMap)
+
+progToDeclMap :: Prog -> DeclMap
+progToDeclMap =
+  foldl'
+    ( \declMap -> \case
+        DeclTy name ty -> declMap & #tyDecls % at name ?~ ty
+        DeclGlobal name gDecl -> declMap & #globalDecls % at name ?~ gDecl
+        DeclFun name funDecl -> declMap & #funDecls % at name ?~ funDecl
+        DeclExtern name ty -> declMap & #externDecls % at name ?~ ty
+    )
+    DeclMap {tyDecls = mempty, globalDecls = mempty, funDecls = mempty, externDecls = mempty}
 
 instName :: AffineTraversal' Inst Name
 instName = atraversalVL go

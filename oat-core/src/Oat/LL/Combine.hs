@@ -41,8 +41,6 @@ data InstWithInfo = InstWithInfo
 $(makeFieldLabelsNoPrefix ''CombineState)
 $(makeFieldLabelsNoPrefix ''InstWithInfo)
 
--- type MonadCombine = MonadState CombineState
-
 combineBody :: LL.FunBody -> LL.FunBody
 combineBody = over LL.bodyBlocks combineBlock
 
@@ -55,8 +53,8 @@ combineBlock block = block'
 
 combineLoop :: (State CombineState :> es) => Eff es ()
 combineLoop = do
-  prevId <- use @CombineState #prevId
-  idToInst <- use @CombineState #idToInst
+  prevId <- use #prevId
+  idToInst <- use #idToInst
   case IntMap.lookupGT prevId idToInst of
     Just (currId, inst) -> do
       combineInst currId inst

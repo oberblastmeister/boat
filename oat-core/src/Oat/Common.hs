@@ -8,6 +8,7 @@ module Oat.Common
     makeFieldGetterLabelsNoPrefix,
     inBetween,
     insOrdSetOf,
+    swap,
   )
 where
 
@@ -51,3 +52,8 @@ inBetween (RangeP start end) imap = imap''
 
 insOrdSetOf :: (Is k A_Fold, Eq a, Hashable a) => Optic' k is s a -> s -> InsOrdHashSet a
 insOrdSetOf o = foldlOf' o (flip InsOrdHashSet.insert) mempty
+
+swap :: (Is k An_AffineFold, Is k' A_Review) => Optic' k is t a -> Optic' k' is' t b -> Setter t t a b
+swap o o' = sets $ \f x -> case x ^? o of
+  Nothing -> x
+  Just y -> o' # f y

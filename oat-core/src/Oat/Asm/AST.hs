@@ -3,11 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Asm.AST
-  ( Reg,
-    Mem,
-    Imm,
-    OpCode,
-    Loc (..),
+  ( Loc (..),
     Operand (.., Reg, Temp),
     Inst (.., (:@)),
     InstLab,
@@ -16,21 +12,11 @@ module Oat.Asm.AST
   )
 where
 
+import Oat.Asm.Class (Asm (..), AsmConstraint)
+import Oat.Common (swap)
 import Oat.LL qualified as LL
 
 type InstLab a = Either ByteString (Inst a)
-
-type family Reg a
-
-type family Mem a
-
-type family Imm a
-
-type family OpCode a
-
-type AsmConstraint :: (Type -> Constraint) -> Type -> Constraint
-
-type AsmConstraint c a = (c (Reg a), c (Mem a), c (Imm a), c (OpCode a))
 
 data Loc a
   = LReg !(Reg a)
@@ -47,9 +33,7 @@ deriving instance AsmConstraint Show a => Show (Loc a)
 deriving instance AsmConstraint Eq a => Eq (Loc a)
 
 tempToReg :: Setter (Loc a) (Loc a) LL.Name (Reg a)
-tempToReg = sets $ \f -> \case
-  LTemp name -> LReg $ f name
-  LReg reg -> LReg reg
+tempToReg = swap #_LTemp #_LReg
 
 data Operand a
   = Imm !(Imm a)
