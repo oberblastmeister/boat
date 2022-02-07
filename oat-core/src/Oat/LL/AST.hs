@@ -10,6 +10,7 @@ import Data.Text qualified as T
 import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 import Optics as O
+import Data.MapList (MapList)
 
 data Ty
   = Void
@@ -228,10 +229,10 @@ data Decl
   | DeclExtern !Name Ty
 
 data DeclMap = DeclMap
-  { tyDecls :: !(HashMap Name Ty),
-    globalDecls :: !(HashMap Name GlobalDecl),
-    funDecls :: !(HashMap Name FunDecl),
-    externDecls :: !(HashMap Name Ty)
+  { tyDecls :: !(MapList Name Ty),
+    globalDecls :: !(MapList Name GlobalDecl),
+    funDecls :: !(MapList Name FunDecl),
+    externDecls :: !(MapList Name Ty)
   }
 
 type Prog = [Decl]
@@ -255,6 +256,11 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
 
+test :: DeclMap
+test = undefined
+
+test' = test ^. #tyDecls % #map
+
 progToDeclMap :: Prog -> DeclMap
 progToDeclMap =
   foldl'
@@ -264,7 +270,7 @@ progToDeclMap =
         DeclFun name funDecl -> declMap & #funDecls % at name ?~ funDecl
         DeclExtern name ty -> declMap & #externDecls % at name ?~ ty
     )
-    DeclMap {tyDecls = mempty, globalDecls = mempty, funDecls = mempty, externDecls = mempty}
+    DeclMap {tyDecls = Empty, globalDecls = Empty, funDecls = Empty, externDecls = Empty}
 
 instName :: AffineTraversal' Inst Name
 instName = atraversalVL go
@@ -281,7 +287,7 @@ instName = atraversalVL go
 
 bodyBlocks :: Traversal' FunBody Block
 bodyBlocks = traversalVL $ \f body -> do
-  entry <- f (body ^. #entry)
+  entry <- f $ body ^. #entry
   labeled <- traverseOf (each % #block) f (body ^. #labeled)
   pure $ FunBody {entry, labeled}
 

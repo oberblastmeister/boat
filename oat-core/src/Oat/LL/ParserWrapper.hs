@@ -11,15 +11,17 @@ module Oat.LL.ParserWrapper
     tellErrors,
     lexer,
     parseError,
+    parse,
+    defaultParseState,
   )
 where
 
-import Data.List qualified as List
-import Oat.LL.Lexer (alexMonadScan)
-import Oat.LL.LexerWrapper (Alex (..), AlexState (..))
-import Oat.LL.Token (Token (..))
 import Control.Monad.Except
 import Control.Monad.State
+import Data.List qualified as List
+import Oat.LL.Lexer (alexMonadScan)
+import Oat.LL.LexerWrapper (Alex (..), AlexState (..), defaultAlexState)
+import Oat.LL.Token (Token (..))
 import Optics.State.Operators
 
 data ParseError
@@ -44,14 +46,20 @@ newtype Parser a = Parser {unParser :: ExceptT ParseError (StateT ParseState Ide
 
 makeFieldLabelsNoPrefix ''ParseState
 
-runParser :: Parser a -> ParseState -> (Either [ParseError] a, ParseState)
-runParser parser state = (res & _Left .~ (state'' ^. #errors), state'')
+parse :: Text -> Parser a -> Either [ParseError] a
+parse text parser = fst $ runParser (defaultParseState text) parser
+
+defaultParseState :: Text -> ParseState
+defaultParseState text = ParseState {errors = [], alexState = defaultAlexState text}
+
+runParser :: ParseState -> Parser a -> (Either [ParseError] a, ParseState)
+runParser state parser = (res & _Left .~ (state'' ^. #errors), state'')
   where
     state'' = state' & #errors %~ (res ^.. _Left ++)
     (res, state') = parser & unParser & runExceptT & (`runState` state)
 
-evalParser :: Parser a -> ParseState -> Either [ParseError] a
-evalParser parser state = runParser parser state ^. _1
+evalParser :: ParseState -> Parser a -> Either [ParseError] a
+evalParser state = fst . runParser state
 
 liftAlex :: Alex a -> Parser a
 liftAlex alex = Parser $ zoom #alexState $ lift $ unAlex alex

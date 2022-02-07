@@ -53,6 +53,4 @@ packages:
     /home/brian/projects/effectful/effectful-core/
     /home/brian/projects/effectful/effectful-plugin/
 
-tests: true
-
-with-compiler: ghc-8.10.7
+with-compiler: ghc-9.0.2

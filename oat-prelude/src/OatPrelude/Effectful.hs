@@ -8,11 +8,11 @@ import Effectful as X
     DispatchOf,
     Eff,
     Effect,
+    IOE,
     runEff,
     runPureEff,
     type (:>),
     type (:>>),
-    IOE,
   )
 import Effectful.Dispatch.Dynamic as X
   ( interpret,
@@ -27,4 +27,6 @@ import Effectful.Dispatch.Static as X
     localStaticRep,
     putStaticRep,
     runStaticRep,
+    stateStaticRep,
+    stateStaticRepM,
   )

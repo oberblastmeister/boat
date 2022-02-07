@@ -13,7 +13,7 @@ module Data.Span
 where
 
 import Data.Pos (Pos (..))
-import Oat.Common (makeFieldGetterLabelsNoPrefix)
+import Oat.TH (getterFieldLabels)
 import Prelude hiding (contains, empty)
 
 data Span = Span
@@ -22,7 +22,7 @@ data Span = Span
   }
   deriving (Show, Eq, Ord)
 
-$(makeFieldGetterLabelsNoPrefix ''Span)
+$(makeFieldLabelsWith getterFieldLabels ''Span)
 
 unsafeNew :: Pos -> Pos -> Span
 unsafeNew = Span

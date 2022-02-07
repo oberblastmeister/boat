@@ -12,10 +12,10 @@ module Oat.Backend.X86.Codegen
   )
 where
 
-import Data.Int (Int64)
-import Data.Sequence qualified as Seq
 import Control.Source (Source)
 import Control.Source qualified as Source
+import Data.Int (Int64)
+import Data.Sequence qualified as Seq
 import Effectful.Reader.Static
 import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
@@ -35,7 +35,7 @@ pattern With :: LL.Inst -> LL.Operand
 pattern With inst <- LL.Nested inst
 
 data BackendEnv = BackendEnv
-  { declMap :: !LL.DeclMap
+  { tyMap :: LL.TyMap
   }
 
 data BackendState = BackEndState
@@ -73,7 +73,7 @@ compileFunDecl' ::
   LL.FunDecl ->
   Eff es ()
 compileFunDecl' funDecl = do
-  tyMap <- rview $ #declMap % #tyDecls
+  tyMap <- rview #tyMap
   emitInsts $ viewShift $ funDecl ^. #params
   ((), frameState) <- X86.runFrame $ munchBody (funDecl ^. #body)
   let maxCall = LL.maxCallSize tyMap (funDecl ^. #body)
@@ -86,12 +86,12 @@ defBackendState = BackEndState {insts = mempty, allocaMems = mempty}
 
 tySize :: Reader BackendEnv :> es => LL.Ty -> Eff es Int
 tySize ty = do
-  tyDecls <- rview $ #declMap % #tyDecls
+  tyDecls <- rview #tyMap
   pure $ LL.tySize tyDecls ty
 
 lookupTy :: Reader BackendEnv :> es => LL.Name -> Eff es LL.Ty
 lookupTy name = do
-  mp <- rview $ #declMap % #tyDecls
+  mp <- rview #tyMap
   pure $ LL.lookupTy name mp
 
 compileOperand' :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand

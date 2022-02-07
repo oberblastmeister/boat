@@ -1,4 +1,6 @@
 ignore-project: False
-tests: True
 test-options: "--color"
 test-show-details: streaming
+
+-- tests: True
+-- benchmarks: True

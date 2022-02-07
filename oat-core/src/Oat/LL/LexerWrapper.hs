@@ -19,6 +19,7 @@ module Oat.LL.LexerWrapper
     alexGetInput,
     alexSetInput,
     ignorePendingBytes,
+    defaultAlexState,
     -- our stuff
     Lexeme,
     User (..),

@@ -7,24 +7,30 @@ module Oat.Common
     unwrap,
     unreachable,
     hashSetOf,
-    makeFieldGetterLabelsNoPrefix,
     inBetween,
     insOrdSetOf,
     swap,
     ShowableException,
     runErrorIO,
     liftEither,
+    readFileUtf8,
+    parOver,
+    evalOf,
+    parOf,
   )
 where
 
 import Control.Exception.Safe qualified as Exception
+import Control.Parallel.Strategies qualified as Parallel
+import Data.ByteString qualified as ByteString
 import Data.HashSet qualified as HashSet
 import Data.HashSet.InsOrd (InsOrdHashSet)
 import Data.HashSet.InsOrd qualified as InsOrdHashSet
 import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
+import Data.Text.Encoding qualified as Text.Encoding
+import Data.Text.Encoding.Error qualified as Text.Encoding.Error
 import Effectful.Error.Static (Error, runError, throwError)
-import Language.Haskell.TH qualified as TH
 import Prelude hiding (Map)
 
 internalError :: forall a. HasCallStack => Text -> a
@@ -46,12 +52,6 @@ unreachable = error "Unreachable!"
 hashSetOf :: (Eq a, Hashable a, Is k A_Fold) => Optic' k is s a -> s -> HashSet a
 hashSetOf fold = foldMapOf fold HashSet.singleton
 
-makeFieldGetterLabelsNoPrefix :: TH.Name -> TH.DecsQ
-makeFieldGetterLabelsNoPrefix =
-  makeFieldLabelsWith $
-    noPrefixFieldLabels
-      & generateUpdateableOptics .~ False
-
 inBetween :: Range -> IntMap a -> IntMap a
 inBetween (RangeP start end) imap = imap''
   where
@@ -65,6 +65,7 @@ swap :: (Is k An_AffineFold, Is k' A_Review) => Optic' k is t a -> Optic' k' is'
 swap o o' = sets $ \f x -> case x ^? o of
   Nothing -> x
   Just y -> o' # f y
+{-# INLINE swap #-}
 
 data ShowableException = forall e. Show e => ShowableException e
   deriving (Typeable)
@@ -84,3 +85,20 @@ runErrorIO m = do
 liftEither :: (Error e :> es) => Either e a -> Eff es a
 liftEither (Left e) = throwError e
 liftEither (Right a) = pure a
+
+readFileUtf8 :: '[Error Text.Encoding.Error.UnicodeException, IOE] :>> es => FilePath -> Eff es Text
+readFileUtf8 path = do
+  bs <- liftIO $ ByteString.readFile path
+  liftEither $ Text.Encoding.decodeUtf8' bs
+
+parOver :: Is k A_Traversal => Parallel.Strategy b -> Optic k is s t a b -> (a -> b) -> s -> t
+parOver strat o f = Parallel.runEval . traverseOf o (Parallel.rparWith strat . f)
+{-# INLINE parOver #-}
+
+evalOf :: Is k A_Traversal => Optic' k is s a -> Parallel.Strategy a -> Parallel.Strategy s
+evalOf = traverseOf
+{-# INLINE evalOf #-}
+
+parOf :: Is k A_Traversal => Optic' k is s a -> Parallel.Strategy a -> Parallel.Strategy s
+parOf o strat = traverseOf o $ Parallel.rparWith strat
+{-# INLINE parOf #-}

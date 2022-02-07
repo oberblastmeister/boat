@@ -13,9 +13,23 @@ data Opt = Opt
   { clang :: !Text,
     emitAsm :: !Bool,
     emitLL :: !Bool,
-    optimization :: !Int,
-    files :: [FilePath]
+    optimization :: !Optimization,
+    files :: [FilePath],
+    regAllocKind :: !RegAllocKind
   }
+  deriving (Show, Eq)
+
+data RegAllocKind
+  = NoReg
+  | SimpleReg
+  | GraphReg
+  | LinearReg
+  deriving (Show, Eq)
+  
+data Optimization
+  = O1
+  | O2
+  | O3
   deriving (Show, Eq)
 
 $(makeFieldLabelsNoPrefix ''Opt)
@@ -45,6 +59,7 @@ parseOpt' = do
     strOption $
       long "clang"
         <> metavar "COMMAND"
+        <> value "clang"
         <> help "The path to the clang command to use"
   emitAsm <-
     switch $
@@ -55,14 +70,34 @@ parseOpt' = do
       long "emit-llvm"
         <> help "Emit llvm instead of assembly"
   optimization <-
-    option auto $
+    option parseOptimization $
       short 'O'
+        <> value O1
         <> help "Set the optimization level"
   files <-
     some $
       argument str $
         metavar "FILES"
-  pure Opt {clang, emitAsm, emitLL, optimization, files}
+  regAllocKind <-
+    option parseRegAllocKind $
+      long "reg-alloc"
+        <> value GraphReg
+  pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind}
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption "0.0" $ long "version" <> help "Show the version"
+
+parseRegAllocKind :: ReadM RegAllocKind
+parseRegAllocKind = eitherReader $ \case
+  "no" -> Right NoReg
+  "simple" -> Right SimpleReg
+  "graph" -> Right GraphReg
+  "linear" -> Right LinearReg
+  _ -> Left "Invalid register allocator method"
+  
+parseOptimization :: ReadM Optimization
+parseOptimization = eitherReader $ \case
+  "1" -> Right O1
+  "2" -> Right O2
+  "3" -> Right O3
+  _ -> Left "Invalid optimization level"

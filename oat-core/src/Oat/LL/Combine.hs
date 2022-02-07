@@ -7,12 +7,13 @@ module Oat.LL.Combine
   )
 where
 
+import Control.Parallel.Strategies qualified as Parallel
 import Data.HashMap.Optics qualified as HashMap
 import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Common (inBetween)
+import Oat.Common (inBetween, parOver)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name (Name)
 import Optics.Operators.Unsafe ((^?!))
@@ -41,13 +42,13 @@ $(makeFieldLabelsNoPrefix ''CombineState)
 $(makeFieldLabelsNoPrefix ''InstWithInfo)
 
 combineBody :: LL.FunBody -> LL.FunBody
-combineBody = over LL.bodyBlocks combineBlock
+combineBody = parOver Parallel.rseq LL.bodyBlocks combineBlock
 
 combineBlock :: LL.Block -> LL.Block
 combineBlock block = block'
   where
     block' = LL.Block {insts = combineState' ^.. #idToInst % each % #inst, term = combineState' ^. #term}
-    ((), combineState') = runPureEff $ runState combineState combineLoop
+    ((), !combineState') = runPureEff $ runState combineState combineLoop
     combineState = stateFromBlock block
 
 combineLoop :: (State CombineState :> es) => Eff es ()

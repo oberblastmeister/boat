@@ -85,9 +85,10 @@ common common-options
     effectful,
     effectful-core,
     effectful-plugin,
-    containers ^>= 0.6.5.1,
-    unordered-containers ^>= 0.2.16.0,
+    containers >=0.5.10.2 && <0.7,
+    unordered-containers >=0.2.6 && <0.3,
     insert-ordered-containers ^>= 0.2.5.1,
+    deepseq >=1.2 && <1.5,
     dlist ^>= 1.0,
     fgl ^>= 5.7.0.3,
     text ^>= 1.2.5.0,
@@ -109,7 +110,8 @@ common common-options
     typed-process ^>= 0.2.8.0,
     optparse-applicative ^>= 0.16.1.0,
     first-class-families ^>= 0.8.0.1,
-    safe-exceptions ^>= 0.1.7.2
+    safe-exceptions ^>= 0.1.7.2,
+    parallel ^>= 3.2.2.0,
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -128,11 +130,16 @@ library
     Effectful.Reader.Static.Optics
     Control.Source
     Control.Fuel
+    Control.OnLeft
     Data.Pos
+    Data.MapList
     Data.Span
     Data.Range
     Data.Infinite
     Oat
+    Oat.Driver
+    Oat.TH
+    Oat.Command
     Oat.Main
     Oat.Opt
     Oat.Frame
@@ -167,14 +174,14 @@ common rtsopts
     -rtsopts
     -with-rtsopts=-N
 
-executable oat-core
+executable oatc
   import: common-options, rtsopts
   main-is: Main.hs
   -- Modules included in this executable, other than Main.
   -- other-modules:
   build-depends:
     oat-core
-  hs-source-dirs:   app
+  hs-source-dirs: app
   
 test-suite oat-core-test
   import: common-options, rtsopts
@@ -189,3 +196,12 @@ test-suite oat-core-test
     hspec == 2.9.2,
     QuickCheck ^>= 2.14.2,
     quickcheck-instances ^>= 0.3.27
+
+benchmark oat-core-bench
+  import: common-options, rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Main.hs
+  build-depends:
+    oat-core,
+    criterion ^>= 1.5.13.0

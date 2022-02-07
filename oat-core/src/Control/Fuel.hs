@@ -1,3 +1,5 @@
+{-# LANGUAGE QualifiedDo #-}
+
 module Control.Fuel
   ( Fuel (..),
     hasFuel,
@@ -5,7 +7,8 @@ module Control.Fuel
   )
 where
 
-import Control.FlattenEither qualified as E
+import Control.OnLeft (OnLeft (OnLeft))
+import Control.OnLeft qualified as OnLeft
 import Effectful.Error.Static
 
 data Fuel :: Effect where
@@ -19,23 +22,3 @@ hasFuel = send HasFuel
 
 useFuel :: Fuel :> es => Eff es ()
 useFuel = send UseFuel
-
-runSomething :: Eff es ()
-runSomething = do
-  res <-
-    runError @Int something
-      & runError @Bool
-      & runError @Char
-  let another = E.do
-
-  let final = case res of
-        Left e -> Left $ show e
-        Right rest -> case rest of
-          Left e -> Left $ show e
-          Right rest -> case rest of
-            Left e -> Left $ show e
-            Right a -> Right a
-  pure ()
-
-something :: '[Error Int, Error Bool, Error Char] :>> es => Eff es ()
-something = pure ()

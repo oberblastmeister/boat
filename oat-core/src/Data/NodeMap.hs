@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Data.NodeMap
   ( run,
@@ -15,6 +16,7 @@ where
 import Control.Monad.State.Lazy
 import Data.Graph.Inductive (DynGraph)
 import qualified Data.Graph.Inductive as Graph
+import Oat.TH (getterFieldLabels, addUnderscoreLenses)
 import qualified Data.HashMap.Strict as HashMap
 import Optics
 import Prelude hiding (map)
@@ -24,12 +26,13 @@ type NodeMapM a = State (NodeMap a)
 type NodeMapGraphM a b c g = State (NodeMap a, g b c)
 
 data NodeMap a = NodeMap
-  { _key :: !Int,
-    _map :: !(HashMap a Int)
+  { key :: !Int,
+    map :: !(HashMap a Int)
   }
   deriving (Show, Eq, Ord, Generic)
 
-$(makeLenses ''NodeMap)
+$(makeFieldLabelsWith getterFieldLabels ''NodeMap)
+$(makeLensesWith addUnderscoreLenses ''NodeMap)
 
 type instance IxValue (NodeMap a) = Int
 
@@ -38,7 +41,7 @@ type instance Index (NodeMap a) = a
 instance (Eq a, Hashable a) => Ixed (NodeMap a)
 
 instance (Eq a, Hashable a) => At (NodeMap a) where
-  at i = map % at i
+  at i = _map % at i
 
 run :: NodeMap a -> g b c -> NodeMapGraphM a b c g r -> (r, NodeMap a, g b c)
 run nmap graph m = (res, nmap', graph')
@@ -51,10 +54,10 @@ run_ nmap graph m = (nmap', graph')
     (_, nmap', graph') = run nmap graph m
 
 mkNodeMap :: NodeMap a
-mkNodeMap = NodeMap {_key = 0, _map = HashMap.empty}
+mkNodeMap = NodeMap {key = 0, map = HashMap.empty}
 
 insert :: (Hashable a, Eq a) => a -> NodeMap a -> (Int, NodeMap a)
-insert a nmap = (nmap ^. key, nmap & map % at a ?~ (nmap ^. key) & key %~ (+ 1))
+insert a nmap = (nmap ^. _key, nmap & _map % at a ?~ (nmap ^. _key) & _key %~ (+ 1))
 
 insertM :: forall a. (Hashable a, Eq a) => a -> NodeMapM a Int
 insertM = state . insert

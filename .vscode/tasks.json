@@ -6,7 +6,8 @@
             "type": "process",
             "command": "cabal",
             "args": [
-                "build"
+                "build",
+                "all",
             ],
             "group": "build"
         },
