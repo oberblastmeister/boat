@@ -1,7 +1,7 @@
 module Oat.X86.Pretty (prettyProg) where
 
 import Oat.Asm.AST qualified as Asm
-import Oat.Backend.X86.AST
+import Oat.Backend.X86.X86
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified as Pretty
 
@@ -159,9 +159,6 @@ prettyInst Asm.Inst {opcode, args} = case opcode of
       Callq -> prettyJmpOperand
       Set _ -> prettyByteOperand
       _ -> prettyOperand
-
--- instance Pretty Inst where
---   pretty Inst {opcode, operands} = case opcode of
 
 prettyShift :: OpCode -> [Operand] -> Doc ann
 prettyShift opcode operands = case operands of

@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.Backend.X86.AST
+module Oat.Backend.X86.X86
   ( Imm (..),
     Reg (..),
     Cond (..),
@@ -29,10 +29,12 @@ module Oat.Backend.X86.AST
     calleeSaves,
     paramRegs,
     regs,
+    instLabToElems,
   )
 where
 
 import Data.Int (Int64)
+import Data.Strict.Wrapper (unstrict, pattern Strict)
 import Oat.Asm qualified as Asm
 import Prelude hiding (first, second)
 
@@ -250,3 +252,15 @@ callDests = [Rax, Rdx]
 -- the number of bytes for a word
 wordSize :: Int
 wordSize = 8
+
+instLabToElems :: [InstLab] -> Prog
+instLabToElems instLabs =
+  snd $
+    unstrict $
+      foldl'
+        ( \(Strict (insts, prog)) -> \case
+            Left (lab, global) -> Strict ([], Elem {lab, global, asm = Text insts} : prog)
+            Right inst -> Strict (inst : insts, prog)
+        )
+        (Strict ([], []))
+        instLabs

@@ -256,11 +256,6 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
 
-test :: DeclMap
-test = undefined
-
-test' = test ^. #tyDecls % #map
-
 progToDeclMap :: Prog -> DeclMap
 progToDeclMap =
   foldl'

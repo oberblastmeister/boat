@@ -12,9 +12,9 @@ import Effectful.Reader.Static
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
-import Oat.Backend.X86.AST (Reg (..))
-import Oat.Backend.X86.AST qualified as X86
-import Oat.Backend.X86.Codegen qualified as Codegen
+import Oat.Backend.X86.X86 (Reg (..))
+import Oat.Backend.X86.X86 qualified as X86
+import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.Frame qualified as X86
 import Oat.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
@@ -72,11 +72,11 @@ spillInst inst@(opcode :@ args)
     case (arg1, arg2) of
       (Asm.Mem mem1, Asm.Mem mem2) -> do
         temp <- Source.fresh
-        Codegen.emitMove (Asm.Mem mem1) (Asm.Temp temp)
-        Codegen.emitInsts [inst {Asm.args = [Asm.Temp temp, Asm.Mem mem2]}]
-      args -> Codegen.emitInsts [inst {Asm.args = args ^.. both}]
+        Munch.emitMove (Asm.Mem mem1) (Asm.Temp temp)
+        Munch.emitInsts [inst {Asm.args = [Asm.Temp temp, Asm.Mem mem2]}]
+      args -> Munch.emitInsts [inst {Asm.args = args ^.. both}]
   | X86.hasTwoOperands opcode = error "Instruction should have two operands"
-  | otherwise = Codegen.emitInst inst
+  | otherwise = Munch.emitInst inst
 
 spillOperand :: SpillEffs :>> es => X86.Operand -> Eff es X86.Operand
 spillOperand arg@(Asm.Temp name) = do
@@ -88,7 +88,7 @@ spillOperand (Asm.Mem mem) = do
     case spills ^. at name of
       Just mem -> do
         name' <- Source.fresh
-        Codegen.emitMove (Asm.Mem mem) (Asm.Temp name')
+        Munch.emitMove (Asm.Mem mem) (Asm.Temp name')
         pure name'
       Nothing -> pure name
   pure $ Asm.Mem mem

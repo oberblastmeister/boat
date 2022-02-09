@@ -16,7 +16,7 @@ import Oat.Asm.Class (Asm (..), AsmConstraint)
 import Oat.Common (swap)
 import Oat.LL qualified as LL
 
-type InstLab a = Either ByteString (Inst a)
+type InstLab a = Either (ByteString, Bool) (Inst a)
 
 data Loc a
   = LReg !(Reg a)

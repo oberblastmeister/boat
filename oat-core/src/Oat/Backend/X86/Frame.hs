@@ -10,10 +10,9 @@ module Oat.Backend.X86.Frame
   )
 where
 
-import Data.Int (Int64)
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Backend.X86.AST (Mem (MemStackSimple), X86)
+import Oat.Backend.X86.X86 (Mem (MemStackSimple), X86)
 import Oat.Frame qualified as Frame
 
 data FrameState = FrameState

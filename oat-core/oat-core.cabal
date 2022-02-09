@@ -130,7 +130,6 @@ library
     Control.Source
     Control.Fuel
     Control.OnLeft
-    Control.Several
     Data.Pos
     Data.MapList
     Data.Span
@@ -162,9 +161,9 @@ library
     Oat.Asm
     Oat.Asm.AST
     Oat.Asm.Class
-    Oat.Backend.X86
     Oat.Backend.X86.Frame
-    Oat.Backend.X86.AST
+    Oat.Backend.X86.X86
+    Oat.Backend.X86.Munch
     Oat.Backend.X86.Codegen
     Oat.Backend.X86.RegAlloc
 
