@@ -85,9 +85,9 @@ common common-options
     effectful,
     effectful-core,
     effectful-plugin,
+    effectful-optics,
     containers >=0.5.10.2 && <0.7,
     unordered-containers >=0.2.6 && <0.3,
-    insert-ordered-containers ^>= 0.2.5.1,
     deepseq >=1.2 && <1.5,
     dlist ^>= 1.0,
     fgl ^>= 5.7.0.3,
@@ -112,6 +112,7 @@ common common-options
     first-class-families ^>= 0.8.0.1,
     safe-exceptions ^>= 0.1.7.2,
     parallel ^>= 3.2.2.0,
+    named ^>= 0.3.0.1,
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -126,11 +127,10 @@ library
   import: common-options
   hs-source-dirs: src
   exposed-modules:
-    Effectful.State.Static.Local.Optics
-    Effectful.Reader.Static.Optics
     Control.Source
     Control.Fuel
     Control.OnLeft
+    Control.Several
     Data.Pos
     Data.MapList
     Data.Span

@@ -8,7 +8,6 @@ module Oat.Common
     unreachable,
     hashSetOf,
     inBetween,
-    insOrdSetOf,
     swap,
     ShowableException,
     runErrorIO,
@@ -24,8 +23,6 @@ import Control.Exception.Safe qualified as Exception
 import Control.Parallel.Strategies qualified as Parallel
 import Data.ByteString qualified as ByteString
 import Data.HashSet qualified as HashSet
-import Data.HashSet.InsOrd (InsOrdHashSet)
-import Data.HashSet.InsOrd qualified as InsOrdHashSet
 import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
 import Data.Text.Encoding qualified as Text.Encoding
@@ -57,9 +54,6 @@ inBetween (RangeP start end) imap = imap''
   where
     (imap'', _) = IntMap.split end imap'
     (_, imap') = IntMap.split start imap
-
-insOrdSetOf :: (Is k A_Fold, Eq a, Hashable a) => Optic' k is s a -> s -> InsOrdHashSet a
-insOrdSetOf o = foldlOf' o (flip InsOrdHashSet.insert) mempty
 
 swap :: (Is k An_AffineFold, Is k' A_Review) => Optic' k is t a -> Optic' k' is' t b -> Setter t t a b
 swap o o' = sets $ \f x -> case x ^? o of
