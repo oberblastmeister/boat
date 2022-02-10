@@ -12,7 +12,7 @@ import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.HashMap.Strict qualified as HashMap
 import Oat.TH (getterFieldLabels, addUnderscoreLenses)
-import Prelude hiding (map)
+import Prelude hiding (map, toList)
 
 data MapList k v = MapList
   { map :: !(HashMap k v),

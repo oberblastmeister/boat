@@ -13,21 +13,31 @@ module Oat.Common
     runErrorIO,
     liftEither,
     readFileUtf8,
+    writeFileUtf8,
     parOver,
     evalOf,
     parOf,
+    listDirectory',
+    unlessM,
+    createFileIfMissing,
+    hPutUtf8,
   )
 where
 
 import Control.Exception.Safe qualified as Exception
 import Control.Parallel.Strategies qualified as Parallel
 import Data.ByteString qualified as ByteString
+import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.HashSet qualified as HashSet
 import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
 import Data.Text.Encoding qualified as Text.Encoding
-import Data.Text.Encoding.Error qualified as Text.Encoding.Error
+import Data.Text.Encoding.Error (UnicodeException)
 import Effectful.Error.Static (Error, runError, throwError)
+import Effectful.FileSystem (FileSystem)
+import Effectful.FileSystem qualified as FileSystem
+import System.FilePath ((</>))
+import System.IO qualified as IO
 import Prelude hiding (Map)
 
 internalError :: forall a. HasCallStack => Text -> a
@@ -80,10 +90,16 @@ liftEither :: (Error e :> es) => Either e a -> Eff es a
 liftEither (Left e) = throwError e
 liftEither (Right a) = pure a
 
-readFileUtf8 :: '[Error Text.Encoding.Error.UnicodeException, IOE] :>> es => FilePath -> Eff es Text
+readFileUtf8 :: '[Error UnicodeException, IOE] :>> es => FilePath -> Eff es Text
 readFileUtf8 path = do
   bs <- liftIO $ ByteString.readFile path
   liftEither $ Text.Encoding.decodeUtf8' bs
+
+writeFileUtf8 :: IOE :> es => FilePath -> Text -> Eff es ()
+writeFileUtf8 path = liftIO . ByteString.writeFile path . Text.Encoding.encodeUtf8
+
+hPutUtf8 :: IOE :> es => IO.Handle -> Text -> Eff es ()
+hPutUtf8 handle = liftIO . ByteString.hPutStr handle . Text.Encoding.encodeUtf8
 
 parOver :: Is k A_Traversal => Parallel.Strategy b -> Optic k is s t a b -> (a -> b) -> s -> t
 parOver strat o f = Parallel.runEval . traverseOf o (Parallel.rparWith strat . f)
@@ -96,3 +112,19 @@ evalOf = traverseOf
 parOf :: Is k A_Traversal => Optic' k is s a -> Parallel.Strategy a -> Parallel.Strategy s
 parOf o strat = traverseOf o $ Parallel.rparWith strat
 {-# INLINE parOf #-}
+
+listDirectory' :: FileSystem :> es => FilePath -> Eff es [FilePath]
+listDirectory' dirPath = do
+  paths <- FileSystem.listDirectory dirPath
+  pure $ (dirPath </>) <$> paths
+
+unlessM :: Monad m => m Bool -> m () -> m ()
+unlessM condM m = do
+  cond <- condM
+  unless cond m
+{-# INLINE unlessM #-}
+
+createFileIfMissing :: IOE :> es => FilePath -> Eff es ()
+createFileIfMissing path = do
+  unlessM (FileSystem.runFileSystem $ FileSystem.doesFileExist path) $
+    liftIO $ ByteString.writeFile path "\n"

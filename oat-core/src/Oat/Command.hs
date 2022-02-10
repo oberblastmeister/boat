@@ -43,9 +43,4 @@ runCommandClangIO = interpret $ \_ -> \case
   Link {mods, out} -> proc "clang" $ mods ++ ["-o", out]
   where
     proc cmd args = adapt $ Process.callProcess cmd args
-    adapt m =
-      Exception.catch
-        (Process.runProcess m)
-        ( \(e :: Exception.IOException) ->
-            throwError . CommandError $ e
-        )
+    adapt m = Process.runProcess m `Exception.catch` (throwError . CommandError)

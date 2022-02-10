@@ -23,6 +23,7 @@ import Oat.LL.Lexer (alexMonadScan)
 import Oat.LL.LexerWrapper (Alex (..), AlexState (..), defaultAlexState)
 import Oat.LL.Token (Token (..))
 import Optics.State.Operators
+import qualified Oat.LL.Token.Kind as Kind
 
 data ParseError
   = LexerError Text
@@ -72,6 +73,6 @@ lexer k = do
   liftAlex alexMonadScan >>= \case
     Left e -> tellErrors [LexerError e] *> lexer k
     Right t -> k t
-
+    
 parseError :: forall a. (Token, [String]) -> Parser a
 parseError (tok, exp) = throwError UnexpectedToken {unexpected = tok, expected = List.nub exp}

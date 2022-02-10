@@ -9,6 +9,8 @@ module Oat.Wrappers.Lexer
   )
 where
 
+import Control.Monad.Reader
+import Control.Monad.State.Lazy
 import Data.ByteString qualified as ByteString
 import Data.Pos (Pos (Pos))
 import Data.Span (Span)
@@ -17,8 +19,6 @@ import Data.Text.Encoding qualified as Text.Encoding
 import Data.Word (Word8)
 import Language.Haskell.TH qualified as TH
 import OatPrelude.Unsafe qualified as Unsafe
-import Control.Monad.State
-import Control.Monad.Reader
 
 makeLexer :: TH.Name -> TH.Name -> TH.DecsQ
 makeLexer name defUserState = do
@@ -60,11 +60,11 @@ makeLexer name defUserState = do
     alexMove (Pos line _) '\n' = Pos (line + 1) 1
     alexMove (Pos line col) _ = Pos line (col + 1)
 
-    runAlex :: AlexState -> Alex a -> a
-    runAlex alexState alex =
+    runAlex :: Text -> Alex a -> a
+    runAlex text alex =
       alex
         & coerce
-        & (`evalStateT` alexState)
+        & (`evalStateT` defaultAlexState text)
         & runIdentity
 
     alexDefaultPos :: Pos

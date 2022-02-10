@@ -57,7 +57,7 @@ stringKind :: (Text -> Kind) -> AlexAction Lexeme
 stringKind f = do
   text <- gview #text
   pure $ Right $ Token $ f text
-  
+
 bytesKind :: (ByteString -> Kind) -> AlexAction Lexeme
 bytesKind f = do
   text <- gview #text

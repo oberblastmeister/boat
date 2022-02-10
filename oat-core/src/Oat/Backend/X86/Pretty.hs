@@ -1,4 +1,4 @@
-module Oat.X86.Pretty (prettyProg) where
+module Oat.Backend.X86.Pretty (prettyProg) where
 
 import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.X86

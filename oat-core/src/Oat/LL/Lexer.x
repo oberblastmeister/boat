@@ -1,7 +1,7 @@
 {
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Oat.LL.Lexer (alexMonadScan) where
+module Oat.LL.Lexer (alexMonadScan, tokenize) where
 
 import OldPrelude as Prelude
 import Data.Void (Void)
@@ -145,4 +145,17 @@ alexMonadScan = do
           span = SpanP pos1 pos2
           env = AlexEnv text span
       runReaderT action env
+      
+tokenize :: Text -> [Lexeme]
+tokenize text = runAlex text tokenize'
+
+tokenize' ::  Alex [Lexeme]
+tokenize' = do
+  lex <- alexMonadScan
+  case lex of
+    Right (Token Kind.Eof) -> pure [lex]
+    _ -> do
+      lexes <- tokenize'
+      pure $ lex : lexes
+
 }

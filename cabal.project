@@ -31,3 +31,6 @@ packages:
     /home/brian/projects/effectful/effectful-plugin/
 
 with-compiler: ghc-9.0.2
+
+tests: True
+-- benchmarks: True
