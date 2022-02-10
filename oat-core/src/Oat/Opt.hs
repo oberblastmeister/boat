@@ -15,7 +15,8 @@ data Opt = Opt
     emitLL :: !Bool,
     optimization :: !Optimization,
     files :: [FilePath],
-    regAllocKind :: !RegAllocKind
+    regAllocKind :: !RegAllocKind,
+    output :: FilePath
   }
   deriving (Show, Eq)
 
@@ -25,7 +26,7 @@ data RegAllocKind
   | GraphReg
   | LinearReg
   deriving (Show, Eq)
-  
+
 data Optimization
   = O1
   | O2
@@ -50,7 +51,6 @@ parseOpt =
     (helper <*> versionOption <*> parseOpt')
     ( fullDesc
         <> progDesc "Compiler for the oat language"
-        <> header "This is my header"
     )
 
 parseOpt' :: Parser Opt
@@ -82,7 +82,12 @@ parseOpt' = do
     option parseRegAllocKind $
       long "reg-alloc"
         <> value GraphReg
-  pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind}
+  output <-
+    strOption $
+      short 'o'
+        <> value "a.out"
+        <> help "Set the output file"
+  pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind, output}
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption "0.0" $ long "version" <> help "Show the version"
@@ -94,7 +99,7 @@ parseRegAllocKind = eitherReader $ \case
   "graph" -> Right GraphReg
   "linear" -> Right LinearReg
   _ -> Left "Invalid register allocator method"
-  
+
 parseOptimization :: ReadM Optimization
 parseOptimization = eitherReader $ \case
   "1" -> Right O1

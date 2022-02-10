@@ -4,17 +4,21 @@
 module TestDataSpec where
 
 import Conduit (runConduit, runConduitRes, (.|))
+import Control.Exception.Safe qualified as Exception
 import Data.Conduit.Combinators qualified as C
 import Data.Foldable (traverse_)
 import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
+import Data.Text qualified as T
 import Data.Text.Lazy qualified as LText
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
 import Effectful.Temporary qualified as Temporary
-import Oat.Common (hPutUtf8, whenM, writeFileUtf8)
+import Oat.Common (hPutUtf8, writeFileUtf8)
 import Oat.Common qualified
 import Oat.LL.Lexer qualified as LL.Lexer
+import Oat.LL.Parser qualified as LL.Parser
+import Oat.LL.ParserWrapper qualified as LL.ParserWrapper
 import System.Directory qualified as Directory
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
@@ -23,13 +27,21 @@ import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
 import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Core.Spec qualified as Spec
-import Text.Pretty.Simple (pShowNoColor)
+import Text.Pretty.Simple (pShow, pShowNoColor)
 
 data Config = Config
   { update :: Bool,
     firstTimeUpdate :: Bool,
-    filterPred :: FilePath -> Bool
+    filterPred :: Pred
   }
+
+type Pred = FilePath -> Bool
+
+(</&&>) :: Pred -> Pred -> Pred
+pred </&&> pred' = (&&) <$> pred <*> pred'
+
+(</||>) :: Pred -> Pred -> Pred
+pred </||> pred' = (||) <$> pred <*> pred'
 
 makeFieldLabelsNoPrefix ''Config
 
@@ -49,6 +61,7 @@ run config =
     filterFun :: ([FilePath], FilePath) -> Bool
     filterFun (ps, p) = config ^. #filterPred $ FilePath.joinPath ps </> p
 
+-- cleans .expect files that do not have a matching file
 clean :: IO ()
 clean = do
   runConduitRes $
@@ -66,14 +79,21 @@ clean = do
               liftIO $ Directory.removeFile expectPath
         )
 
-runOnly :: [FilePath] -> FilePath -> Bool
-runOnly ps = \p -> has (ix p) psSet
+matchHead :: FilePath -> Pred
+matchHead base path = FilePath.takeDirectory path == base
+
+matchTail :: FilePath -> Pred
+matchTail tail path = FilePath.takeFileName path == tail
+
+matchExact :: [FilePath] -> Pred
+matchExact ps = \p -> has (ix p) psSet
   where
     psSet = HashSet.fromList ps
 
 specWith :: Config -> Spec
 specWith config = do
   llLexerSpec config
+  llParserSpec config
 
 llLexerSpec :: Config -> Spec
 llLexerSpec config = do
@@ -85,6 +105,21 @@ llLexerSpec config = do
         . LL.Lexer.tokenize
     )
     "ll_lexer/ok"
+
+llParserSpec :: Config -> Spec
+llParserSpec config = do
+  makeSnapshotSpec
+    config
+    ( \text -> do
+        let res = LL.ParserWrapper.parse text LL.Parser.prog
+        case res of
+          Left es -> Exception.throwString $ T.unpack $ LText.toStrict $ pShowNoColor es
+          Right prog -> pure $ LText.toStrict $ pShowNoColor prog
+    )
+    "ll_parser/ok"
+
+llCompileSpec :: Config -> Spec
+llCompileSpec config = pure ()
 
 defConfig :: Config
 defConfig =

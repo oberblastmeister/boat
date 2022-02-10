@@ -5,8 +5,6 @@ module Oat.TH
   )
 where
 
-import Language.Haskell.TH qualified as TH
-
 getterFieldLabels :: LensRules
 getterFieldLabels =
   noPrefixFieldLabels

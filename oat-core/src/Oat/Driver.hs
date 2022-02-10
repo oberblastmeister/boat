@@ -60,12 +60,14 @@ compileLLTextToFile llText dotO = do
   dotSText <- compileLLText llText
   Temporary.withSystemTempFile "oat" $ \dotSTemp _ -> do
     writeFileUtf8 dotSTemp dotSText
-    compileAsm dotSTemp dotO
+    compileAsm True dotSTemp dotO
 
 compileLLText :: '[Error [LL.ParseError]] :>> es => Text -> Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
+  let !_ = traceShowId insts
   let prog = Backend.X86.instLabToElems $ toList insts
+  let !_ = traceShowId prog
   let asmDoc = Backend.X86.Pretty.prettyProg prog
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
@@ -73,16 +75,18 @@ compileLLText text = do
 compileLLTextToInsts :: '[Error [LL.ParseError]] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
   insts <- parseLL text
+  let !_ = traceShowId insts
   LL.runNameSource $ Backend.X86.Codegen.compileProg insts
 
-compileAsm :: '[Command, Temporary] :>> es => FilePath -> FilePath -> Eff es ()
-compileAsm dotS dotO = do
+compileAsm :: '[Command, Temporary] :>> es => Bool -> FilePath -> FilePath -> Eff es ()
+compileAsm shouldLink dotS dotO = do
   Temporary.withSystemTempFile "oat" $ \dotOTemp _ -> do
     Command.assemble dotS dotOTemp
-    Command.link [dotOTemp] dotO
+    when shouldLink $
+      Command.link [dotOTemp] dotO
 
 compileLLFileClang :: '[Command, Temporary] :>> es => FilePath -> FilePath -> Eff es ()
 compileLLFileClang dotLL dotO = do
   Temporary.withSystemTempFile "oat" $ \dotSTemp _ -> do
     Command.compileLlvm dotLL dotSTemp
-    compileAsm dotSTemp dotO
+    compileAsm True dotSTemp dotO

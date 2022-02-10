@@ -5,13 +5,13 @@ module Data.MapList
   ( MapList,
     toList,
     toMap,
-  )
+  insert)
 where
 
 import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.HashMap.Strict qualified as HashMap
-import Oat.TH (getterFieldLabels, addUnderscoreLenses)
+import Oat.TH (addUnderscoreLenses, getterFieldLabels)
 import Prelude hiding (map, toList)
 
 data MapList k v = MapList
@@ -38,15 +38,6 @@ instance (Eq k, Hashable k) => Semigroup (MapList k v) where
 
 instance (NFData k, NFData v) => NFData (MapList k v)
 
-type instance IxValue (MapList k v) = v
-
-type instance Index (MapList k v) = k
-
-instance (Eq k, Hashable k) => Ixed (MapList k v)
-
-instance (Eq k, Hashable k) => At (MapList k v) where
-  at i = _map % at i
-
 instance AsEmpty (MapList k v) where
   _Empty = nearly (MapList HashMap.empty []) (null . list)
 
@@ -55,3 +46,10 @@ toList = view _list
 
 toMap :: MapList k v -> HashMap k v
 toMap = view _map
+
+insert :: (Eq k, Hashable k) => k -> v -> MapList k v -> MapList k v
+insert key val MapList {map, list} =
+  MapList
+    { map = map & at key ?~ val,
+      list = (key, val) : list
+    }

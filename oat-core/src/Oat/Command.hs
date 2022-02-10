@@ -34,6 +34,7 @@ link :: Command :> es => [FilePath] -> FilePath -> Eff es ()
 link mods out = send Link {mods, out}
 
 data CommandError = CommandError Exception.IOException
+  deriving (Show)
 
 runCommandClangIO :: ('[IOE, Error CommandError] :>> es) => Eff (Command ': es) a -> Eff es a
 runCommandClangIO = interpret $ \_ -> \case

@@ -23,7 +23,6 @@ import Oat.LL.Lexer (alexMonadScan)
 import Oat.LL.LexerWrapper (Alex (..), AlexState (..), defaultAlexState)
 import Oat.LL.Token (Token (..))
 import Optics.State.Operators
-import qualified Oat.LL.Token.Kind as Kind
 
 data ParseError
   = LexerError Text

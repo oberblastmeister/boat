@@ -90,8 +90,8 @@ tokens :-
   <0> "external" { kind Kind.External }
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
-  <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.take 1 }
-  <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.take 1 }
+  <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.drop 1 }
+  <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.drop 1 }
   <0> "x" { kind Kind.Cross }
   <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
   <0> [a-z]+ { bytesKind Kind.Lab }

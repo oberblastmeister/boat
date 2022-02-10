@@ -1,7 +1,9 @@
 module Oat.Backend.X86.Pretty (prettyProg) where
 
+import Data.Text qualified as T
 import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.X86
+import OatPrelude.Unsafe qualified as Unsafe
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified as Pretty
 
@@ -9,12 +11,14 @@ prettyProg :: Prog -> Doc ann
 prettyProg elems = Pretty.vsep (prettyElem <$> elems)
 
 prettyElem :: Elem -> Doc ann
-prettyElem Elem {lab, global, asm} =
-  sec <> glb <> Pretty.viaShow lab <> ":\n" <> body
+prettyElem Elem {lab, global, asm} = do
+  -- let !_ = traceShowId lab
+  -- let !_ = traceShowId $ prettyLab lab
+  sec <> glb <> prettyLab lab <> ":\n" <> body
   where
     glb =
       if global
-        then "\t.global\t" <> Pretty.viaShow lab <> "\n"
+        then "\t.global\t" <> prettyLab lab <> "\n"
         else ""
     (sec, body) = case asm of
       Text insts -> ("\t.text\n", Pretty.vsep (prettyInst <$> insts))
@@ -64,11 +68,26 @@ prettyByteReg = \case
   R15 -> "%r15b"
   Rip -> error "%rip does not have a byte register"
 
+pIf :: Bool -> Doc ann -> Doc ann
+pIf cond doc
+  | cond = doc
+  | otherwise = mempty
+
+prettyLab :: ByteString -> Doc ann
+prettyLab =
+  pretty @Text
+    . fst
+    . Unsafe.fromJust
+    . T.unsnoc
+    . snd
+    . Unsafe.fromJust
+    . T.uncons
+    . T.pack
+    . show
+
 prettyImm :: Imm -> Doc ann
-prettyImm imm =
-  "$" <> case imm of
-    (Lit l) -> pretty l
-    (Lab l) -> Pretty.viaShow l
+prettyImm (Lit l) = pretty l
+prettyImm (Lab l) = prettyLab l
 
 prettyCond :: Cond -> Doc ann
 prettyCond = \case

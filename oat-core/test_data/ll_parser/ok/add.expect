@@ -1,0 +1,39 @@
+[ DeclFun "main"
+    ( FunDecl
+        { funTy = FunTy
+            { args =
+                [ I64
+                , TyPtr ( TyPtr I8 )
+                ]
+            , ret = I64
+            }
+        , params =
+            [ "argc"
+            , "argv"
+            ]
+        , body = FunBody
+            { entry = Block
+                { insts =
+                    [ BinOp
+                        ( BinOpInst
+                            { name = "1"
+                            , op = Add
+                            , ty = I64
+                            , arg1 = Const 5
+                            , arg2 = Const 9
+                            }
+                        )
+                    ]
+                , term = Ret
+                    ( RetTerm
+                        { ty = I64
+                        , arg = Just
+                            ( Temp "1" )
+                        }
+                    )
+                }
+            , labeled = []
+            }
+        }
+    )
+]

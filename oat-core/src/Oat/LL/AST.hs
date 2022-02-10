@@ -6,11 +6,12 @@ module Oat.LL.AST where
 
 import Data.Data (Data)
 import Data.Int (Int64)
+import Data.MapList (MapList)
+import Data.MapList qualified as MapList
 import Data.Text qualified as T
 import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 import Optics as O
-import Data.MapList (MapList)
 
 data Ty
   = Void
@@ -227,6 +228,7 @@ data Decl
   | DeclGlobal !Name GlobalDecl
   | DeclFun !Name FunDecl
   | DeclExtern !Name Ty
+  deriving (Show, Eq)
 
 data DeclMap = DeclMap
   { tyDecls :: !(MapList Name Ty),
@@ -234,6 +236,7 @@ data DeclMap = DeclMap
     funDecls :: !(MapList Name FunDecl),
     externDecls :: !(MapList Name Ty)
   }
+  deriving (Show, Eq)
 
 type Prog = [Decl]
 
@@ -256,14 +259,14 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
 
-progToDeclMap :: Prog -> DeclMap
+progToDeclMap :: [Decl] -> DeclMap
 progToDeclMap =
   foldl'
     ( \declMap -> \case
-        DeclTy name ty -> declMap & #tyDecls % at name ?~ ty
-        DeclGlobal name gDecl -> declMap & #globalDecls % at name ?~ gDecl
-        DeclFun name funDecl -> declMap & #funDecls % at name ?~ funDecl
-        DeclExtern name ty -> declMap & #externDecls % at name ?~ ty
+        DeclTy name ty -> declMap & #tyDecls %~ MapList.insert name ty
+        DeclGlobal name gDecl -> declMap & #globalDecls %~ MapList.insert name gDecl
+        DeclFun name funDecl -> declMap & #funDecls %~ MapList.insert name funDecl
+        DeclExtern name ty -> declMap & #externDecls %~ MapList.insert name ty
     )
     DeclMap {tyDecls = Empty, globalDecls = Empty, funDecls = Empty, externDecls = Empty}
 

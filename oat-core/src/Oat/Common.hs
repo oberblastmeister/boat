@@ -22,13 +22,12 @@ module Oat.Common
     createFileIfMissing,
     hPutUtf8,
     pathTail,
-  )
+  whenM)
 where
 
 import Control.Exception.Safe qualified as Exception
 import Control.Parallel.Strategies qualified as Parallel
 import Data.ByteString qualified as ByteString
-import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.HashSet qualified as HashSet
 import Data.IntMap qualified as IntMap
 import Data.Range (Range (RangeP))
@@ -125,6 +124,12 @@ unlessM condM m = do
   cond <- condM
   unless cond m
 {-# INLINE unlessM #-}
+
+whenM :: Monad m => m Bool -> m () -> m ()
+whenM condM m = do
+  cond <- condM
+  when cond m
+{-# INLINE whenM #-}
 
 createFileIfMissing :: IOE :> es => FilePath -> Eff es ()
 createFileIfMissing path = do

@@ -7,9 +7,29 @@
             "command": "cabal",
             "args": [
                 "build",
-                "all",
+                "all"
             ],
             "group": "build"
+        },
+        {
+            "label": "test",
+            "type": "process",
+            "command": "cabal",
+            "args": [
+                "test",
+                "oat-core-test"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "repl test",
+            "type": "process",
+            "command": "cabal",
+            "args": [
+                "repl",
+                "oat-core-test"
+            ],
+            "problemMatcher": []
         },
         {
             "label": "ghcid app",

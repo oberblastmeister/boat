@@ -91,7 +91,7 @@ prologueEpilogue maxCall frameState = (prologue, epilogue)
     addStack = Seq.fromList [X86.Addq :@ [stackSizeArg] | stackSize /= 0]
     stackSize =
       nextMultipleOf16 $
-        X86.wordSize * (fromIntegral callSize + (frameState ^. #stack))
+        (fromIntegral callSize + (frameState ^. #stack))
     stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
     callSize = case maxCall of
       Just maxCall -> maxCall - X86.wordSize * length X86.paramRegs

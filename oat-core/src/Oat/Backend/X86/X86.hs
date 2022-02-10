@@ -256,11 +256,10 @@ wordSize = 8
 instLabToElems :: [InstLab] -> Prog
 instLabToElems instLabs =
   snd $
-    unstrict $
-      foldl'
-        ( \(Strict (insts, prog)) -> \case
-            Left (lab, global) -> Strict ([], Elem {lab, global, asm = Text insts} : prog)
-            Right inst -> Strict (inst : insts, prog)
-        )
-        (Strict ([], []))
-        instLabs
+    foldr
+      ( \instLab (insts, prog) -> case instLab of
+          Left (lab, global) -> ([], Elem {lab, global, asm = Text insts} : prog)
+          Right inst -> (inst : insts, prog)
+      )
+      ([], [])
+      instLabs
