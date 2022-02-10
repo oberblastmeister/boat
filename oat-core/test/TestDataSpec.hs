@@ -1,88 +1,167 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module TestDataSpec where
 
+import Conduit (runConduit, runConduitRes, (.|))
+import Data.Conduit.Combinators qualified as C
 import Data.Foldable (traverse_)
+import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
 import Data.Text.Lazy qualified as LText
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
 import Effectful.Temporary qualified as Temporary
-import Oat.Common (hPutUtf8, listDirectory', writeFileUtf8)
-import Oat.Common qualified as Oat.Common
+import Oat.Common (hPutUtf8, whenM, writeFileUtf8)
+import Oat.Common qualified
 import Oat.LL.Lexer qualified as LL.Lexer
 import System.Directory qualified as Directory
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
 import System.IO qualified as IO
 import Test.Hspec
+import Test.Hspec.Core.Runner qualified as Spec
 import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Core.Spec qualified as Spec
 import Text.Pretty.Simple (pShowNoColor)
 
+data Config = Config
+  { update :: Bool,
+    firstTimeUpdate :: Bool,
+    filterPred :: FilePath -> Bool
+  }
+
+makeFieldLabelsNoPrefix ''Config
+
 spec :: Spec
 spec = do
-  llLexerSpec
+  specWith defConfig
 
-llLexerSpec :: Spec
-llLexerSpec = do
+run :: Config -> IO ()
+run config =
+  Spec.hspecWith
+    ( Spec.defaultConfig
+        { Spec.configFilterPredicate = Just filterFun
+        }
+    )
+    $ specWith config
+  where
+    filterFun :: ([FilePath], FilePath) -> Bool
+    filterFun (ps, p) = config ^. #filterPred $ FilePath.joinPath ps </> p
+
+clean :: IO ()
+clean = do
+  runConduitRes $
+    C.sourceDirectoryDeep False "test_data"
+      .| C.filter (\path -> FilePath.takeExtension path == ".expect")
+      .| C.mapM_
+        ( \expectPath -> do
+            let possiblePaths = [expectPath -<.> ".ll", expectPath -<.> ".oat"]
+            anyExist <-
+              runConduit $
+                C.yieldMany possiblePaths
+                  .| C.mapM (liftIO . Directory.doesFileExist)
+                  .| C.any id
+            unless anyExist $ do
+              liftIO $ Directory.removeFile expectPath
+        )
+
+runOnly :: [FilePath] -> FilePath -> Bool
+runOnly ps = \p -> has (ix p) psSet
+  where
+    psSet = HashSet.fromList ps
+
+specWith :: Config -> Spec
+specWith config = do
+  llLexerSpec config
+
+llLexerSpec :: Config -> Spec
+llLexerSpec config = do
   makeSnapshotSpec
-    "ll_lexer/ok"
+    config
     ( pure
         . LText.toStrict
         . pShowNoColor
         . LL.Lexer.tokenize
     )
+    "ll_lexer/ok"
 
-makeSnapshotSpec :: FilePath -> (Text -> IO Text) -> Spec
-makeSnapshotSpec dirPath convert = do
-  llCompileOk <- runIOE $ FileSystem.runFileSystem $ listDirectory' $ "test_data" </> dirPath
+defConfig :: Config
+defConfig =
+  Config
+    { update = False,
+      firstTimeUpdate = True,
+      filterPred = const True
+    }
+
+makeSnapshotSpec :: Config -> (Text -> IO Text) -> FilePath -> Spec
+makeSnapshotSpec config convert dirPath = do
+  llCompileOk <- runIOE $ FileSystem.runFileSystem $ FileSystem.listDirectory $ "test_data" </> dirPath
   describe dirPath $
     traverse_
-      (`makeSnapshotFileSpec` convert)
-      ( filter
-          (\path -> FilePath.takeExtension path /= ".expect")
-          llCompileOk
-      )
+      (makeSnapshotFileSpec config convert dirPath)
+      (filter notExpectPath llCompileOk)
 
-makeSnapshotFileSpec :: FilePath -> (Text -> IO Text) -> Spec
-makeSnapshotFileSpec path convert = do
-  contents <- readFileUtf8 path
-  let expectPath = path -<.> "expect"
-  existsExpect <- runIO $ Directory.doesFileExist expectPath
-  if existsExpect
-    then do
-      expectContents <- readFileUtf8 expectPath <&> stripLastNewline
-      it path $
-        IOResultSpec $ do
-          convertContents <- convert contents
+notExpectPath :: FilePath -> Bool
+notExpectPath path = FilePath.takeExtension path /= ".expect"
+
+makeSnapshotFileSpec :: Config -> (Text -> IO Text) -> FilePath -> FilePath -> Spec
+makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec example
+  where
+    fullPath = "test_data" </> dirPath </> path
+
+    example :: IO Spec.Result
+    example = do
+      contents <- readFileUtf8 fullPath
+      let expectPath = fullPath -<.> "expect"
+      existsExpect <- Directory.doesFileExist expectPath
+      convertContents <- convert contents
+      if existsExpect
+        then do
+          expectContents <- readFileUtf8 expectPath <&> stripLastNewline
           if convertContents /= expectContents
-            then do
-              runEff $
-                Temporary.runTemporary $
-                  Temporary.withSystemTempFile "snap" $ \temp handle -> do
-                    hPutUtf8 handle convertContents
-                    liftIO $ IO.hFlush handle
-                    liftIO $ gitDiff expectPath temp
-              pure
-                Spec.Result
-                  { resultInfo = "The files did not match!",
-                    resultStatus = Spec.Failure Nothing Spec.NoReason
-                  }
+            then
+              if config ^. #update
+                then do
+                  runEff $ writeFileUtf8 expectPath convertContents
+                  pure
+                    Spec.Result
+                      { resultInfo = "Updating the .expect file!",
+                        resultStatus = Spec.Success
+                      }
+                else do
+                  runEff $
+                    Temporary.runTemporary $
+                      Temporary.withSystemTempFile "snap" $ \temp handle -> do
+                        hPutUtf8 handle convertContents
+                        liftIO $ IO.hFlush handle
+                        liftIO $ gitDiff expectPath temp
+                  pure
+                    Spec.Result
+                      { resultInfo = "The files did not match!",
+                        resultStatus = Spec.Failure Nothing Spec.NoReason
+                      }
             else
               pure
                 Spec.Result
                   { resultInfo = "The files matched!",
                     resultStatus = Spec.Success
                   }
-    else do
-      it path $
-        IOResultSpec $ do
-          expectConverted <- convert contents
-          runEff $ writeFileUtf8 expectPath expectConverted
-          pure
-            Spec.Result
-              { resultInfo = "First time running. Updating the .expect file!",
-                resultStatus = Spec.Success
-              }
+        else
+          if config ^. #firstTimeUpdate
+            then do
+              runEff $ writeFileUtf8 expectPath convertContents
+              pure
+                Spec.Result
+                  { resultInfo = "First time running. Updating the .expect file!",
+                    resultStatus = Spec.Success
+                  }
+            else
+              pure
+                Spec.Result
+                  { resultInfo = "There was no .expect file!",
+                    resultStatus = Spec.Failure Nothing Spec.NoReason
+                  }
 
 gitDiff :: FilePath -> FilePath -> IO ()
 gitDiff file file' = do
@@ -101,8 +180,8 @@ stripLastNewline :: Text -> Text
 stripLastNewline (t :> '\n') = t
 stripLastNewline t = t
 
-readFileUtf8 :: FilePath -> SpecM arg Text
-readFileUtf8 = runIO . runEff . Oat.Common.runErrorIO . Oat.Common.readFileUtf8
+readFileUtf8 :: FilePath -> IO Text
+readFileUtf8 = runEff . Oat.Common.runErrorIO . Oat.Common.readFileUtf8
 
 runIOE :: Eff '[IOE] a -> SpecM arg a
 runIOE = runIO . runEff

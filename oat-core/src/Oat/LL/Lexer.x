@@ -33,15 +33,15 @@ $digit = [0-9]
 $lower = [a-z]
 $upper = [A-Z]
 $char = [$lower $upper]
-$identStart = [$char $digit '_']
-$identRest = [$identStart '.']
+$identStart = [$char $digit \_]
+$identRest = [$identStart \.]
 @ident = $identStart $identRest*
 $newline = [\n]
 
 tokens :-
   <0> $newline { skip }
   <0> $white+ { skip }
-  <0> c \"  { start string } -- "
+  <0> \"  { start string } -- "
   <0> "*" { kind Kind.Star }
   <0> "," { kind Kind.Comma }
   <0> ":" { kind Kind.Colon }
@@ -94,6 +94,7 @@ tokens :-
   <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.take 1 }
   <0> "x" { kind Kind.Cross }
   <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
+  <0> [a-z]+ { bytesKind Kind.Lab }
   <0> @ident { bytesKind Kind.Lab }
   <0> ";" [^ \n \r]* $newline { skip }
   <0> "declare" [^ \n \r]* $newline { skip }

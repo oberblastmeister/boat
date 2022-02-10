@@ -29,7 +29,7 @@ makeLexer name defUserState = do
         inpBytes :: !ByteString,
         inpText :: !Text
       }
-      deriving (Show, Eq)
+      deriving (Show)
 
     data AlexState = AlexState
       { statePos :: !Pos,
@@ -38,7 +38,7 @@ makeLexer name defUserState = do
         stateBytes :: !ByteString,
         stateScd :: !Int, -- the current startcode
         user :: $con
-      }
+      } deriving (Show)
 
     newtype Alex a = Alex {unAlex :: (StateT AlexState Identity) a}
       deriving (Functor, Applicative, Monad, MonadState AlexState)
@@ -46,7 +46,7 @@ makeLexer name defUserState = do
     data AlexEnv = AlexEnv
       { text :: !Text,
         span :: !Span
-      }
+      } deriving (Show)
 
     type AlexAction a = ReaderT AlexEnv Alex a
 

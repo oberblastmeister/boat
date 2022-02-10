@@ -21,6 +21,7 @@ module Oat.Common
     unlessM,
     createFileIfMissing,
     hPutUtf8,
+    pathTail,
   )
 where
 
@@ -37,6 +38,7 @@ import Effectful.Error.Static (Error, runError, throwError)
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import System.FilePath ((</>))
+import System.FilePath qualified as FilePath
 import System.IO qualified as IO
 import Prelude hiding (Map)
 
@@ -128,3 +130,6 @@ createFileIfMissing :: IOE :> es => FilePath -> Eff es ()
 createFileIfMissing path = do
   unlessM (FileSystem.runFileSystem $ FileSystem.doesFileExist path) $
     liftIO $ ByteString.writeFile path "\n"
+
+pathTail :: FilePath -> FilePath
+pathTail = FilePath.joinPath . tail . FilePath.splitPath
