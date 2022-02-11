@@ -9,7 +9,7 @@ module Oat.Common
     hashSetOf,
     inBetween,
     swap,
-    ShowableException,
+    ShowableException(..),
     runErrorIO,
     liftEither,
     readFileUtf8,

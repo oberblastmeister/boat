@@ -91,5 +91,6 @@ prologueEpilogue maxCall frameState = (prologue, epilogue)
     callSize = case maxCall of
       Just maxCall -> maxCall - X86.wordSize * length X86.paramRegs
       Nothing -> 0
+    -- TODO: do we need this?
     nextMultipleOf16 :: Int -> Int
     nextMultipleOf16 n = 16 * ((n + 15) `div` 16)

@@ -1,5 +1,9 @@
+{-# LANGUAGE QualifiedDo #-}
+
 module Oat.Driver where
 
+import Control.OnLeft (OnLeft (OnLeft))
+import Control.OnLeft qualified as OnLeft
 import Data.Text.Encoding.Error (UnicodeException)
 import Effectful.Error.Static
 import Effectful.FileSystem (FileSystem)
@@ -19,6 +23,12 @@ import Prettyprinter.Render.Text qualified as Prettyprinter
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
 type DriverEffs = IOE ': DriverEffsRun
+
+compileLLFileToAsm :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
+compileLLFileToAsm dotLL dotS = do
+  contents <- readFileUtf8 dotLL
+  dotSText <- compileLLText contents
+  writeFileUtf8 dotS dotSText
 
 parseLL :: (Error [LL.ParseError] :> es) => Text -> Eff es LL.Prog
 parseLL text = liftEither $ LL.parse text LL.prog
@@ -78,11 +88,19 @@ type DriverEffsRun =
      Error Command.CommandError
    ]
 
-runEffs :: IOE :> es => Eff (DriverEffsRun ++ es) a -> Eff es a
-runEffs =
-  runErrorIO @[LL.ParseError]
-    >>> runErrorIO @UnicodeException
-    >>> Temporary.runTemporary
-    >>> FileSystem.runFileSystem
-    >>> Command.runCommandClangIO
-    >>> runErrorIO @Command.CommandError
+runEffs :: IOE :> es => Eff (DriverEffsRun ++ es) a -> Eff es (Either String a)
+runEffs m = do
+  res <- run m
+  pure $ OnLeft.do
+    res <- OnLeft show res
+    res <- OnLeft show res
+    res <- OnLeft show res
+    return res
+  where
+    run =
+      runErrorNoCallStack @[LL.ParseError]
+        >>> runErrorNoCallStack @UnicodeException
+        >>> Temporary.runTemporary
+        >>> FileSystem.runFileSystem
+        >>> Command.runCommandClangIO
+        >>> runErrorNoCallStack @Command.CommandError

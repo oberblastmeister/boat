@@ -1,2 +1,5 @@
 dist-newstyle/
 .direnv/
+a.out
+*.s
+oat-core/test_data/**/*.s

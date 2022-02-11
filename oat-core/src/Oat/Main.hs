@@ -6,35 +6,35 @@
 module Oat.Main where
 
 import Control.Exception.Safe qualified as Exception
-import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.IO qualified as TIO
-import Effectful.FileSystem qualified as FileSystem
-import Effectful.Temporary qualified as Temporary
-import Oat.Command qualified as Command
+import Effectful.Error.Static
 import Oat.Common
 import Oat.Driver qualified as Driver
-import Oat.LL qualified as LL
 import Oat.Opt qualified as Opt
 import System.FilePath ((-<.>))
+import System.FilePath qualified as FilePath
 
 main :: IO ()
 main = runEff run
 
 run :: IOE :> es => Eff es ()
-run = do
+run =
+  tryRun >>= \case
+    Left e -> liftIO $ putStrLn e
+    Right () -> pure ()
+
+tryRun :: IOE :> es => Eff es (Either String ())
+tryRun = do
   opt <- Opt.opt
   file <- case opt ^. #files of
     [p] -> pure p
     _ -> Exception.throwString "Only compiling one file is supported for now"
   if
-      | opt ^. #emitAsm -> do
-        Driver.runEffs $ do
-          contents <- readFileUtf8 file
-          liftIO $ TIO.putStrLn contents
-          dotSText <- Driver.compileLLText contents
-          liftIO $ TIO.putStrLn dotSText
-          let outputPath = fromMaybe (file -<.> ".s") (opt ^. #output)
-          writeFileUtf8 outputPath dotSText
-      | otherwise -> do
-        let outputPath = fromMaybe "a.out" (opt ^. #output)
-        Driver.runEffs $ Driver.compileLLFile file outputPath
+      | opt ^. #emitAsm ->
+        Driver.runEffs $
+          Driver.compileLLFileToAsm file $
+            fromMaybe (FilePath.takeFileName file -<.> ".s") (opt ^. #output)
+      | otherwise ->
+        Driver.runEffs $
+          Driver.compileLLFile file $
+            fromMaybe "a.out" (opt ^. #output)

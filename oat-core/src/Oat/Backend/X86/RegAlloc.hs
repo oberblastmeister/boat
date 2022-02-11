@@ -23,6 +23,7 @@ import Oat.LL.Name qualified as LL
 noReg :: '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
 noReg insts = do
   let spills =
+        -- TODO: List.nub is pretty bad I think, use some sort of ordered hashset, we are already converting to a hashmap anyway
         List.nub $
           insts
             ^.. ( each % _Right
@@ -35,6 +36,8 @@ noReg insts = do
     pure (spill, mem)
   let spillsMap = HashMap.fromList spillsMem
   spilledInsts <- spill spillsMap insts
+  -- we can do this because we are only using the stack, so it is impossible to have interferences
+  -- therefore just set the extra temps to %r11
   let res =
         spilledInsts
           & ( each

@@ -5,7 +5,8 @@ module Data.MapList
   ( MapList,
     toList,
     toMap,
-  insert)
+    insert,
+  )
 where
 
 import Control.DeepSeq (NFData)
@@ -48,8 +49,11 @@ toMap :: MapList k v -> HashMap k v
 toMap = view _map
 
 insert :: (Eq k, Hashable k) => k -> v -> MapList k v -> MapList k v
-insert key val MapList {map, list} =
-  MapList
-    { map = map & at key ?~ val,
-      list = (key, val) : list
-    }
+insert key val ml@MapList {map, list} =
+  if has (ix key) map
+    then ml
+    else
+      MapList
+        { map = map & at key ?~ val,
+          list = (key, val) : list
+        }

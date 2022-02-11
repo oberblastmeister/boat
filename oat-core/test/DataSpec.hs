@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module TestDataSpec where
+module DataSpec where
 
 import Conduit (runConduit, runConduitRes, (.|))
 import Control.Exception.Safe qualified as Exception
@@ -66,6 +66,12 @@ clean :: IO ()
 clean = do
   runConduitRes $
     C.sourceDirectoryDeep False "test_data"
+      .| C.iterM
+        ( \path ->
+            liftIO $
+              when (FilePath.takeExtension path == ".s") $
+                Directory.removeFile path
+        )
       .| C.filter (\path -> FilePath.takeExtension path == ".expect")
       .| C.mapM_
         ( \expectPath -> do

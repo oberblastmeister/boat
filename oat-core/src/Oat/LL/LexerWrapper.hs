@@ -38,7 +38,7 @@ import Oat.Wrappers.Lexer (makeLexer)
 import Text.Builder qualified
 
 data User = User
-  { stringBuilder :: Text.Builder.Builder
+  { stringBuilder :: !Text.Builder.Builder
   }
   deriving (Show)
 
