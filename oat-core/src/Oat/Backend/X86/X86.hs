@@ -30,11 +30,11 @@ module Oat.Backend.X86.X86
     paramRegs,
     regs,
     instLabToElems,
+    pattern MemBaseSimple,
   )
 where
 
 import Data.Int (Int64)
-import Data.Strict.Wrapper (unstrict, pattern Strict)
 import Oat.Asm qualified as Asm
 import Prelude hiding (first, second)
 
@@ -59,6 +59,9 @@ data Mem = Mem
     scale :: Maybe Imm
   }
   deriving (Show, Eq)
+
+pattern MemBaseSimple :: Int64 -> Mem
+pattern MemBaseSimple displace = Mem {displace = Just (Lit displace), first = Just (Asm.LReg Rbp), second = Nothing, scale = Nothing}
 
 pattern MemStackSimple :: Int64 -> Mem
 pattern MemStackSimple displace = MemStack (Just (Lit displace)) Nothing Nothing

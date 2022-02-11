@@ -16,7 +16,7 @@ data Opt = Opt
     optimization :: !Optimization,
     files :: [FilePath],
     regAllocKind :: !RegAllocKind,
-    output :: FilePath
+    output :: Maybe FilePath
   }
   deriving (Show, Eq)
 
@@ -83,9 +83,9 @@ parseOpt' = do
       long "reg-alloc"
         <> value GraphReg
   output <-
-    strOption $
+    option (Just <$> auto) $
       short 'o'
-        <> value "a.out"
+        <> value Nothing
         <> help "Set the output file"
   pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind, output}
 

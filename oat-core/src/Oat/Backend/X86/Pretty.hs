@@ -12,8 +12,6 @@ prettyProg elems = Pretty.vsep (prettyElem <$> elems)
 
 prettyElem :: Elem -> Doc ann
 prettyElem Elem {lab, global, asm} = do
-  -- let !_ = traceShowId lab
-  -- let !_ = traceShowId $ prettyLab lab
   sec <> glb <> prettyLab lab <> ":\n" <> body
   where
     glb =
@@ -144,13 +142,11 @@ prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperandWith prettyReg
 
 prettyMem :: Mem -> Doc ann
-prettyMem Mem {displace, first, second, scale} =
+prettyMem Mem {displace, first, second, scale} = do
   maybe' prettyImm displace
     <> Pretty.parens
       ( maybe' prettyLoc first
-          <> Pretty.comma
-          <+> maybe' prettyLoc first
-          <> maybe' prettyLoc second
+          <> maybe' (\second -> Pretty.comma <+> prettyLoc second) second
           <> maybe' (\scale -> Pretty.comma <+> prettyImm scale) scale
       )
   where

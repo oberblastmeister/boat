@@ -6,28 +6,30 @@ module Oat.Backend.X86.RegAlloc
   )
 where
 
-import Data.HashMap.Strict qualified as HashMap
 import Control.Source qualified as Source
+import Data.HashMap.Strict qualified as HashMap
+import Data.List qualified as List
 import Effectful.Reader.Static
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
+import Oat.Backend.X86.Frame qualified as X86
+import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.X86 (Reg (..))
 import Oat.Backend.X86.X86 qualified as X86
-import Oat.Backend.X86.Munch qualified as Munch
-import Oat.Backend.X86.Frame qualified as X86
 import Oat.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
 
 noReg :: '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
 noReg insts = do
   let spills =
-        insts
-          ^.. ( each % _Right
-                  % Asm.instOperands
-                  % X86.operandLocs
-                  % #_LTemp
-              )
+        List.nub $
+          insts
+            ^.. ( each % _Right
+                    % Asm.instOperands
+                    % X86.operandLocs
+                    % #_LTemp
+                )
   spillsMem <- for spills $ \spill -> do
     mem <- Frame.allocLocal
     pure (spill, mem)

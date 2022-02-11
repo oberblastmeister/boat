@@ -97,7 +97,6 @@ common common-options
     hashable >= 1.2 && <1.4,
     bytestring ^>= 0.10.10.0,
     filepath ^>= 1.4.2.1,
-    strict-wrapper ^>= 0.0.0.0,
     -- needed for alex
     array ^>= 0.5.4.0,
     vector ^>= 0.12.3.1,

@@ -1,13 +1,9 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module Oat.Backend.X86.Codegen
   ( compileProg,
   )
 where
 
 import Control.Source (Source)
-import Data.Foldable (fold)
 import Data.Int (Int64)
 import Data.Sequence qualified as Seq
 import Effectful.Reader.Static
@@ -81,17 +77,16 @@ prologueEpilogue maxCall frameState = (prologue, epilogue)
         ]
         <> subStack
     epilogue =
-      Seq.fromList
-        [ X86.Movq :@ [Asm.Reg Rbp, Asm.Reg Rsp],
-          X86.Popq :@ [Asm.Reg Rbp],
-          X86.Retq :@ []
-        ]
-        <> addStack
-    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg] | stackSize /= 0]
-    addStack = Seq.fromList [X86.Addq :@ [stackSizeArg] | stackSize /= 0]
+      addStack
+        <> Seq.fromList
+          [ X86.Popq :@ [Asm.Reg Rbp],
+            X86.Retq :@ []
+          ]
+    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
+    addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
     stackSize =
       nextMultipleOf16 $
-        (fromIntegral callSize + (frameState ^. #stack))
+        (fromIntegral callSize + Frame.getStackSize frameState)
     stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
     callSize = case maxCall of
       Just maxCall -> maxCall - X86.wordSize * length X86.paramRegs

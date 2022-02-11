@@ -7,14 +7,15 @@ module Oat.Main where
 
 import Control.Exception.Safe qualified as Exception
 import Data.Text.Encoding.Error (UnicodeException)
+import Data.Text.IO qualified as TIO
+import Effectful.FileSystem qualified as FileSystem
 import Effectful.Temporary qualified as Temporary
 import Oat.Command qualified as Command
 import Oat.Common
 import Oat.Driver qualified as Driver
 import Oat.LL qualified as LL
 import Oat.Opt qualified as Opt
-import Text.Pretty.Simple (pPrint)
-import qualified Data.Text.IO as TIO
+import System.FilePath ((-<.>))
 
 main :: IO ()
 main = runEff run
@@ -27,20 +28,13 @@ run = do
     _ -> Exception.throwString "Only compiling one file is supported for now"
   if
       | opt ^. #emitAsm -> do
-        runStuff $ do
+        Driver.runEffs $ do
           contents <- readFileUtf8 file
           liftIO $ TIO.putStrLn contents
           dotSText <- Driver.compileLLText contents
           liftIO $ TIO.putStrLn dotSText
-          writeFileUtf8 (opt ^. #output) dotSText
+          let outputPath = fromMaybe (file -<.> ".s") (opt ^. #output)
+          writeFileUtf8 outputPath dotSText
       | otherwise -> do
-        Driver.compileLLFile file (opt ^. #output)
-          & runStuff
-
-runStuff m =
-  m
-    & runErrorIO @UnicodeException
-    & runErrorIO @[LL.ParseError]
-    & Temporary.runTemporary
-    & Command.runCommandClangIO
-    & runErrorIO @Command.CommandError
+        let outputPath = fromMaybe "a.out" (opt ^. #output)
+        Driver.runEffs $ Driver.compileLLFile file outputPath

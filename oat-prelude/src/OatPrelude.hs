@@ -5,6 +5,7 @@ module OatPrelude
 where
 
 import Control.Applicative as X (Alternative (..))
+import Control.Arrow as X ((&&&), (<<<), (>>>), (|||))
 import Data.Bifunctor as X (Bifunctor (bimap, first, second))
 import Data.ByteString as X (ByteString)
 import Data.ByteString.Short as X (ShortByteString)
