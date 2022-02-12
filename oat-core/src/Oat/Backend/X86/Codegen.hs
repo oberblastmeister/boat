@@ -16,6 +16,7 @@ import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.RegAlloc qualified as RegAlloc
 import Oat.Backend.X86.X86 (InstLab, Reg (..))
 import Oat.Backend.X86.X86 qualified as X86
+import Oat.Common (concatToEither)
 import Oat.LL qualified as LL
 import Prelude
 
@@ -44,31 +45,28 @@ compileFunDecl ::
 compileFunDecl env name funDecl = runReader env $ do
   (insts, frameState) <- Frame.runFrame $ do
     insts <- Munch.compileBody $ funDecl ^. #body
-    let viewShiftedInsts = Seq.fromList (Right <$> viewShift (funDecl ^. #params)) <> insts
+    let viewShiftedInsts = Seq.fromList (Right <$> viewShiftFrom (funDecl ^. #params)) <> insts
     RegAlloc.noReg viewShiftedInsts
   tyMap <- rview #tyMap
   let maxCall = LL.maxCallSize tyMap (funDecl ^. #body)
       (prologue, epilogue) = prologueEpilogue maxCall frameState
   pure $ Left (name, True) :< (fmap Right prologue <> insts <> fmap Right epilogue)
 
-viewShift :: [LL.Name] -> [X86.Inst]
-viewShift args = insts
-  where
-    insts :: [X86.Inst]
-    insts =
-      -- it starts from two because we need to skip the implicitly pushed %rip from callq and also skip the pushed %rbp
-      fmap Left X86.paramRegs ++ fmap Right [2 :: Int64 ..]
-        & zip args
-        & fmap
-          ( \case
-              (name, Left reg) ->
-                X86.Movq :@ [Asm.Reg reg, Asm.Temp name]
-              (name, Right n) ->
-                X86.Movq :@ [Asm.Mem $ X86.MemStackSimple n, Asm.Temp name]
-          )
+viewShiftFrom :: [LL.Name] -> [X86.Inst]
+viewShiftFrom args =
+  -- it starts from two because we need to skip the implicitly pushed %rip from callq and also skip the pushed %rbp
+  concatToEither X86.paramRegs [i * 8 | i <- [2 :: Int64 ..]]
+    & zip args
+    & fmap
+      ( \case
+          (name, Left reg) ->
+            X86.Movq :@ [Asm.Reg reg, Asm.Temp name]
+          (name, Right n) ->
+            X86.Movq :@ [Asm.Mem $ X86.MemStackSimple n, Asm.Temp name]
+      )
 
 prologueEpilogue :: Maybe Int -> Frame.FrameState -> (Seq X86.Inst, Seq X86.Inst)
-prologueEpilogue maxCall frameState = (prologue, epilogue)
+prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)
   where
     prologue =
       Seq.fromList
@@ -82,15 +80,11 @@ prologueEpilogue maxCall frameState = (prologue, epilogue)
           [ X86.Popq :@ [Asm.Reg Rbp],
             X86.Retq :@ []
           ]
-    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
+    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, Asm.Reg Rsp]]
     addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
-    stackSize =
-      nextMultipleOf16 $
-        (fromIntegral callSize + Frame.getStackSize frameState)
+    stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
     stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
-    callSize = case maxCall of
-      Just maxCall -> maxCall - X86.wordSize * length X86.paramRegs
-      Nothing -> 0
+    maxCall = max 0 (fromMaybe 0 maybeMaxCall - X86.wordSize * length X86.paramRegs)
     -- TODO: do we need this?
     nextMultipleOf16 :: Int -> Int
     nextMultipleOf16 n = 16 * ((n + 15) `div` 16)

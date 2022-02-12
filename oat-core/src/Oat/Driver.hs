@@ -67,9 +67,7 @@ compileLLTextToFile llText out = do
 compileLLText :: '[Error [LL.ParseError]] :>> es => Text -> Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
-  let !_ = traceShowId insts
   let prog = Backend.X86.instLabToElems $ toList insts
-  let !_ = traceShowId prog
   let asmDoc = Backend.X86.Pretty.prettyProg prog
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
@@ -77,7 +75,6 @@ compileLLText text = do
 compileLLTextToInsts :: '[Error [LL.ParseError]] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
   insts <- parseLL text
-  let !_ = traceShowId insts
   LL.runNameSource $ Backend.X86.Codegen.compileProg insts
 
 -- compile and links all asm paths with the runtime

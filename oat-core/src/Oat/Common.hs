@@ -9,7 +9,7 @@ module Oat.Common
     hashSetOf,
     inBetween,
     swap,
-    ShowableException(..),
+    ShowableException (..),
     runErrorIO,
     liftEither,
     readFileUtf8,
@@ -26,6 +26,7 @@ module Oat.Common
     type (++),
     Tail,
     Drop,
+    concatToEither,
   )
 where
 
@@ -159,3 +160,9 @@ type family Drop n xs where
   Drop 0 xs = xs
   Drop n '[] = TypeError ('Text "Nothing left to drop!")
   Drop n (x ': xs) = Drop (n - 1) xs
+
+concatToEither :: [a] -> [b] -> [Either a b]
+concatToEither as bs = fmap Left as ++ fmap Right bs
+
+-- partitionPrisms :: [Optic is A_Prism s t a b] -> 
+-- unzipEither :: [Either a b] -> ([a], b)

@@ -6,9 +6,6 @@
 module Oat.Main where
 
 import Control.Exception.Safe qualified as Exception
-import Data.Text.IO qualified as TIO
-import Effectful.Error.Static
-import Oat.Common
 import Oat.Driver qualified as Driver
 import Oat.Opt qualified as Opt
 import System.FilePath ((-<.>))

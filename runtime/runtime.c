@@ -129,7 +129,7 @@ void print_string(char *str) {
     printf("%s", str);
 }
 
-void print_int(int64_t i) { printf("%ld", (long)i); }
+void print_int(int64_t i) { printf("%ld\n", (long)i); }
 
 void print_bool(int64_t i) {
     if (i == 0) {

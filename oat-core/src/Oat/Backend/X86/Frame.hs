@@ -34,7 +34,7 @@ interpretFrame (Frame.AllocLocalWith i) = do
   base <- use #base
   #base %= subtract (fromIntegral i)
   pure $ MemBaseSimple $ fromIntegral base
-interpretFrame (Frame.AllocGlobal _) = undefined
+
 
 getStackSize :: FrameState -> Int
 getStackSize s = abs $ s ^. #base + 8

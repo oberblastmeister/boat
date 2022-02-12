@@ -13,6 +13,7 @@ import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 import Optics as O
 
+-- most of these types are just symbolic because we store everything in 8 bytes for simplicity
 data Ty
   = Void
   | I1

@@ -132,6 +132,7 @@ library
     Control.Fuel
     Control.OnLeft
     Data.Pos
+    Data.IdMap
     Data.MapList
     Data.Span
     Data.Range

@@ -3,14 +3,13 @@
 
 module DataSpec where
 
-import Conduit (runConduit, runConduitRes, yield, (.|))
+import Conduit (runConduit, runConduitRes, (.|))
 import Control.Exception.Safe qualified as Exception
 import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.Conduit.Combinators qualified as C
 import Data.Foldable (traverse_)
 import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
-import Data.Text qualified as T
 import Data.Text.Lazy qualified as LText
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
@@ -117,6 +116,11 @@ clean = do
               liftIO $ Directory.removeFile expectPath
         )
 
+runLL :: FilePath -> IO ()
+runLL path = do
+  emitAsm path
+  runAsm $ FilePath.takeFileName path -<.> ".s"
+
 -- | the possible extensions for each .expect file
 possibleExtensions :: [String]
 possibleExtensions = [".ll", ".oat"]
@@ -144,13 +148,15 @@ openAsm path = do
 
 runAsm :: FilePath -> IO ()
 runAsm path = do
-  asmDir <- Directory.makeAbsolute "test_data/asm_compile"
-  let !_ = traceShowId asmDir
-  runEff $
+  let asmDir = "test_data/asm_compile"
+  let exe = FilePath.takeBaseName path
+  let exePath = asmDir </> exe
+  runEff $ Process.runProcess $ do
     Driver.runEffs' $
       Driver.compileAsmPaths
         [asmDir </> path]
-        (asmDir </> FilePath.takeBaseName path)
+        exePath
+    Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]
