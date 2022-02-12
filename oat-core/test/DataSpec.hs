@@ -3,8 +3,9 @@
 
 module DataSpec where
 
-import Conduit (runConduit, runConduitRes, (.|))
+import Conduit (runConduit, runConduitRes, yield, (.|))
 import Control.Exception.Safe qualified as Exception
+import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.Conduit.Combinators qualified as C
 import Data.Foldable (traverse_)
 import Data.HashSet qualified as HashSet
@@ -16,6 +17,7 @@ import Effectful.Process qualified as Process
 import Effectful.Temporary qualified as Temporary
 import Oat.Common (hPutUtf8, writeFileUtf8)
 import Oat.Common qualified
+import Oat.Driver qualified as Driver
 import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.LL.Parser qualified as LL.Parser
 import Oat.LL.ParserWrapper qualified as LL.ParserWrapper
@@ -27,7 +29,7 @@ import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
 import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Core.Spec qualified as Spec
-import Text.Pretty.Simple (pShow, pShowNoColor)
+import Text.Pretty.Simple (pShowNoColor)
 
 data Config = Config
   { update :: Bool,
@@ -61,41 +63,6 @@ run config =
     filterFun :: ([FilePath], FilePath) -> Bool
     filterFun (ps, p) = config ^. #filterPred $ FilePath.joinPath ps </> p
 
--- cleans .expect files that do not have a matching file
-clean :: IO ()
-clean = do
-  runConduitRes $
-    C.sourceDirectoryDeep False "test_data"
-      .| C.iterM
-        ( \path ->
-            liftIO $
-              when (FilePath.takeExtension path == ".s") $
-                Directory.removeFile path
-        )
-      .| C.filter (\path -> FilePath.takeExtension path == ".expect")
-      .| C.mapM_
-        ( \expectPath -> do
-            let possiblePaths = [expectPath -<.> ".ll", expectPath -<.> ".oat"]
-            anyExist <-
-              runConduit $
-                C.yieldMany possiblePaths
-                  .| C.mapM (liftIO . Directory.doesFileExist)
-                  .| C.any id
-            unless anyExist $ do
-              liftIO $ Directory.removeFile expectPath
-        )
-
-matchHead :: FilePath -> Pred
-matchHead base path = FilePath.takeDirectory path == base
-
-matchTail :: FilePath -> Pred
-matchTail tail path = FilePath.takeFileName path == tail
-
-matchExact :: [FilePath] -> Pred
-matchExact ps = \p -> has (ix p) psSet
-  where
-    psSet = HashSet.fromList ps
-
 specWith :: Config -> Spec
 specWith config = do
   llLexerSpec config
@@ -119,13 +86,85 @@ llParserSpec config = do
     ( \text -> do
         let res = LL.ParserWrapper.parse text LL.Parser.prog
         case res of
-          Left es -> Exception.throwString $ T.unpack $ LText.toStrict $ pShowNoColor es
+          Left es -> Exception.throwString $ LText.unpack $ pShowNoColor es
           Right prog -> pure $ LText.toStrict $ pShowNoColor prog
     )
     "ll_parser/ok"
 
 llCompileSpec :: Config -> Spec
 llCompileSpec config = pure ()
+
+-- | cleans .expect files that do not have a matching file
+clean :: IO ()
+clean = do
+  runConduitRes $
+    C.sourceDirectoryDeep False "test_data"
+      .| C.iterM
+        ( \path ->
+            liftIO $
+              when (FilePath.takeExtension path == ".s") $
+                Directory.removeFile path
+        )
+      .| C.filter (\path -> FilePath.takeExtension path == ".expect")
+      .| C.mapM_
+        ( \expectPath -> do
+            anyExist <-
+              runConduit $
+                C.yieldMany ((expectPath -<.>) <$> possibleExtensions)
+                  .| C.mapM (liftIO . Directory.doesFileExist)
+                  .| C.any id
+            unless anyExist $ do
+              liftIO $ Directory.removeFile expectPath
+        )
+
+-- | the possible extensions for each .expect file
+possibleExtensions :: [String]
+possibleExtensions = [".ll", ".oat"]
+
+emitAsm :: FilePath -> IO ()
+emitAsm path =
+  runEff $
+    Driver.runEffs' $
+      Driver.compileLLFileToAsm
+        ("test_data/ll_compile" </> path)
+        ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
+
+showAsm :: FilePath -> IO ()
+showAsm path = do
+  emitAsm path
+  runConduitRes $ C.sourceFileBS ("test_data/asm_compile" </> FilePath.takeFileName path) .| C.stdout
+  ByteString.Char8.putStrLn ""
+
+openAsm :: FilePath -> IO ()
+openAsm path = do
+  emitAsm path
+  runEff $
+    Process.runProcess $ do
+      Process.callProcess "code" ["test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s"]
+
+runAsm :: FilePath -> IO ()
+runAsm path = do
+  asmDir <- Directory.makeAbsolute "test_data/asm_compile"
+  let !_ = traceShowId asmDir
+  runEff $
+    Driver.runEffs' $
+      Driver.compileAsmPaths
+        [asmDir </> path]
+        (asmDir </> FilePath.takeBaseName path)
+
+openLLData :: FilePath -> IO ()
+openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]
+
+matchHead :: FilePath -> Pred
+matchHead base path = FilePath.takeDirectory path == base
+
+matchTail :: FilePath -> Pred
+matchTail tail path = FilePath.takeFileName path == tail
+
+matchExact :: [FilePath] -> Pred
+matchExact ps = \p -> has (ix p) psSet
+  where
+    psSet = HashSet.fromList ps
 
 defConfig :: Config
 defConfig =

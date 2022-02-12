@@ -12,7 +12,7 @@ where
 
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Backend.X86.X86 (Mem (MemStackSimple), X86, pattern MemBaseSimple)
+import Oat.Backend.X86.X86 (X86, pattern MemBaseSimple)
 import Oat.Frame qualified as Frame
 
 data FrameState = FrameState

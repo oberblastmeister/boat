@@ -4,6 +4,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+// llvmlite internal functions
+void *ll_malloc(int64_t n, int64_t size) { return calloc(n, size); }
+
+int64_t ll_strlen(int8_t *s) { return 0; }
+
+int8_t *ll_strncopy(int8_t *dst, int8_t *src, int64_t i) {
+    int64_t src_size = ll_strlen(src);
+    int64_t dst_size = ll_strlen(dst);
+    if (i >= dst_size)
+        return dst;
+    else
+        return (int8_t *)strncpy((char *)dst + i, (char *)src, dst_size - i);
+}
+
+void ll_puts(int8_t *s) { puts((char *)s); }
+
+int64_t ll_atol(int8_t *s) { return atol((char *)s); }
+
+int64_t ll_ltoa(int64_t i, int8_t *dst) {
+    int64_t size = ll_strlen(dst);
+    return snprintf((char *)dst, size, "%ld", (long)i);
+}
+
+
 /* Oat Internal Functions --------------------------------------------------- */
 
 // this just leaks memory for now
@@ -115,7 +139,7 @@ void print_bool(int64_t i) {
     }
 }
 
-extern int64_t program(int64_t argc, int64_t *oargv);
+extern int64_t /* MANGLED_PROGRAM_NAME */(int64_t argc, int64_t *oargv);
 
 /*
  * Convert the argv array into an Oat array of
@@ -135,7 +159,6 @@ int main(int argc, char *argv[]) {
         oargv[i + 1] = (int64_t)argv[i];
     }
 
-    /* Call the initialization code. */
-    result = program(argc, oargv);
+    result = /* MANGLED_PROGRAM_NAME */(argc, oargv);
     return result;
 }
