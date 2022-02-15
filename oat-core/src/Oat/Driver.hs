@@ -6,6 +6,7 @@
 
 module Oat.Driver where
 
+import Control.Exception.Safe qualified as Exception
 import Control.OnLeft (OnLeft (OnLeft))
 import Control.OnLeft qualified as OnLeft
 import Data.FileEmbed qualified as FileEmbed
@@ -25,10 +26,12 @@ import Oat.Backend.X86.Pretty qualified as Backend.X86.Pretty
 import Oat.Backend.X86.X86 qualified as Backend.X86
 import Oat.Command (Command)
 import Oat.Command qualified as Command
-import Oat.Common (hPutUtf8, liftEither, maybeToLeft, readFileUtf8, whenM, writeFileUtf8, type (++))
+import Oat.Common (hPutUtf8, readFileUtf8, whenM, writeFileUtf8, type (++))
+import Oat.Error (CompileFail, reportFail)
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
 import Oat.PrettyUtil (Ann (..), ann)
+import Oat.Reporter
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified
 import Prettyprinter qualified as Pretty
@@ -41,9 +44,10 @@ type DriverEffs :: [Effect]
 type DriverEffs =
   '[ IOE,
      Reader Opt,
-     Error [LL.ParseError],
-     Error (NonEmpty LL.CheckError),
+     Reporter [LL.ParseError],
+     Reporter [LL.CheckError],
      Error UnicodeException,
+     Error CompileFail,
      Temporary,
      FileSystem,
      Command
@@ -61,13 +65,13 @@ compileLLFileToAsmShow llPath = do
   asmText <- compileLLText contents
   liftIO $ TIO.putStrLn asmText
 
-parseLLText :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es LL.Prog
+parseLLText :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es LL.Prog
 parseLLText text = do
-  decls <- liftEither $ LL.parse text LL.prog
+  decls <- LL.parse text LL.prog
   let declMap = LL.declsToMap decls
       prog = LL.Prog {decls, declMap}
   whenM (rview @Opt #checkLL) $ do
-    liftEither $ maybeToLeft () $ LL.checkProg prog
+    LL.checkProg prog
   pure prog
 
 parseLLFile :: DriverEffs :>> es => FilePath -> Eff es LL.Prog
@@ -88,7 +92,7 @@ compileLLTextToFile llText out = do
     FileSystem.IO.hFlush handle
     compileAsmPaths [asmTemp] out
 
-compileLLText :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es Text
+compileLLText :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
   let prog = Backend.X86.instLabToElems $ toList insts
@@ -96,7 +100,7 @@ compileLLText text = do
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
 
-compileLLTextToInsts :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
+compileLLTextToInsts :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
   prog <- parseLLText text
   LL.runNameSource $ Backend.X86.Codegen.compileProg prog
@@ -138,41 +142,32 @@ runtimeTemplate programName =
 -- the effects that we need to run
 type DriverEffsRun :: [Effect]
 type DriverEffsRun =
-  '[ Error [LL.ParseError],
-     Error (NonEmpty LL.CheckError),
-     Error UnicodeException,
+  '[ Error UnicodeException,
      Temporary,
      FileSystem,
      Command,
      Error Command.CommandError
    ]
 
-runEffs :: '[IOE, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es (Either (Doc Ann) a)
+data DriverError
+  = DriverUnicodeException UnicodeException
+  | DriverIOError Exception.IOException
+  | DriverCommandError Command.CommandError
+
+runEffs :: '[IOE, Reporter [DriverError], Error CompileFail, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es a
 runEffs m = do
   let run =
-        runError @[LL.ParseError]
-          >>> runError @(NonEmpty LL.CheckError)
-          >>> runError @UnicodeException
+        runErrorNoCallStack @UnicodeException
           >>> Temporary.runTemporary
           >>> FileSystem.runFileSystem
           >>> Command.runCommandClangIO
-          >>> runError @Command.CommandError
-  m' <- run m
-  let finalRes = OnLeft.do
-        let show' :: Show s => (a, s) -> (a, Doc ann)
-            show' = second Pretty.viaShow
-        res <- OnLeft show' m'
-        res <- OnLeft show' res
-        res <- OnLeft show' res
-        res <- OnLeft show' res
-        return res
-  hasCallStack <- rview @Opt #callStack
-  if hasCallStack
-    then pure $ finalRes & _Left %~ (\(callStack, doc) -> doc <> Pretty.line <> prettyCallStack' callStack)
-    else pure $ finalRes & _Left %~ snd
-
-prettyCallStack' :: CallStack -> Doc Ann
-prettyCallStack' callStack = ann Info "Callstack" <> ":" <+> pretty (prettyCallStack callStack)
+          >>> runErrorNoCallStack @Command.CommandError
+  res <- run m
+  case res of
+    Left e -> reportFail [DriverCommandError e]
+    Right res -> case res of
+      Left ex -> reportFail [DriverUnicodeException ex]
+      Right res -> pure res
 
 -- runEffs' :: '[IOE, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es a
 -- runEffs' m =

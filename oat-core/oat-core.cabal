@@ -138,6 +138,8 @@ library
     Data.Infinite
     Oat
     Oat.Driver
+    Oat.Reporter
+    Oat.Error
     Oat.PrettyUtil
     Oat.TH
     Oat.Command

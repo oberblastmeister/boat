@@ -13,10 +13,10 @@ import Effectful.Reader.Static
 import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Effectful.Writer.Static.Local
-import Oat.Common (leftToMaybe, maybeToLeft, unwrap, type (++))
+import Oat.Common (unwrap, type (++))
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
+import Oat.Reporter
 
 data CheckState = CheckState
   { tempToTy :: HashMap LL.Name LL.Ty
@@ -32,41 +32,35 @@ data CheckError
 makeFieldLabelsNoPrefix ''CheckState
 
 type StateCheckEffs =
-  '[ ErrorWriter,
+  '[ Reporter [CheckError],
      State CheckState,
      Reader LL.DeclMap
    ]
 
 type CheckEffs =
-  '[ ErrorWriter,
+  '[ Reporter [CheckError],
      Reader LL.TyMap,
      Reader LL.DeclMap
    ]
 
-type ErrorWriter = Writer (Dual [CheckError])
+-- type Reporter [CheckError] = Writer (Dual [CheckError])
 
-checkProg :: LL.Prog -> Maybe (NonEmpty CheckError)
-checkProg prog = run $ do
+checkProg :: '[Reporter [CheckError]] :>> es => LL.Prog -> Eff es ()
+checkProg prog = runCheck (prog ^. #declMap) $ do
   checkDeclMap $ prog ^. #declMap
   checkDecls $ prog ^. #decls
-  where
-    run =
-      leftToMaybe
-        . runPureEff
-        . runCheck
-          (prog ^. #declMap)
 
 checkDecls :: StateCheckEffs :>> es => [LL.Decl] -> Eff es ()
 checkDecls = traverse_ checkDecl
 
-checkDeclMap :: ErrorWriter :> es => LL.DeclMap -> Eff es ()
+checkDeclMap :: Reporter [CheckError] :> es => LL.DeclMap -> Eff es ()
 checkDeclMap declMap = do
   let gidUnion =
         (declMap ^. #globalDecls % to MapList.keysSet)
           `HashSet.union` (declMap ^. #funDecls % to MapList.keysSet)
           `HashSet.union` (declMap ^. #externDecls % to MapList.keysSet)
   unless (HashSet.null gidUnion) $
-    tellErrors [InterferingGlobals]
+    report [InterferingGlobals]
 
 checkDecl :: StateCheckEffs :>> es => LL.Decl -> Eff es ()
 checkDecl (LL.DeclFun _name funDecl) = traverseOf_ (#body % LL.bodyBlocks) checkBlock funDecl
@@ -106,7 +100,7 @@ checkOperand :: CheckEffs :>> es => LL.Operand -> LL.Ty -> Eff es ()
 checkOperand (LL.Const _) LL.I1 = pure ()
 checkOperand (LL.Const _) LL.I8 = pure ()
 checkOperand (LL.Const _) LL.I64 = pure ()
-checkOperand arg@(LL.Const _) ty = tellErrors [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
+checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
 checkOperand arg@(LL.Gid name) ty = do
   ty' <- rview @LL.DeclMap $ #globalDecls % #map % at name % unwrap (error "impossible") % #ty
   tyAssert (Just "gid") (Just arg) [ty'] ty
@@ -114,7 +108,7 @@ checkOperand (LL.Nested _) _ = error "There must not be any nested when checking
 checkOperand arg@(LL.Temp name) ty =
   rview @LL.TyMap (at name) >>= \case
     Just ty' -> tyAssert (Just "name") (Just arg) [ty] ty'
-    Nothing -> tellErrors [NameNotFound name]
+    Nothing -> report [NameNotFound name]
 
 inferBinOp :: CheckEffs :>> es => LL.BinOpInst -> Eff es LL.Ty
 inferBinOp LL.BinOpInst {ty, arg1, arg2} = do
@@ -161,23 +155,20 @@ inferGep = undefined
 inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
 inferSelect = undefined
 
-tellErrors :: ErrorWriter :> es => [CheckError] -> Eff es ()
-tellErrors = tell . Dual
-
-tyAssert :: Writer (Dual [CheckError]) :> es => Maybe Text -> Maybe LL.Operand -> [LL.Ty] -> LL.Ty -> Eff es ()
+tyAssert :: Reporter [CheckError] :> es => Maybe Text -> Maybe LL.Operand -> [LL.Ty] -> LL.Ty -> Eff es ()
 tyAssert mess arg expectedTys actualTy =
   unless (actualTy `elem` expectedTys) $
-    tellErrors [MismatchedTy mess arg expectedTys actualTy]
+    report [MismatchedTy mess arg expectedTys actualTy]
 
 defCheckState :: CheckState
 defCheckState = CheckState {tempToTy = mempty}
 
-runCheck :: LL.DeclMap -> Eff (StateCheckEffs ++ es) a -> Eff es (Either (NonEmpty CheckError) a)
-runCheck declMap m = do
-  (a, Dual es) <- run m
-  pure $ maybeToLeft a $ nonEmpty es
-  where
-    run =
-      runWriter @(Dual [CheckError])
-        >>> evalState @CheckState defCheckState
-        >>> runReader @LL.DeclMap declMap
+type StateCheckEffsRun =
+  '[ State CheckState,
+     Reader LL.DeclMap
+   ]
+
+runCheck :: LL.DeclMap -> Eff (StateCheckEffsRun ++ es) a -> Eff es a
+runCheck declMap =
+  evalState @CheckState defCheckState
+    >>> runReader @LL.DeclMap declMap
