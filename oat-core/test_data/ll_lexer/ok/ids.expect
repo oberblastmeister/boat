@@ -1,0 +1,19 @@
+[ Right
+    ( Token
+        { kind = Gid "first" }
+    )
+, Right
+    ( Token
+        { kind = Gid "second" }
+    )
+, Right
+    ( Token
+        { kind = Uid "local" }
+    )
+, Right
+    ( Token
+        { kind = Uid "1324" }
+    )
+, Right
+    ( Token { kind = Eof } )
+]

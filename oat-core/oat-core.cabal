@@ -66,7 +66,6 @@ common common-options
     ImportQualifiedPost,
   ghc-options:
     -Wall
-    -Wincomplete-record-updates
     -Wredundant-constraints
     -Wno-name-shadowing
     -- until OverloadedRecordUpdate stabilizes
@@ -74,30 +73,29 @@ common common-options
     -Werror=incomplete-patterns
     -Werror=incomplete-uni-patterns
     -Werror=missing-methods
-    -fplugin=Effectful.Plugin
+    -Werror=incomplete-record-updates
   build-depends:
     base >= 4.12 && <5,
     oat-prelude,
     template-haskell >= 2.16.0.0 && < 2.19.0.0,
     optics,
     optics-extra,
-    mtl ^>= 2.2.2,
+    mtl >=2.2.2 && <2.3,
     effectful,
     effectful-core,
-    effectful-plugin,
     effectful-optics,
     containers >=0.5.10.2 && <0.7,
     unordered-containers >=0.2.6 && <0.3,
     deepseq >=1.2 && <1.5,
     dlist ^>= 1.0,
     fgl ^>= 5.7.0.3,
-    text ^>= 1.2.5.0,
+    -- text ^>= 1.2.5.0,
+    text >=1.2.3.0 && <2.0,
     text-builder ^>= 0.6.6.3,
     -- relude bound
     hashable >= 1.2 && <1.4,
     bytestring ^>= 0.10.10.0,
     filepath ^>= 1.4.2.1,
-    strict-wrapper ^>= 0.0.0.0,
     -- needed for alex
     array ^>= 0.5.4.0,
     vector ^>= 0.12.3.1,
@@ -106,13 +104,15 @@ common common-options
     conduit ^>= 1.3.4.2,
     recursion-schemes ^>= 5.2.2.2,
     prettyprinter ^>= 1.7.1,
+    prettyprinter-ansi-terminal ^>= 1.1.3,
     pretty-simple ^>= 4.0.0.0,
     typed-process ^>= 0.2.8.0,
     optparse-applicative ^>= 0.16.1.0,
-    first-class-families ^>= 0.8.0.1,
     safe-exceptions ^>= 0.1.7.2,
     parallel ^>= 3.2.2.0,
     named ^>= 0.3.0.1,
+    directory ^>= 1.3.6.2,
+    file-embed ^>= 0.0.15.0,
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -131,12 +131,14 @@ library
     Control.Fuel
     Control.OnLeft
     Data.Pos
+    Data.IdMap
     Data.MapList
     Data.Span
     Data.Range
     Data.Infinite
     Oat
     Oat.Driver
+    Oat.PrettyUtil
     Oat.TH
     Oat.Command
     Oat.Main
@@ -156,12 +158,14 @@ library
     Oat.LL.AST
     Oat.LL.Combine
     Oat.LL.LexerWrapper
+    Oat.LL.Check
     Oat.LL.ParserWrapper
     Oat.LL.Name
     Oat.Asm
     Oat.Asm.AST
     Oat.Asm.Class
     Oat.Backend.X86.Frame
+    Oat.Backend.X86.Pretty
     Oat.Backend.X86.X86
     Oat.Backend.X86.Munch
     Oat.Backend.X86.Codegen
@@ -188,11 +192,12 @@ test-suite oat-core-test
   hs-source-dirs: test
   main-is: Spec.hs
   other-modules:
+    DataSpec
     Oat.InternedSpec
   build-depends:
     oat-core,
-    -- doesn't build with bytestring for some reason
-    hspec == 2.9.2,
+    hspec ^>= 2.9.4,
+    hspec-core ^>= 2.9.4,
     QuickCheck ^>= 2.14.2,
     quickcheck-instances ^>= 0.3.27
 

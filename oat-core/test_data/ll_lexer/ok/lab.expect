@@ -1,0 +1,27 @@
+[ Right
+    ( Token
+        { kind = Lab "first" }
+    )
+, Right
+    ( Token
+        { kind = Lab "second" }
+    )
+, Right
+    ( Token
+        { kind = Lab "third" }
+    )
+, Right
+    ( Token
+        { kind = Lab "fourth" }
+    )
+, Right
+    ( Token
+        { kind = Lab "fifth" }
+    )
+, Right
+    ( Token
+        { kind = Lab "__123...4..hel.lo_woRlD" }
+    )
+, Right
+    ( Token { kind = Eof } )
+]

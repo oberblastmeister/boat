@@ -19,7 +19,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.ByteString (ByteString)
 }
 
-%name prog Prog
+%name prog
 
 %tokentype { Token }
 %monad { Parser } { (>>=) } { return }
@@ -85,7 +85,7 @@ import Data.ByteString (ByteString)
 
 %%
 
-Prog :: { Prog }
+Prog :: { [Decl] }
   : List(Decl) { $1 }
   
 Decl :: { Decl }
@@ -171,6 +171,7 @@ Inst :: { Inst }
   | CallInst { Call $1 }
   | BitcastInst { Bitcast $1 }
   | GepInst { Gep $1 }
+  | SelectInst { Select $1 }
 
 BinOpInst :: { BinOpInst }
   : uid '=' BinOp Ty Operand ',' Operand  { BinOpInst {name = $1, op = $3, ty = $4, arg1 = $5, arg2 = $7} }
@@ -179,10 +180,10 @@ AllocaInst :: { AllocaInst }
   : uid '=' alloca Ty { AllocaInst {name = $1, ty = $4} }
   
 LoadInst :: { LoadInst }
-  : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $6, arg = $7} }
+  : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $4, ty' = $6, arg = $7} }
 
 StoreInst :: { StoreInst }
-  : store Ty Operand ',' Ty Operand { StoreInst {ty = $2, arg1 = $3, arg2 = $6} }
+  : store Ty Operand ',' Ty Operand { StoreInst {ty1 = $2, arg1 = $3, ty2 = $5, arg2 = $6} }
   
 IcmpInst :: { IcmpInst }
   : uid '=' icmp CmpOp Ty Operand ',' Operand { IcmpInst {name = $1, op = $4, ty = $5, arg1 = $6, arg2 = $8} }
@@ -202,6 +203,9 @@ GepInst :: { GepInst }
 GepOperand :: { Operand }
   : i64 Operand { $2 }
   | i32 Operand { $2 }
+
+SelectInst :: { SelectInst }
+  : uid '=' Operand ',' Ty Operand ',' Ty Operand ',' { SelectInst {cond = $3, ty1 = $5, arg1 = $6, ty2 = $8, arg2 = $9} }
 
 ArgList :: { [(Ty, Operand)] }
   : ListSep(Arg, ',') { $1 }

@@ -1,7 +1,7 @@
 {
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Oat.LL.Lexer (alexMonadScan) where
+module Oat.LL.Lexer (alexMonadScan, tokenize) where
 
 import OldPrelude as Prelude
 import Data.Void (Void)
@@ -33,15 +33,15 @@ $digit = [0-9]
 $lower = [a-z]
 $upper = [A-Z]
 $char = [$lower $upper]
-$identStart = [$char $digit '_']
-$identRest = [$identStart '.']
+$identStart = [$char $digit \_]
+$identRest = [$identStart \.]
 @ident = $identStart $identRest*
 $newline = [\n]
 
 tokens :-
   <0> $newline { skip }
   <0> $white+ { skip }
-  <0> c \"  { start string } -- "
+  <0> \"  { start string } -- "
   <0> "*" { kind Kind.Star }
   <0> "," { kind Kind.Comma }
   <0> ":" { kind Kind.Colon }
@@ -90,10 +90,11 @@ tokens :-
   <0> "external" { kind Kind.External }
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
-  <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.take 1 }
-  <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.take 1 }
+  <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.drop 1 }
+  <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.drop 1 }
   <0> "x" { kind Kind.Cross }
   <0> "-"? $digit+ { stringKind $ \t -> Kind.Int $ Text.Read.decimal t ^?! _Right % _1 }
+  <0> [a-z]+ { bytesKind Kind.Lab }
   <0> @ident { bytesKind Kind.Lab }
   <0> ";" [^ \n \r]* $newline { skip }
   <0> "declare" [^ \n \r]* $newline { skip }
@@ -145,4 +146,17 @@ alexMonadScan = do
           span = SpanP pos1 pos2
           env = AlexEnv text span
       runReaderT action env
+      
+tokenize :: Text -> [Lexeme]
+tokenize text = runAlex text tokenize'
+
+tokenize' ::  Alex [Lexeme]
+tokenize' = do
+  lex <- alexMonadScan
+  case lex of
+    Right (Token Kind.Eof) -> pure [lex]
+    _ -> do
+      lexes <- tokenize'
+      pure $ lex : lexes
+
 }

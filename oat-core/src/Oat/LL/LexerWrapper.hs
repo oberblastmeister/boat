@@ -38,8 +38,9 @@ import Oat.Wrappers.Lexer (makeLexer)
 import Text.Builder qualified
 
 data User = User
-  { stringBuilder :: Text.Builder.Builder
+  { stringBuilder :: !Text.Builder.Builder
   }
+  deriving (Show)
 
 makeFieldLabelsNoPrefix ''User
 
@@ -57,10 +58,12 @@ stringKind :: (Text -> Kind) -> AlexAction Lexeme
 stringKind f = do
   text <- gview #text
   pure $ Right $ Token $ f text
-  
+
 bytesKind :: (ByteString -> Kind) -> AlexAction Lexeme
 bytesKind f = do
   text <- gview #text
+  -- let !_ = trace "text" ()
+  -- let !_ = trace (show text) ()
   pure $ Right $ Token $ f $ Text.Encoding.encodeUtf8 text
 
 alexEOF :: Token

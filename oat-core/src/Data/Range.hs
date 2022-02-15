@@ -1,3 +1,6 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Data.Range
   ( Range (RangeP),
     length,
@@ -21,6 +24,7 @@ import Data.Vector.Unboxed (Unbox)
 import Data.Vector.Unboxed qualified as VU
 import Data.Vector.Unboxed.Mutable qualified as VUM
 import Prelude hiding (contains, length, empty)
+import Oat.TH (addUnderscoreLenses, getterFieldLabels)
 
 data Range = Range
   { start :: !Int,
@@ -28,11 +32,8 @@ data Range = Range
   }
   deriving (Show, Eq, Ord, Data, Typeable, Generic)
 
-instance LabelOptic "start" A_Lens Range Range Int Int where
-  labelOptic = lens start (flip setStart)
-
-instance LabelOptic "end" A_Lens Range Range Int Int where
-  labelOptic = lens end (flip setEnd)
+$(makeFieldLabelsWith getterFieldLabels ''Range)
+$(makeLensesWith addUnderscoreLenses ''Range)
 
 instance Semigroup Range where
   Range {start, end} <> Range {start = start', end = end'} =

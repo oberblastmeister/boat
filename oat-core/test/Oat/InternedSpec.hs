@@ -1,11 +1,6 @@
 module Oat.InternedSpec (spec) where
 
-import Oat.Interned
-import Oat.Interned.ShortByteString
-import Oat.Interned.Text
 import Test.Hspec
-import Test.Hspec.QuickCheck
-import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 
 -- testInterned ::
@@ -33,5 +28,6 @@ import Test.QuickCheck.Instances ()
 spec :: Spec
 spec = parallel $ do
   pure ()
-  -- testInterned (Proxy @IText) "IText"
-  -- testInterned (Proxy @IShortByteString) "IShortByteString"
+
+-- testInterned (Proxy @IText) "IText"
+-- testInterned (Proxy @IShortByteString) "IShortByteString"

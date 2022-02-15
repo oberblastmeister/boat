@@ -3,7 +3,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Opt
-  ( opt,
+  ( Opt (..),
+    opt,
+    defOpt,
   )
 where
 
@@ -13,9 +15,12 @@ data Opt = Opt
   { clang :: !Text,
     emitAsm :: !Bool,
     emitLL :: !Bool,
+    checkLL :: !Bool,
     optimization :: !Optimization,
     files :: [FilePath],
-    regAllocKind :: !RegAllocKind
+    regAllocKind :: !RegAllocKind,
+    output :: Maybe FilePath,
+    callStack :: !Bool
   }
   deriving (Show, Eq)
 
@@ -25,7 +30,7 @@ data RegAllocKind
   | GraphReg
   | LinearReg
   deriving (Show, Eq)
-  
+
 data Optimization
   = O1
   | O2
@@ -50,7 +55,6 @@ parseOpt =
     (helper <*> versionOption <*> parseOpt')
     ( fullDesc
         <> progDesc "Compiler for the oat language"
-        <> header "This is my header"
     )
 
 parseOpt' :: Parser Opt
@@ -67,8 +71,12 @@ parseOpt' = do
         <> help "Print the assembly"
   emitLL <-
     switch $
-      long "emit-llvm"
+      long "emit-ll"
         <> help "Emit llvm instead of assembly"
+  checkLL <-
+    switch $
+      long "check-ll"
+        <> help "Check llvm the"
   optimization <-
     option parseOptimization $
       short 'O'
@@ -82,7 +90,30 @@ parseOpt' = do
     option parseRegAllocKind $
       long "reg-alloc"
         <> value GraphReg
-  pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind}
+  output <-
+    option (Just <$> auto) $
+      short 'o'
+        <> value Nothing
+        <> help "Set the output file"
+  callStack <-
+    switch $
+      long "callstack"
+        <> help "Show the callstack on errors"
+  pure Opt {clang, emitAsm, emitLL, checkLL, optimization, files, regAllocKind, output, callStack}
+
+defOpt :: Opt
+defOpt =
+  Opt
+    { clang = "clang",
+      emitAsm = False,
+      emitLL = False,
+      checkLL = False,
+      optimization = O1,
+      files = [],
+      regAllocKind = GraphReg,
+      output = Nothing,
+      callStack = False
+    }
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption "0.0" $ long "version" <> help "Show the version"
@@ -94,7 +125,7 @@ parseRegAllocKind = eitherReader $ \case
   "graph" -> Right GraphReg
   "linear" -> Right LinearReg
   _ -> Left "Invalid register allocator method"
-  
+
 parseOptimization :: ReadM Optimization
 parseOptimization = eitherReader $ \case
   "1" -> Right O1

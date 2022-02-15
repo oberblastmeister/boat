@@ -2,6 +2,7 @@ module Oat.TH
   ( getterFieldLabels,
     addUnderscoreLenses,
     addUnderscoreNamer,
+    makeFieldLabelsForOnly,
   )
 where
 
@@ -17,3 +18,6 @@ addUnderscoreLenses = lensRules & lensField .~ addUnderscoreNamer
 
 addUnderscoreNamer :: FieldNamer
 addUnderscoreNamer = mappingNamer $ pure . ('_' :)
+
+makeFieldLabelsForOnly :: [String] -> TH.Name -> TH.DecsQ
+makeFieldLabelsForOnly names = makeFieldLabelsFor $ zip names names

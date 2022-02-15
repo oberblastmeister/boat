@@ -1,7 +1,9 @@
-module Oat.X86.Pretty (prettyProg) where
+module Oat.Backend.X86.Pretty (prettyProg) where
 
+import Data.Text qualified as T
 import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.X86
+import OatPrelude.Unsafe qualified as Unsafe
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified as Pretty
 
@@ -9,12 +11,12 @@ prettyProg :: Prog -> Doc ann
 prettyProg elems = Pretty.vsep (prettyElem <$> elems)
 
 prettyElem :: Elem -> Doc ann
-prettyElem Elem {lab, global, asm} =
-  sec <> glb <> Pretty.viaShow lab <> ":\n" <> body
+prettyElem Elem {lab, global, asm} = do
+  sec <> glb <> prettyLab lab <> ":\n" <> body
   where
     glb =
       if global
-        then "\t.global\t" <> Pretty.viaShow lab <> "\n"
+        then "\t.global\t" <> prettyLab lab <> "\n"
         else ""
     (sec, body) = case asm of
       Text insts -> ("\t.text\n", Pretty.vsep (prettyInst <$> insts))
@@ -64,11 +66,26 @@ prettyByteReg = \case
   R15 -> "%r15b"
   Rip -> error "%rip does not have a byte register"
 
+pIf :: Bool -> Doc ann -> Doc ann
+pIf cond doc
+  | cond = doc
+  | otherwise = mempty
+
+prettyLab :: ByteString -> Doc ann
+prettyLab =
+  pretty @Text
+    . fst
+    . Unsafe.fromJust
+    . T.unsnoc
+    . snd
+    . Unsafe.fromJust
+    . T.uncons
+    . T.pack
+    . show
+
 prettyImm :: Imm -> Doc ann
-prettyImm imm =
-  "$" <> case imm of
-    (Lit l) -> pretty l
-    (Lab l) -> Pretty.viaShow l
+prettyImm (Lit l) = pretty l
+prettyImm (Lab l) = prettyLab l
 
 prettyCond :: Cond -> Doc ann
 prettyCond = \case
@@ -82,6 +99,7 @@ prettyCond = \case
 prettyOpCode :: OpCode -> Doc ann
 prettyOpCode = \case
   Movq -> "movq"
+  Movzbq -> "movzbq"
   Pushq -> "pushq"
   Popq -> "popq"
   Leaq -> "leaq"
@@ -125,18 +143,22 @@ prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperandWith prettyReg
 
 prettyMem :: Mem -> Doc ann
-prettyMem Mem {displace, first, second, scale} =
-  maybe' prettyImm displace
+prettyMem Mem {offset, base, index, scale} = do
+  maybe' prettyImm offset
     <> Pretty.parens
-      ( maybe' prettyLoc first
-          <> Pretty.comma
-          <+> maybe' prettyLoc first
-          <> maybe' prettyLoc second
-          <> maybe' (\scale -> Pretty.comma <+> prettyImm scale) scale
+      ( maybe' prettyLoc base
+          <> maybe' (\index -> Pretty.comma <+> prettyLoc index) index
+          <> maybe' (\scale -> Pretty.comma <+> prettyScale scale) scale
       )
   where
     maybe' :: Monoid b => (a -> b) -> Maybe a -> b
     maybe' = maybe mempty
+
+prettyScale :: Scale -> Doc ann
+prettyScale S1 = "1"
+prettyScale S2 = "2"
+prettyScale S4 = "4"
+prettyScale S8 = "8"
 
 prettyJmpOperand :: Operand -> Doc ann
 prettyJmpOperand = \case
