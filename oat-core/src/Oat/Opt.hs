@@ -19,7 +19,8 @@ data Opt = Opt
     optimization :: !Optimization,
     files :: [FilePath],
     regAllocKind :: !RegAllocKind,
-    output :: Maybe FilePath
+    output :: Maybe FilePath,
+    callStack :: !Bool
   }
   deriving (Show, Eq)
 
@@ -94,7 +95,11 @@ parseOpt' = do
       short 'o'
         <> value Nothing
         <> help "Set the output file"
-  pure Opt {clang, emitAsm, emitLL, checkLL, optimization, files, regAllocKind, output}
+  callStack <-
+    switch $
+      long "callstack"
+        <> help "Show the callstack on errors"
+  pure Opt {clang, emitAsm, emitLL, checkLL, optimization, files, regAllocKind, output, callStack}
 
 defOpt :: Opt
 defOpt =
@@ -106,7 +111,8 @@ defOpt =
       optimization = O1,
       files = [],
       regAllocKind = GraphReg,
-      output = Nothing
+      output = Nothing,
+      callStack = False
     }
 
 versionOption :: Parser (a -> a)

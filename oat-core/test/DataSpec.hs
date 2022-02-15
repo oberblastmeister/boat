@@ -130,12 +130,13 @@ possibleExtensions = [".ll", ".oat"]
 
 emitAsm :: FilePath -> IO ()
 emitAsm path =
-  runEff $
-    Driver.runEffs' $
-      runReader Opt.defOpt $
-        Driver.compileLLFileToAsm
-          ("test_data/ll_compile" </> path)
-          ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
+  undefined
+  -- runEff $
+  --   Opt.defOpt $
+  --     Driver.runEffs' $
+  --       Driver.compileLLFileToAsm
+  --         ("test_data/ll_compile" </> path)
+  --         ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
 
 showAsm :: FilePath -> IO ()
 showAsm path = do
@@ -158,11 +159,12 @@ runAsm path = do
   runEff $
     Process.runProcess $
       runReader Opt.defOpt $ do
-        Driver.runEffs' $
-          Driver.compileAsmPaths
-            [asmDir </> path]
-            exePath
-        Process.callProcess exePath []
+        undefined
+        -- Driver.runEffs' $
+        --   Driver.compileAsmPaths
+        --     [asmDir </> path]
+        --     exePath
+        -- Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]

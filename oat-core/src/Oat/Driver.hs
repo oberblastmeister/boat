@@ -1,9 +1,11 @@
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant return" #-}
 
 module Oat.Driver where
 
-import Control.Exception.Safe qualified as Exception
 import Control.OnLeft (OnLeft (OnLeft))
 import Control.OnLeft qualified as OnLeft
 import Data.FileEmbed qualified as FileEmbed
@@ -26,7 +28,10 @@ import Oat.Command qualified as Command
 import Oat.Common (hPutUtf8, liftEither, maybeToLeft, readFileUtf8, whenM, writeFileUtf8, type (++))
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
+import Oat.PrettyUtil (Ann (..), ann)
+import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified
+import Prettyprinter qualified as Pretty
 import Prettyprinter.Render.Text qualified as Prettyprinter
 import System.IO qualified as IO
 
@@ -142,27 +147,46 @@ type DriverEffsRun =
      Error Command.CommandError
    ]
 
-runEffs :: IOE :> es => Eff (DriverEffsRun ++ es) a -> Eff es (Either String a)
+runEffs :: '[IOE, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es (Either (Doc Ann) a)
 runEffs m = do
-  res <- run m
-  pure $ OnLeft.do
-    res <- OnLeft show res
-    res <- OnLeft show res
-    res <- OnLeft show res
-    res <- OnLeft show res
-    return res
-  where
-    run =
-      runErrorNoCallStack @[LL.ParseError]
-        >>> runErrorNoCallStack @(NonEmpty LL.CheckError)
-        >>> runErrorNoCallStack @UnicodeException
-        >>> Temporary.runTemporary
-        >>> FileSystem.runFileSystem
-        >>> Command.runCommandClangIO
-        >>> runErrorNoCallStack @Command.CommandError
+  let run =
+        runError @[LL.ParseError]
+          >>> runError @(NonEmpty LL.CheckError)
+          >>> runError @UnicodeException
+          >>> Temporary.runTemporary
+          >>> FileSystem.runFileSystem
+          >>> Command.runCommandClangIO
+          >>> runError @Command.CommandError
+  m' <- run m
+  let finalRes = OnLeft.do
+        let show' :: Show s => (a, s) -> (a, Doc ann)
+            show' = second Pretty.viaShow
+        res <- OnLeft show' m'
+        res <- OnLeft show' res
+        res <- OnLeft show' res
+        res <- OnLeft show' res
+        return res
+  hasCallStack <- rview @Opt #callStack
+  if hasCallStack
+    then pure $ finalRes & _Left %~ (\(callStack, doc) -> doc <> Pretty.line <> prettyCallStack' callStack)
+    else pure $ finalRes & _Left %~ snd
 
-runEffs' :: IOE :> es => Eff (DriverEffsRun ++ es) a -> Eff es a
-runEffs' m =
-  runEffs m >>= \case
-    Left e -> Exception.throwString e
-    Right a -> pure a
+prettyCallStack' :: CallStack -> Doc Ann
+prettyCallStack' callStack = ann Info "Callstack" <> ":" <+> pretty (prettyCallStack callStack)
+
+-- runEffs' :: '[IOE, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es a
+-- runEffs' m =
+--   runEffs m >>= \case
+--     Left e -> undefined
+--     Right a -> pure a
+
+type DriverErrors =
+  '[ [LL.ParseError],
+     NonEmpty LL.CheckError,
+     UnicodeException,
+     Command.CommandError
+   ]
+
+data HList ts where
+  HNil :: HList '[]
+  (:::) :: t -> HList ts -> HList (t ': ts)
