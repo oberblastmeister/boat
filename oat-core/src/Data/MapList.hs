@@ -3,17 +3,19 @@
 
 module Data.MapList
   ( MapList,
-    toList,
     toMap,
     insert,
+    keysSet,
+    keys,
+    orderedSetKeys,
   )
 where
 
 import Control.DeepSeq (NFData)
 import Data.Data (Data)
 import Data.HashMap.Strict qualified as HashMap
+import GHC.Exts (IsList (Item))
 import Oat.TH (addUnderscoreLenses, getterFieldLabels)
-import Prelude hiding (map, toList)
 
 data MapList k v = MapList
   { map :: !(HashMap k v),
@@ -42,8 +44,11 @@ instance (NFData k, NFData v) => NFData (MapList k v)
 instance AsEmpty (MapList k v) where
   _Empty = nearly (MapList HashMap.empty []) (null . list)
 
-toList :: MapList k v -> [(k, v)]
-toList = view _list
+instance (Eq k, Hashable k) => IsList (MapList k v) where
+  type Item (MapList k v) = (k, v)
+
+  toList = view _list
+  fromList = foldl' (\ml (k, v) -> insert k v ml) Empty
 
 toMap :: MapList k v -> HashMap k v
 toMap = view _map
@@ -57,3 +62,12 @@ insert key val ml@MapList {map, list} =
         { map = map & at key ?~ val,
           list = (key, val) : list
         }
+
+keys :: MapList k v -> [k]
+keys = (^.. #list % traversed % _1)
+
+keysSet :: MapList k v -> HashSet k
+keysSet = (^. #map % to HashMap.keysSet)
+
+orderedSetKeys :: (Eq k, Hashable k) => HashSet k -> MapList k v -> [k]
+orderedSetKeys set mapList = filter (\k -> has (ix k) set) (keys mapList)

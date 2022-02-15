@@ -179,10 +179,10 @@ AllocaInst :: { AllocaInst }
   : uid '=' alloca Ty { AllocaInst {name = $1, ty = $4} }
   
 LoadInst :: { LoadInst }
-  : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $6, arg = $7} }
+  : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $4, ty' = $6, arg = $7} }
 
 StoreInst :: { StoreInst }
-  : store Ty Operand ',' Ty Operand { StoreInst {ty = $2, arg1 = $3, arg2 = $6} }
+  : store Ty Operand ',' Ty Operand { StoreInst {ty1 = $2, arg1 = $3, ty2 = $5, arg2 = $6} }
   
 IcmpInst :: { IcmpInst }
   : uid '=' icmp CmpOp Ty Operand ',' Operand { IcmpInst {name = $1, op = $4, ty = $5, arg1 = $6, arg2 = $8} }

@@ -14,6 +14,7 @@ module Oat.Backend.X86.X86
     Prog,
     Operand,
     Mem (.., MemImm, MemLoc, MemStack, MemStackSimple),
+    Scale (..),
     Loc,
     InstLab,
     X86,
@@ -31,12 +32,14 @@ module Oat.Backend.X86.X86
     regs,
     instLabToElems,
     pattern MemBaseSimple,
+    allocLocal,
   )
 where
 
 import Data.Int (Int64)
 import Oat.Asm qualified as Asm
-import Prelude hiding (first, second)
+import Oat.Frame (Frame)
+import Oat.Frame qualified as Frame
 
 data X86
 
@@ -52,38 +55,46 @@ type Inst = Asm.Inst X86
 
 type Loc = Asm.Loc X86
 
+-- M[offset + R[base] + R[index] * scale]
 data Mem = Mem
-  { displace :: Maybe Imm,
-    first :: Maybe Loc,
-    second :: Maybe Loc,
-    scale :: Maybe Imm
+  { offset :: Maybe Imm,
+    base :: Maybe Loc,
+    index :: Maybe Loc,
+    scale :: Maybe Scale
   }
   deriving (Show, Eq)
 
+data Scale
+  = S1
+  | S2
+  | S4
+  | S8
+  deriving (Show, Eq)
+
 pattern MemBaseSimple :: Int64 -> Mem
-pattern MemBaseSimple displace = Mem {displace = Just (Lit displace), first = Just (Asm.LReg Rbp), second = Nothing, scale = Nothing}
+pattern MemBaseSimple offset = Mem {offset = Just (Lit offset), base = Just (Asm.LReg Rbp), index = Nothing, scale = Nothing}
 
 pattern MemStackSimple :: Int64 -> Mem
-pattern MemStackSimple displace = MemStack (Just (Lit displace)) Nothing Nothing
+pattern MemStackSimple offset = MemStack (Just (Lit offset)) Nothing Nothing
 
-pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Imm -> Mem
-pattern MemStack displace second scale = Mem {displace, first = Just (Asm.LReg Rsp), second, scale}
+pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Scale -> Mem
+pattern MemStack offset index scale = Mem {offset, base = Just (Asm.LReg Rsp), index, scale}
 
 pattern MemImm :: Imm -> Mem
 pattern MemImm imm =
   Mem
-    { displace = Just imm,
-      first = Nothing,
-      second = Nothing,
+    { offset = Just imm,
+      base = Nothing,
+      index = Nothing,
       scale = Nothing
     }
 
 pattern MemLoc :: Loc -> Mem
 pattern MemLoc loc =
   Mem
-    { displace = Nothing,
-      first = Just loc,
-      second = Nothing,
+    { offset = Nothing,
+      base = Just loc,
+      index = Nothing,
       scale = Nothing
     }
 
@@ -96,10 +107,10 @@ operandLocs = traversalVL $ \f -> \case
   other -> pure other
 
 memLocs :: Traversal' Mem Loc
-memLocs = traversalVL $ \f mem@Mem {first, second} -> do
-  first <- traverse f first
-  second <- traverse f second
-  pure $ mem {first, second}
+memLocs = traversalVL $ \f mem@Mem {base, index} -> do
+  base <- traverse f base
+  index <- traverse f index
+  pure $ mem {base, index}
 
 hasTwoOperands :: OpCode -> Bool
 hasTwoOperands = \case
@@ -152,6 +163,7 @@ data Cond
 
 data OpCode
   = Movq
+  | Movzbq
   | Pushq
   | Popq
   | Leaq
@@ -229,9 +241,11 @@ makePrismLabels ''OpCode
 
 -- needTemps :: Traversal Inst Inst (Mem, Bool) LL.Name
 -- needTemps = traversalVL go
+dat :: ByteString -> [Data] -> Elem
 dat lab ds = Elem {lab, global = True, asm = Data ds}
 
 --       | hasTwoOperands opcode,
+text :: ByteString -> [Inst] -> Elem
 text lab is = Elem {lab, global = False, asm = Text is}
 
 gText :: ByteString -> [Inst] -> Elem
@@ -266,3 +280,6 @@ instLabToElems instLabs =
       )
       ([], [])
       instLabs
+
+allocLocal :: Frame X86 :> es => Eff es Mem
+allocLocal = Frame.allocLocal @X86

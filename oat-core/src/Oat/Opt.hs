@@ -3,7 +3,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.Opt
-  ( opt,
+  ( Opt (..),
+    opt,
+    defOpt,
   )
 where
 
@@ -13,6 +15,7 @@ data Opt = Opt
   { clang :: !Text,
     emitAsm :: !Bool,
     emitLL :: !Bool,
+    checkLL :: !Bool,
     optimization :: !Optimization,
     files :: [FilePath],
     regAllocKind :: !RegAllocKind,
@@ -67,8 +70,12 @@ parseOpt' = do
         <> help "Print the assembly"
   emitLL <-
     switch $
-      long "emit-llvm"
+      long "emit-ll"
         <> help "Emit llvm instead of assembly"
+  checkLL <-
+    switch $
+      long "check-ll"
+        <> help "Check llvm the"
   optimization <-
     option parseOptimization $
       short 'O'
@@ -87,7 +94,20 @@ parseOpt' = do
       short 'o'
         <> value Nothing
         <> help "Set the output file"
-  pure Opt {clang, emitAsm, emitLL, optimization, files, regAllocKind, output}
+  pure Opt {clang, emitAsm, emitLL, checkLL, optimization, files, regAllocKind, output}
+
+defOpt :: Opt
+defOpt =
+  Opt
+    { clang = "clang",
+      emitAsm = False,
+      emitLL = False,
+      checkLL = False,
+      optimization = O1,
+      files = [],
+      regAllocKind = GraphReg,
+      output = Nothing
+    }
 
 versionOption :: Parser (a -> a)
 versionOption = infoOption "0.0" $ long "version" <> help "Show the version"

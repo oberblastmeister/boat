@@ -99,6 +99,7 @@ prettyCond = \case
 prettyOpCode :: OpCode -> Doc ann
 prettyOpCode = \case
   Movq -> "movq"
+  Movzbq -> "movzbq"
   Pushq -> "pushq"
   Popq -> "popq"
   Leaq -> "leaq"
@@ -142,16 +143,22 @@ prettyOperand :: Operand -> Doc ann
 prettyOperand = prettyOperandWith prettyReg
 
 prettyMem :: Mem -> Doc ann
-prettyMem Mem {displace, first, second, scale} = do
-  maybe' prettyImm displace
+prettyMem Mem {offset, base, index, scale} = do
+  maybe' prettyImm offset
     <> Pretty.parens
-      ( maybe' prettyLoc first
-          <> maybe' (\second -> Pretty.comma <+> prettyLoc second) second
-          <> maybe' (\scale -> Pretty.comma <+> prettyImm scale) scale
+      ( maybe' prettyLoc base
+          <> maybe' (\index -> Pretty.comma <+> prettyLoc index) index
+          <> maybe' (\scale -> Pretty.comma <+> prettyScale scale) scale
       )
   where
     maybe' :: Monoid b => (a -> b) -> Maybe a -> b
     maybe' = maybe mempty
+
+prettyScale :: Scale -> Doc ann
+prettyScale S1 = "1"
+prettyScale S2 = "2"
+prettyScale S4 = "4"
+prettyScale S8 = "8"
 
 prettyJmpOperand :: Operand -> Doc ann
 prettyJmpOperand = \case

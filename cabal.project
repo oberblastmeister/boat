@@ -10,25 +10,19 @@ source-repository-package
 --     tag: a68a03ec0e26097884b713abcf545396203f7a79
 --     subdir: effectful-typed-process
 
--- source-repository-package
---     type: git
---     location: https://github.com/arybczak/effectful.git
---     tag: 485e3e08f46a3b8c285ec82267e6c6b229c175a8
---     subdir: effectful
-
--- source-repository-package
---     type: git
---     location: https://github.com/arybczak/effectful.git
---     tag: 485e3e08f46a3b8c285ec82267e6c6b229c175a8
---     subdir: effectful-core
+source-repository-package
+    type: git
+    location: https://github.com/arybczak/effectful.git
+    tag: cc25dc9ef4d06c8df391ede07642d3bbfbab6aca
+    subdir: effectful effectful-core
 
 packages:
     oat-core/
     oat-prelude/
     /home/brian/projects/effectful-contrib/effectful-optics/
-    /home/brian/projects/effectful/effectful/
-    /home/brian/projects/effectful/effectful-core/
-    /home/brian/projects/effectful/effectful-plugin/
+    -- /home/brian/projects/effectful/effectful/
+    -- /home/brian/projects/effectful/effectful-core/
+    -- /home/brian/projects/effectful/effectful-plugin/
 
 with-compiler: ghc-9.0.2
 

@@ -66,7 +66,6 @@ common common-options
     ImportQualifiedPost,
   ghc-options:
     -Wall
-    -Wincomplete-record-updates
     -Wredundant-constraints
     -Wno-name-shadowing
     -- until OverloadedRecordUpdate stabilizes
@@ -74,7 +73,7 @@ common common-options
     -Werror=incomplete-patterns
     -Werror=incomplete-uni-patterns
     -Werror=missing-methods
-    -fplugin=Effectful.Plugin
+    -Werror=incomplete-record-updates
   build-depends:
     base >= 4.12 && <5,
     oat-prelude,
@@ -84,7 +83,6 @@ common common-options
     mtl >=2.2.2 && <2.3,
     effectful,
     effectful-core,
-    effectful-plugin,
     effectful-optics,
     containers >=0.5.10.2 && <0.7,
     unordered-containers >=0.2.6 && <0.3,
@@ -158,6 +156,7 @@ library
     Oat.LL.AST
     Oat.LL.Combine
     Oat.LL.LexerWrapper
+    Oat.LL.Check
     Oat.LL.ParserWrapper
     Oat.LL.Name
     Oat.Asm

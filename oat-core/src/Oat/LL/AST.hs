@@ -2,9 +2,49 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.LL.AST where
+module Oat.LL.AST
+  ( Ty (..),
+    FunTy (..),
+    lookupTy,
+    plateTy,
+    BinOp (..),
+    CmpOp (..),
+    Inst (..),
+    Term (..),
+    Operand (..),
+    BinOpInst (..),
+    AllocaInst (..),
+    LoadInst (..),
+    StoreInst (..),
+    IcmpInst (..),
+    CallInst (..),
+    BitcastInst (..),
+    GepInst (..),
+    RetTerm (..),
+    CbrTerm (..),
+    Block (..),
+    LabBlock (..),
+    FunBody (..),
+    FunDecl (..),
+    GlobalInit (..),
+    TyMap,
+    GlobalDecl (..),
+    Decl (..),
+    DeclMap (..),
+    Prog,
+    progToDeclMap,
+    instName,
+    bodyBlocks,
+    bodyInsts,
+    instOperands,
+    termOperands,
+    operandName,
+    doesInsAssign,
+    tySize,
+    maxCallSize,
+  )
+where
 
-import Data.Data (Data)
 import Data.Int (Int64)
 import Data.MapList (MapList)
 import Data.MapList qualified as MapList
@@ -12,6 +52,60 @@ import Data.Text qualified as T
 import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 import Optics as O
+
+type Prog = [Decl]
+
+data DeclMap = DeclMap
+  { tyDecls :: !(MapList Name Ty),
+    globalDecls :: !(MapList Name GlobalDecl),
+    funDecls :: !(MapList Name FunDecl),
+    externDecls :: !(MapList Name Ty)
+  }
+  deriving (Show, Eq)
+
+data Decl
+  = DeclTy !Name Ty
+  | DeclGlobal !Name GlobalDecl
+  | DeclFun !Name FunDecl
+  | DeclExtern !Name Ty
+  deriving (Show, Eq)
+
+data GlobalInit
+  = GlobalNull
+  | GlobalGid !Name
+  | GlobalInt !Int64
+  | GlobalString !ByteString
+  | GlobalArray [GlobalDecl]
+  | GlobalStruct [GlobalDecl]
+  deriving (Show, Eq)
+
+data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
+  deriving (Show, Eq)
+
+data Block = Block
+  { insts :: [Inst],
+    term :: Term
+  }
+  deriving (Show, Eq)
+
+data LabBlock = LabBlock
+  { lab :: !Name,
+    block :: Block
+  }
+  deriving (Show, Eq)
+
+data FunBody = FunBody
+  { entry :: Block,
+    labeled :: [LabBlock]
+  }
+  deriving (Show, Eq)
+
+data FunDecl = FunDecl
+  { funTy :: FunTy,
+    params :: [Name],
+    body :: FunBody
+  }
+  deriving (Show, Eq)
 
 -- most of these types are just symbolic because we store everything in 8 bytes for simplicity
 data Ty
@@ -48,8 +142,6 @@ plateTy mp = traversalVL $ \f -> \case
   TyStruct tys -> TyStruct <$> traverse f tys
   other -> pure other
 
-data InstShape = Flat | Tree
-
 data BinOp
   = Add
   | Sub
@@ -70,8 +162,6 @@ data CmpOp
   | Sgt
   | Sge
   deriving (Show, Eq)
-
-data InstS = SInst | STerm
 
 data Inst where
   BinOp :: BinOpInst -> Inst
@@ -116,13 +206,15 @@ data AllocaInst = AllocaInst
 data LoadInst = LoadInst
   { name :: Name,
     ty :: Ty,
+    ty' :: Ty,
     arg :: Operand
   }
   deriving (Show, Eq)
 
 data StoreInst = StoreInst
-  { ty :: Ty,
+  { ty1 :: Ty,
     arg1 :: Operand,
+    ty2 :: Ty,
     arg2 :: Operand
   }
   deriving (Show, Eq)
@@ -173,74 +265,6 @@ data CbrTerm = CbrTerm
   }
   deriving (Show, Eq)
 
-data Block = Block
-  { insts :: [Inst],
-    term :: Term
-  }
-  deriving (Show, Eq)
-
-data LabBlock = LabBlock
-  { lab :: !Name,
-    block :: Block
-  }
-  deriving (Show, Eq)
-
-data FunBody = FunBody
-  { entry :: Block,
-    labeled :: [LabBlock]
-  }
-  deriving (Show, Eq)
-
-data FunDecl = FunDecl
-  { funTy :: FunTy,
-    params :: [Name],
-    body :: FunBody
-  }
-  deriving (Show, Eq)
-
-data Named a
-  = Named Name a
-  | Do a
-  deriving (Show, Eq, Data, Typeable, Generic)
-
-pattern (:=) :: Name -> a -> Named a
-pattern (:=) name a = Named name a
-
-{-# COMPLETE (:=) #-}
-
-type WithName a = (Name, a)
-
-instance Hashable a => Hashable (Named a)
-
-data GlobalInit
-  = GlobalNull
-  | GlobalGid !Name
-  | GlobalInt !Int64
-  | GlobalString !ByteString
-  | GlobalArray [GlobalDecl]
-  | GlobalStruct [GlobalDecl]
-  deriving (Show, Eq)
-
-data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
-  deriving (Show, Eq)
-
-data Decl
-  = DeclTy !Name Ty
-  | DeclGlobal !Name GlobalDecl
-  | DeclFun !Name FunDecl
-  | DeclExtern !Name Ty
-  deriving (Show, Eq)
-
-data DeclMap = DeclMap
-  { tyDecls :: !(MapList Name Ty),
-    globalDecls :: !(MapList Name GlobalDecl),
-    funDecls :: !(MapList Name FunDecl),
-    externDecls :: !(MapList Name Ty)
-  }
-  deriving (Show, Eq)
-
-type Prog = [Decl]
-
 $(makeFieldLabelsNoPrefix ''LoadInst)
 $(makeFieldLabelsNoPrefix ''AllocaInst)
 $(makeFieldLabelsNoPrefix ''BinOpInst)
@@ -255,6 +279,7 @@ $(makeFieldLabelsNoPrefix ''FunBody)
 $(makeFieldLabelsNoPrefix ''FunDecl)
 $(makeFieldLabelsNoPrefix ''LabBlock)
 $(makeFieldLabelsNoPrefix ''RetTerm)
+$(makeFieldLabelsNoPrefix ''GlobalDecl)
 $(makeFieldLabelsNoPrefix ''CbrTerm)
 $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)

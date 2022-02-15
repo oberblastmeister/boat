@@ -164,5 +164,5 @@ type family Drop n xs where
 concatToEither :: [a] -> [b] -> [Either a b]
 concatToEither as bs = fmap Left as ++ fmap Right bs
 
--- partitionPrisms :: [Optic is A_Prism s t a b] -> 
+-- partitionPrisms :: [Optic is A_Prism s t a b] ->
 -- unzipEither :: [Either a b] -> ([a], b)

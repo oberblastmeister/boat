@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Oat.Frame
   ( Frame (..),
     allocLocalWith,
@@ -12,8 +14,8 @@ data Frame :: Type -> Effect where
 
 type instance DispatchOf (Frame a) = 'Dynamic
 
-allocLocalWith :: Frame a :> es => Int -> Eff es (Asm.Mem a)
-allocLocalWith = send . AllocLocalWith
+allocLocalWith :: forall a es. Frame a :> es => Int -> Eff es (Asm.Mem a)
+allocLocalWith i = send $ AllocLocalWith @a i
 
-allocLocal :: Frame a :> es => Eff es (Asm.Mem a)
-allocLocal = allocLocalWith 8
+allocLocal :: forall a es. Frame a :> es => Eff es (Asm.Mem a)
+allocLocal = allocLocalWith @a 8

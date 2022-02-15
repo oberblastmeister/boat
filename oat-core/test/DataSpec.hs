@@ -10,11 +10,12 @@ import Data.Conduit.Combinators qualified as C
 import Data.Foldable (traverse_)
 import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
+import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
 import Effectful.Temporary qualified as Temporary
-import Oat.Common (hPutUtf8, writeFileUtf8)
+import Oat.Common (hPutUtf8, runErrorIO, writeFileUtf8)
 import Oat.Common qualified
 import Oat.Driver qualified as Driver
 import Oat.LL.Lexer qualified as LL.Lexer
@@ -151,12 +152,13 @@ runAsm path = do
   let asmDir = "test_data/asm_compile"
   let exe = FilePath.takeBaseName path
   let exePath = asmDir </> exe
-  runEff $ Process.runProcess $ do
-    Driver.runEffs' $
-      Driver.compileAsmPaths
-        [asmDir </> path]
-        exePath
-    Process.callProcess exePath []
+  runEff $
+    Process.runProcess $ do
+      Driver.runEffs' $
+        Driver.compileAsmPaths
+          [asmDir </> path]
+          exePath
+      Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]
@@ -267,7 +269,7 @@ stripLastNewline (t :> '\n') = t
 stripLastNewline t = t
 
 readFileUtf8 :: FilePath -> IO Text
-readFileUtf8 = runEff . Oat.Common.runErrorIO . Oat.Common.readFileUtf8
+readFileUtf8 = runEff . runErrorIO @UnicodeException . Oat.Common.readFileUtf8
 
 runIOE :: Eff '[IOE] a -> SpecM arg a
 runIOE = runIO . runEff

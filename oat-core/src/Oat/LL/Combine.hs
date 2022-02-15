@@ -53,12 +53,12 @@ combineBlock block = block'
 
 combineLoop :: (State CombineState :> es) => Eff es ()
 combineLoop = do
-  prevId <- use #prevId
-  idToInst <- use #idToInst
+  prevId <- use @CombineState #prevId
+  idToInst <- use @CombineState #idToInst
   case IntMap.lookupGT prevId idToInst of
     Just (currId, inst) -> do
       combineInst currId inst
-      #prevId .= currId
+      assign @CombineState #prevId currId
       combineLoop
     Nothing -> pure ()
 
@@ -67,8 +67,8 @@ combineInst id inst = do
   st <- get
   case combineInst' id inst st of
     Just (toDelete, toInsert, inst') -> do
-      #idToInst % at toDelete .= Nothing
-      #idToInst % at toInsert ?= inst'
+      assign @CombineState (#idToInst % at toDelete) Nothing
+      assign @CombineState (#idToInst % at toInsert) (Just inst')
     Nothing -> pure ()
 
 combineInst' :: Int -> InstWithInfo -> CombineState -> Maybe (Int, Int, InstWithInfo)

@@ -75,8 +75,6 @@ common common-options
     mtl ^>= 2.2.2,
     effectful,
     effectful-core,
-    effectful-plugin,
-    -- containers ^>= 0.6.5.1,
     containers >= 0.6.4.1,
     unordered-containers ^>= 0.2.16.0,
     text ^>= 1.2.5.0,

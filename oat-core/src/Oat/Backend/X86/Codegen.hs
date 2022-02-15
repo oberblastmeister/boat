@@ -11,7 +11,6 @@ import Effectful.Reader.Static.Optics
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.Frame qualified as Frame
-import Oat.Backend.X86.Munch (BackendEnv (..))
 import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.RegAlloc qualified as RegAlloc
 import Oat.Backend.X86.X86 (InstLab, Reg (..))
@@ -24,30 +23,28 @@ compileProg :: '[Source LL.Name] :>> es => LL.Prog -> Eff es (Seq InstLab)
 compileProg = compileDeclMap . LL.progToDeclMap
 
 compileDeclMap :: '[Source LL.Name] :>> es => LL.DeclMap -> Eff es (Seq InstLab)
-compileDeclMap declMap = do
-  let env = Munch.BackendEnv {tyMap = declMap ^. #tyDecls % #map}
-  funDecls <- traverse (uncurry $ compileFunDecl env) (declMap ^. #funDecls % #list)
-  globalDecls <- traverse (uncurry $ compileGlobalDecl env) (declMap ^. #globalDecls % #list)
+compileDeclMap declMap = runReader declMap $ do
+  funDecls <- traverse (uncurry compileFunDecl) (declMap ^. #funDecls % #list)
+  globalDecls <- traverse (uncurry compileGlobalDecl) (declMap ^. #globalDecls % #list)
   pure $
     fold funDecls
       <> fold globalDecls
 
-compileGlobalDecl :: '[Source LL.Name] :>> es => BackendEnv -> LL.Name -> LL.GlobalDecl -> Eff es (Seq InstLab)
-compileGlobalDecl globalDecl = mempty
+compileGlobalDecl :: '[Reader LL.DeclMap, Source LL.Name] :>> es => LL.Name -> LL.GlobalDecl -> Eff es (Seq InstLab)
+compileGlobalDecl = mempty
 
 compileFunDecl ::
   forall es.
-  Source LL.Name :> es =>
-  BackendEnv ->
+  '[Reader LL.DeclMap, Source LL.Name] :>> es =>
   LL.Name ->
   LL.FunDecl ->
   Eff es (Seq InstLab)
-compileFunDecl env name funDecl = runReader env $ do
+compileFunDecl name funDecl = do
   (insts, frameState) <- Frame.runFrame $ do
     insts <- Munch.compileBody $ funDecl ^. #body
     let viewShiftedInsts = Seq.fromList (Right <$> viewShiftFrom (funDecl ^. #params)) <> insts
     RegAlloc.noReg viewShiftedInsts
-  tyMap <- rview #tyMap
+  tyMap <- rview @LL.DeclMap $ #tyDecls % #map
   let maxCall = LL.maxCallSize tyMap (funDecl ^. #body)
       (prologue, epilogue) = prologueEpilogue maxCall frameState
   pure $ Left (name, True) :< (fmap Right prologue <> insts <> fmap Right epilogue)

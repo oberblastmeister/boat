@@ -31,8 +31,8 @@ runFrame = reinterpret (runState defFrameState) $ const interpretFrame
 
 interpretFrame :: State FrameState :> es => Frame (Eff localEs) a -> Eff es a
 interpretFrame (Frame.AllocLocalWith i) = do
-  base <- use #base
-  #base %= subtract (fromIntegral i)
+  base <- use @FrameState #base
+  modifying @FrameState #base (subtract $ fromIntegral i)
   pure $ MemBaseSimple $ fromIntegral base
 
 

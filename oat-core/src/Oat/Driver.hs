@@ -14,6 +14,7 @@ import Effectful.Error.Static
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.FileSystem.IO qualified as FileSystem.IO
+import Effectful.Reader.Static
 import Effectful.Temporary (Temporary)
 import Effectful.Temporary qualified as Temporary
 import Oat.Backend.X86.Codegen qualified as Backend.X86.Codegen
@@ -23,13 +24,23 @@ import Oat.Command (Command)
 import Oat.Command qualified as Command
 import Oat.Common (hPutUtf8, liftEither, readFileUtf8, writeFileUtf8, type (++))
 import Oat.LL qualified as LL
+import Oat.Opt (Opt)
 import Prettyprinter qualified
 import Prettyprinter.Render.Text qualified as Prettyprinter
 import System.IO qualified as IO
 
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
-type DriverEffs = IOE ': DriverEffsRun
+-- type DriverEffs = IOE ': DriverEffsRun
+type DriverEffs =
+  '[ IOE,
+     Reader Opt,
+     Error [LL.ParseError],
+     Error UnicodeException,
+     Temporary,
+     FileSystem,
+     Command
+   ]
 
 compileLLFileToAsm :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
 compileLLFileToAsm llPath asmPath = do
@@ -43,11 +54,11 @@ compileLLFileToAsmShow llPath = do
   asmText <- compileLLText contents
   liftIO $ TIO.putStrLn asmText
 
-parseLL :: (Error [LL.ParseError] :> es) => Text -> Eff es LL.Prog
-parseLL text = liftEither $ LL.parse text LL.prog
+parseLLText :: (Error [LL.ParseError] :> es) => Text -> Eff es LL.Prog
+parseLLText text = liftEither $ LL.parse text LL.prog
 
 parseLLFile :: DriverEffs :>> es => FilePath -> Eff es LL.Prog
-parseLLFile path = readFileUtf8 path >>= parseLL
+parseLLFile path = readFileUtf8 path >>= parseLLText
 
 compileLLFile :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
 compileLLFile llPath out = do
@@ -74,7 +85,7 @@ compileLLText text = do
 
 compileLLTextToInsts :: '[Error [LL.ParseError]] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
-  insts <- parseLL text
+  insts <- parseLLText text
   LL.runNameSource $ Backend.X86.Codegen.compileProg insts
 
 -- compile and links all asm paths with the runtime

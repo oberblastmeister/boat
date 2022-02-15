@@ -81,9 +81,6 @@ makeLexer name defUserState = do
           user = $(TH.varE defUserState)
         }
 
-    -- These two functions are needed for alex to work
-    -- alexGetByte = undefined
-
     alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
     alexGetByte AlexInput {inpPos, inpPrev, inpBytes = b :< bs, inpText} =
       Just (b, AlexInput {inpPos, inpPrev, inpBytes = bs, inpText})
