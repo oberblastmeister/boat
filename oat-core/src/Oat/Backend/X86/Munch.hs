@@ -122,6 +122,8 @@ munchInst = \case
     arg <- compileOperand arg
     emitMov arg (Asm.Temp name)
   LL.Gep inst -> undefined
+  -- probably compile to conditional move instruction
+  LL.Select inst -> undefined
 
 munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()
 munchTerm = \case

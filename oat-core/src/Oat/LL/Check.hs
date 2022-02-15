@@ -1,7 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.LL.Check where
+module Oat.LL.Check
+  ( checkProg,
+    CheckError,
+  )
+where
 
 import Data.HashSet qualified as HashSet
 import Data.MapList qualified as MapList
@@ -10,7 +14,7 @@ import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
-import Oat.Common (unwrap)
+import Oat.Common (leftToMaybe, maybeToLeft, unwrap, type (++))
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
 
@@ -41,10 +45,19 @@ type CheckEffs =
 
 type ErrorWriter = Writer (Dual [CheckError])
 
-checkProg :: StateCheckEffs :>> es => LL.Prog -> Eff es ()
-checkProg prog = do
-  checkDeclMap =<< ask
-  traverse_ checkDecl prog
+checkProg :: LL.Prog -> Maybe (NonEmpty CheckError)
+checkProg prog = run $ do
+  checkDeclMap $ prog ^. #declMap
+  checkDecls $ prog ^. #decls
+  where
+    run =
+      leftToMaybe
+        . runPureEff
+        . runCheck
+          (prog ^. #declMap)
+
+checkDecls :: StateCheckEffs :>> es => [LL.Decl] -> Eff es ()
+checkDecls = traverse_ checkDecl
 
 checkDeclMap :: ErrorWriter :> es => LL.DeclMap -> Eff es ()
 checkDeclMap declMap = do
@@ -60,13 +73,15 @@ checkDecl (LL.DeclFun _name funDecl) = traverseOf_ (#body % LL.bodyBlocks) check
 checkDecl _ = pure ()
 
 checkBlock :: StateCheckEffs :>> es => LL.Block -> Eff es ()
-checkBlock block =
+checkBlock block = do
   forOf_ (#insts % traversed) block $ \inst -> do
     tempToTy <- use @CheckState #tempToTy
     ty <- runReader tempToTy $ inferInst inst
     case inst ^? LL.instName of
       Nothing -> pure ()
       Just name -> assign @CheckState (#tempToTy % at name) (Just ty)
+  tempToTy <- use @CheckState #tempToTy
+  runReader tempToTy $ checkTerm (block ^. #term)
 
 inferInst :: CheckEffs :>> es => LL.Inst -> Eff es LL.Ty
 inferInst = \case
@@ -78,6 +93,7 @@ inferInst = \case
   LL.Call inst -> inferCall inst
   LL.Bitcast inst -> inferBitcast inst
   LL.Gep inst -> inferGep inst
+  LL.Select inst -> inferSelect inst
 
 checkTerm :: CheckEffs :>> es => LL.Term -> Eff es ()
 checkTerm (LL.Ret LL.RetTerm {ty, arg}) = case arg of
@@ -142,6 +158,9 @@ inferBitcast LL.BitcastInst {from, to, arg} = do
 inferGep :: CheckEffs :>> es => LL.GepInst -> Eff es LL.Ty
 inferGep = undefined
 
+inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
+inferSelect = undefined
+
 tellErrors :: ErrorWriter :> es => [CheckError] -> Eff es ()
 tellErrors = tell . Dual
 
@@ -149,3 +168,16 @@ tyAssert :: Writer (Dual [CheckError]) :> es => Maybe Text -> Maybe LL.Operand -
 tyAssert mess arg expectedTys actualTy =
   unless (actualTy `elem` expectedTys) $
     tellErrors [MismatchedTy mess arg expectedTys actualTy]
+
+defCheckState :: CheckState
+defCheckState = CheckState {tempToTy = mempty}
+
+runCheck :: LL.DeclMap -> Eff (StateCheckEffs ++ es) a -> Eff es (Either (NonEmpty CheckError) a)
+runCheck declMap m = do
+  (a, Dual es) <- run m
+  pure $ maybeToLeft a $ nonEmpty es
+  where
+    run =
+      runWriter @(Dual [CheckError])
+        >>> evalState @CheckState defCheckState
+        >>> runReader @LL.DeclMap declMap

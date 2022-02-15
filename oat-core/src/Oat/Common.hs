@@ -27,6 +27,10 @@ module Oat.Common
     Tail,
     Drop,
     concatToEither,
+    maybeToRight,
+    maybeToLeft,
+    rightToMaybe,
+    leftToMaybe,
   )
 where
 
@@ -164,5 +168,18 @@ type family Drop n xs where
 concatToEither :: [a] -> [b] -> [Either a b]
 concatToEither as bs = fmap Left as ++ fmap Right bs
 
--- partitionPrisms :: [Optic is A_Prism s t a b] ->
--- unzipEither :: [Either a b] -> ([a], b)
+maybeToLeft :: b -> Maybe a -> Either a b
+maybeToLeft _ (Just a) = Left a
+maybeToLeft b Nothing = Right b
+
+maybeToRight :: a -> Maybe b -> Either a b
+maybeToRight _ (Just b) = Right b
+maybeToRight a Nothing = Left a
+
+leftToMaybe :: Either a b -> Maybe a
+leftToMaybe (Left a) = Just a
+leftToMaybe (Right _) = Nothing
+
+rightToMaybe :: Either a b -> Maybe b
+rightToMaybe (Right b) = Just b
+rightToMaybe (Left _) = Nothing

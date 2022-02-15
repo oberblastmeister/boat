@@ -14,6 +14,7 @@ import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
+import Effectful.Reader.Static
 import Effectful.Temporary qualified as Temporary
 import Oat.Common (hPutUtf8, runErrorIO, writeFileUtf8)
 import Oat.Common qualified
@@ -21,6 +22,7 @@ import Oat.Driver qualified as Driver
 import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.LL.Parser qualified as LL.Parser
 import Oat.LL.ParserWrapper qualified as LL.ParserWrapper
+import Oat.Opt qualified as Opt
 import System.Directory qualified as Directory
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
@@ -130,9 +132,10 @@ emitAsm :: FilePath -> IO ()
 emitAsm path =
   runEff $
     Driver.runEffs' $
-      Driver.compileLLFileToAsm
-        ("test_data/ll_compile" </> path)
-        ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
+      runReader Opt.defOpt $
+        Driver.compileLLFileToAsm
+          ("test_data/ll_compile" </> path)
+          ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
 
 showAsm :: FilePath -> IO ()
 showAsm path = do
@@ -153,12 +156,13 @@ runAsm path = do
   let exe = FilePath.takeBaseName path
   let exePath = asmDir </> exe
   runEff $
-    Process.runProcess $ do
-      Driver.runEffs' $
-        Driver.compileAsmPaths
-          [asmDir </> path]
-          exePath
-      Process.callProcess exePath []
+    Process.runProcess $
+      runReader Opt.defOpt $ do
+        Driver.runEffs' $
+          Driver.compileAsmPaths
+            [asmDir </> path]
+            exePath
+        Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]

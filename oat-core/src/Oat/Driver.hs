@@ -15,6 +15,7 @@ import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.FileSystem.IO qualified as FileSystem.IO
 import Effectful.Reader.Static
+import Effectful.Reader.Static.Optics
 import Effectful.Temporary (Temporary)
 import Effectful.Temporary qualified as Temporary
 import Oat.Backend.X86.Codegen qualified as Backend.X86.Codegen
@@ -22,7 +23,7 @@ import Oat.Backend.X86.Pretty qualified as Backend.X86.Pretty
 import Oat.Backend.X86.X86 qualified as Backend.X86
 import Oat.Command (Command)
 import Oat.Command qualified as Command
-import Oat.Common (hPutUtf8, liftEither, readFileUtf8, writeFileUtf8, type (++))
+import Oat.Common (hPutUtf8, liftEither, maybeToLeft, readFileUtf8, whenM, writeFileUtf8, type (++))
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
 import Prettyprinter qualified
@@ -36,6 +37,7 @@ type DriverEffs =
   '[ IOE,
      Reader Opt,
      Error [LL.ParseError],
+     Error (NonEmpty LL.CheckError),
      Error UnicodeException,
      Temporary,
      FileSystem,
@@ -54,8 +56,14 @@ compileLLFileToAsmShow llPath = do
   asmText <- compileLLText contents
   liftIO $ TIO.putStrLn asmText
 
-parseLLText :: (Error [LL.ParseError] :> es) => Text -> Eff es LL.Prog
-parseLLText text = liftEither $ LL.parse text LL.prog
+parseLLText :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es LL.Prog
+parseLLText text = do
+  decls <- liftEither $ LL.parse text LL.prog
+  let declMap = LL.declsToMap decls
+      prog = LL.Prog {decls, declMap}
+  whenM (rview @Opt #checkLL) $ do
+    liftEither $ maybeToLeft () $ LL.checkProg prog
+  pure prog
 
 parseLLFile :: DriverEffs :>> es => FilePath -> Eff es LL.Prog
 parseLLFile path = readFileUtf8 path >>= parseLLText
@@ -75,7 +83,7 @@ compileLLTextToFile llText out = do
     FileSystem.IO.hFlush handle
     compileAsmPaths [asmTemp] out
 
-compileLLText :: '[Error [LL.ParseError]] :>> es => Text -> Eff es Text
+compileLLText :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
   let prog = Backend.X86.instLabToElems $ toList insts
@@ -83,10 +91,10 @@ compileLLText text = do
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
 
-compileLLTextToInsts :: '[Error [LL.ParseError]] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
+compileLLTextToInsts :: '[Reader Opt, Error [LL.ParseError], Error (NonEmpty LL.CheckError)] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
-  insts <- parseLLText text
-  LL.runNameSource $ Backend.X86.Codegen.compileProg insts
+  prog <- parseLLText text
+  LL.runNameSource $ Backend.X86.Codegen.compileProg prog
 
 -- compile and links all asm paths with the runtime
 compileAsmPaths :: DriverEffs :>> es => [FilePath] -> FilePath -> Eff es ()
@@ -126,6 +134,7 @@ runtimeTemplate programName =
 type DriverEffsRun :: [Effect]
 type DriverEffsRun =
   '[ Error [LL.ParseError],
+     Error (NonEmpty LL.CheckError),
      Error UnicodeException,
      Temporary,
      FileSystem,
@@ -140,10 +149,12 @@ runEffs m = do
     res <- OnLeft show res
     res <- OnLeft show res
     res <- OnLeft show res
+    res <- OnLeft show res
     return res
   where
     run =
       runErrorNoCallStack @[LL.ParseError]
+        >>> runErrorNoCallStack @(NonEmpty LL.CheckError)
         >>> runErrorNoCallStack @UnicodeException
         >>> Temporary.runTemporary
         >>> FileSystem.runFileSystem

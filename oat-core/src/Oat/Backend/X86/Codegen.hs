@@ -20,7 +20,7 @@ import Oat.LL qualified as LL
 import Prelude
 
 compileProg :: '[Source LL.Name] :>> es => LL.Prog -> Eff es (Seq InstLab)
-compileProg = compileDeclMap . LL.progToDeclMap
+compileProg LL.Prog {declMap}= compileDeclMap declMap
 
 compileDeclMap :: '[Source LL.Name] :>> es => LL.DeclMap -> Eff es (Seq InstLab)
 compileDeclMap declMap = runReader declMap $ do

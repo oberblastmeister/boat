@@ -3,7 +3,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.LL.AST
-  ( Ty (..),
+  ( Prog (..),
+    Ty (..),
     FunTy (..),
     lookupTy,
     plateTy,
@@ -20,6 +21,7 @@ module Oat.LL.AST
     CallInst (..),
     BitcastInst (..),
     GepInst (..),
+    SelectInst (..),
     RetTerm (..),
     CbrTerm (..),
     Block (..),
@@ -31,8 +33,7 @@ module Oat.LL.AST
     GlobalDecl (..),
     Decl (..),
     DeclMap (..),
-    Prog,
-    progToDeclMap,
+    declsToMap,
     instName,
     bodyBlocks,
     bodyInsts,
@@ -53,7 +54,11 @@ import Oat.Common (internalError, unwrap)
 import Oat.LL.Name (Name)
 import Optics as O
 
-type Prog = [Decl]
+data Prog = Prog
+  { decls :: [Decl],
+    declMap :: DeclMap
+  }
+  deriving (Show, Eq)
 
 data DeclMap = DeclMap
   { tyDecls :: !(MapList Name Ty),
@@ -172,6 +177,7 @@ data Inst where
   Call :: CallInst -> Inst
   Bitcast :: BitcastInst -> Inst
   Gep :: GepInst -> Inst
+  Select :: SelectInst -> Inst
   deriving (Show, Eq)
 
 data Term where
@@ -265,6 +271,16 @@ data CbrTerm = CbrTerm
   }
   deriving (Show, Eq)
 
+data SelectInst = SelectInst
+  { cond :: Operand,
+    ty1 :: Ty,
+    arg1 :: Operand,
+    ty2 :: Ty,
+    arg2 :: Operand
+  }
+  deriving (Show, Eq)
+
+$(makeFieldLabelsNoPrefix ''Prog)
 $(makeFieldLabelsNoPrefix ''LoadInst)
 $(makeFieldLabelsNoPrefix ''AllocaInst)
 $(makeFieldLabelsNoPrefix ''BinOpInst)
@@ -273,6 +289,7 @@ $(makeFieldLabelsNoPrefix ''IcmpInst)
 $(makeFieldLabelsNoPrefix ''CallInst)
 $(makeFieldLabelsNoPrefix ''BitcastInst)
 $(makeFieldLabelsNoPrefix ''GepInst)
+$(makePrismLabels ''SelectInst)
 $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
 $(makeFieldLabelsNoPrefix ''FunBody)
@@ -285,8 +302,8 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''Inst)
 
-progToDeclMap :: [Decl] -> DeclMap
-progToDeclMap =
+declsToMap :: [Decl] -> DeclMap
+declsToMap =
   foldl'
     ( \declMap -> \case
         DeclTy name ty -> declMap & #tyDecls %~ MapList.insert name ty
@@ -350,6 +367,10 @@ instOperands = traversalVL go
         arg <- f arg
         args <- traverse f args
         pure $ Gep inst {arg, args}
+      Select inst@SelectInst {arg1, arg2} -> do
+        arg1 <- f arg1
+        arg2 <- f arg2
+        pure $ Select inst {arg1, arg2}
 
 termOperands :: Traversal' Term Operand
 termOperands = traversalVL go
