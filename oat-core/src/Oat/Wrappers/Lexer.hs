@@ -57,8 +57,8 @@ makeLexer name defUserState = do
       labelOptic = lensVL $ \f (AlexEnv text span) -> fmap (`AlexEnv` span) (f text)
 
     alexMove :: Pos -> Char -> Pos
-    alexMove (Pos line _) '\n' = Pos (line + 1) 1
-    alexMove (Pos line col) _ = Pos line (col + 1)
+    alexMove (Pos line _ pos) '\n' = Pos (line + 1) 1 (pos + 1)
+    alexMove (Pos line col pos) _ = Pos line (col + 1) (pos + 1)
 
     runAlex :: Text -> Alex a -> a
     runAlex text alex =
@@ -68,7 +68,7 @@ makeLexer name defUserState = do
         & runIdentity
 
     alexDefaultPos :: Pos
-    alexDefaultPos = Pos 1 1
+    alexDefaultPos = Pos 1 1 1
 
     defaultAlexState :: Text -> AlexState
     defaultAlexState stateText =

@@ -39,8 +39,8 @@ data Optimization
 
 $(makeFieldLabelsNoPrefix ''Opt)
 
-opt :: IOE :> es => Eff es Opt
-opt = liftIO $ customExecParser optPrefs parseOpt
+opt :: IO Opt
+opt = customExecParser optPrefs parseOpt
 
 optPrefs :: ParserPrefs
 optPrefs =

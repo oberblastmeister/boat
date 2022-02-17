@@ -5,7 +5,7 @@ module Oat.Reporter
     report,
     runReporterCallback,
     runReporterPure,
-    runReporterPureList,
+    runReporterList,
   )
 where
 
@@ -20,8 +20,8 @@ report :: forall w es. Reporter w :> es => w -> Eff es ()
 report = send . Report
 
 -- runReporterPure specialized to a list so that we don't get O(n^2) complexity
-runReporterPureList :: forall a es b. Eff (Reporter [a] ': es) b -> Eff es (b, [a])
-runReporterPureList m = do
+runReporterList :: forall a es b. Eff (Reporter [a] ': es) b -> Eff es (b, [a])
+runReporterList m = do
   (b, Dual as) <-
     reinterpret
       (runWriter @(Dual [a]))

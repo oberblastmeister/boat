@@ -9,17 +9,20 @@ where
 
 import Data.HashSet qualified as HashSet
 import Data.MapList qualified as MapList
+import Effectful.Error.Static
 import Effectful.Reader.Static
 import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Common (unwrap, type (++))
+import Oat.Common (unwrap, whenM, type (++))
+import Oat.Error (CompileFail, compileFail)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter
 
 data CheckState = CheckState
-  { tempToTy :: HashMap LL.Name LL.Ty
+  { tempToTy :: !LL.TyMap,
+    didFail :: !Bool
   }
 
 data CheckError
@@ -45,10 +48,12 @@ type CheckEffs =
 
 -- type Reporter [CheckError] = Writer (Dual [CheckError])
 
-checkProg :: '[Reporter [CheckError]] :>> es => LL.Prog -> Eff es ()
+checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
 checkProg prog = runCheck (prog ^. #declMap) $ do
   checkDeclMap $ prog ^. #declMap
   checkDecls $ prog ^. #decls
+  -- TODO:  somehow fix this
+  -- whenM (use @CheckState #didFail) compileFail
 
 checkDecls :: StateCheckEffs :>> es => [LL.Decl] -> Eff es ()
 checkDecls = traverse_ checkDecl
@@ -102,8 +107,10 @@ checkOperand (LL.Const _) LL.I8 = pure ()
 checkOperand (LL.Const _) LL.I64 = pure ()
 checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
 checkOperand arg@(LL.Gid name) ty = do
-  ty' <- rview @LL.DeclMap $ #globalDecls % #map % at name % unwrap (error "impossible") % #ty
-  tyAssert (Just "gid") (Just arg) [ty'] ty
+  rview @LL.DeclMap (#globalDecls % #map % at name)
+    >>= \case
+      Just globalDecl -> tyAssert (Just "gid") (Just arg) [globalDecl ^. #ty] ty
+      Nothing -> pure ()
 checkOperand (LL.Nested _) _ = error "There must not be any nested when checking ll"
 checkOperand arg@(LL.Temp name) ty =
   rview @LL.TyMap (at name) >>= \case
@@ -161,7 +168,7 @@ tyAssert mess arg expectedTys actualTy =
     report [MismatchedTy mess arg expectedTys actualTy]
 
 defCheckState :: CheckState
-defCheckState = CheckState {tempToTy = mempty}
+defCheckState = CheckState {tempToTy = mempty, didFail = False}
 
 type StateCheckEffsRun =
   '[ State CheckState,

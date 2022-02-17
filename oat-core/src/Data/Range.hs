@@ -14,6 +14,8 @@ module Data.Range
     withRange,
     setStart,
     setEnd,
+    intersect,
+    cover,
   )
 where
 
@@ -23,8 +25,8 @@ import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Unboxed (Unbox)
 import Data.Vector.Unboxed qualified as VU
 import Data.Vector.Unboxed.Mutable qualified as VUM
-import Prelude hiding (contains, length, empty)
 import Oat.TH (addUnderscoreLenses, getterFieldLabels)
+import Prelude hiding (contains, empty, length)
 
 data Range = Range
   { start :: !Int,
@@ -129,3 +131,24 @@ setEnd end' range = range'
   where
     !_ = validateRange "setEnd" range'
     range' = range {end = end'}
+
+intersect :: Range -> Range -> Maybe Range
+intersect range range' =
+  if end < start
+    then Nothing
+    else Just Range {start, end}
+  where
+    start = max (range ^. #start) (range' ^. #start)
+    end = min (range ^. #end) (range' ^. #end)
+
+cover :: Range -> Range -> Range
+cover range range' =
+  Range
+    { start = min (range ^. #start) (range ^. #start),
+      end = max (range' ^. #end) (range' ^. #end)
+    }
+
+-- combine :: Range -> Range -> Maybe Range
+-- combine range1@Range {start, end} range2@Range {start = start', end = end'} =
+--   if
+--       | range1 `contains` range2 -> Range {}

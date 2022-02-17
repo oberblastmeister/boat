@@ -4,34 +4,35 @@
 module DataSpec where
 
 import Conduit (runConduit, runConduitRes, (.|))
-import Control.Exception.Safe qualified as Exception
 import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.Conduit.Combinators qualified as C
-import Data.Foldable (traverse_)
 import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
 import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
+import Effectful.Error.Static (runErrorNoCallStack)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
-import Effectful.Reader.Static
 import Effectful.Temporary qualified as Temporary
 import Oat.Common (hPutUtf8, runErrorIO, writeFileUtf8)
 import Oat.Common qualified
 import Oat.Driver qualified as Driver
+import Oat.Error (CompileFail)
+import Oat.LL qualified as LL
 import Oat.LL.Lexer qualified as LL.Lexer
-import Oat.LL.Parser qualified as LL.Parser
-import Oat.LL.ParserWrapper qualified as LL.ParserWrapper
+import Oat.Main qualified as Main
 import Oat.Opt qualified as Opt
-import System.Directory qualified as Directory
+import Oat.Reporter qualified as Reporter
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
-import System.IO qualified as IO
 import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
 import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Core.Spec qualified as Spec
 import Text.Pretty.Simple (pShowNoColor)
+import UnliftIO.Directory qualified as Directory
+import UnliftIO.Exception qualified as Exception
+import UnliftIO.IO qualified as IO
 
 data Config = Config
   { update :: Bool,
@@ -86,10 +87,14 @@ llParserSpec config = do
   makeSnapshotSpec
     config
     ( \text -> do
-        let res = LL.ParserWrapper.parse text LL.Parser.prog
+        let (res, parseErrors) =
+              runPureEff $
+                Reporter.runReporterList @LL.ParseError $
+                  runErrorNoCallStack @CompileFail $
+                    LL.parse text LL.prog
         case res of
-          Left es -> Exception.throwString $ LText.unpack $ pShowNoColor es
-          Right prog -> pure $ LText.toStrict $ pShowNoColor prog
+          Left _ -> Exception.throwString $ LText.unpack $ pShowNoColor parseErrors
+          Right res -> pure $ LText.toStrict $ pShowNoColor res
     )
     "ll_parser/ok"
 
@@ -103,9 +108,8 @@ clean = do
     C.sourceDirectoryDeep False "test_data"
       .| C.iterM
         ( \path ->
-            liftIO $
-              when (FilePath.takeExtension path == ".s") $
-                Directory.removeFile path
+            when (FilePath.takeExtension path == ".s") $
+              Directory.removeFile path
         )
       .| C.filter (\path -> FilePath.takeExtension path == ".expect")
       .| C.mapM_
@@ -113,10 +117,10 @@ clean = do
             anyExist <-
               runConduit $
                 C.yieldMany ((expectPath -<.>) <$> possibleExtensions)
-                  .| C.mapM (liftIO . Directory.doesFileExist)
+                  .| C.mapM Directory.doesFileExist
                   .| C.any id
             unless anyExist $ do
-              liftIO $ Directory.removeFile expectPath
+              Directory.removeFile expectPath
         )
 
 runLL :: FilePath -> IO ()
@@ -130,13 +134,13 @@ possibleExtensions = [".ll", ".oat"]
 
 emitAsm :: FilePath -> IO ()
 emitAsm path =
-  undefined
-  -- runEff $
-  --   Opt.defOpt $
-  --     Driver.runEffs' $
-  --       Driver.compileLLFileToAsm
-  --         ("test_data/ll_compile" </> path)
-  --         ("test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s")
+  Main.mainWithOpt $
+    Opt.defOpt
+      { Opt.emitAsm = True,
+        Opt.checkLL = True,
+        Opt.files = ["test_data/ll_compile" </> path],
+        Opt.output = Just $ "test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s"
+      }
 
 showAsm :: FilePath -> IO ()
 showAsm path = do
@@ -153,18 +157,10 @@ openAsm path = do
 
 runAsm :: FilePath -> IO ()
 runAsm path = do
-  let asmDir = "test_data/asm_compile"
-  let exe = FilePath.takeBaseName path
-  let exePath = asmDir </> exe
-  runEff $
-    Process.runProcess $
-      runReader Opt.defOpt $ do
-        undefined
-        -- Driver.runEffs' $
-        --   Driver.compileAsmPaths
-        --     [asmDir </> path]
-        --     exePath
-        -- Process.callProcess exePath []
+  asmDir <- Directory.makeAbsolute "test_data/asm_compile"
+  let exePath = asmDir </> FilePath.takeBaseName path
+  Main.runDriverMain Opt.defOpt $ Driver.compileAsmPaths [asmDir </> path] exePath
+  runEff $ Process.runProcess $ Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]
@@ -228,8 +224,8 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec exampl
                     Temporary.runTemporary $
                       Temporary.withSystemTempFile "snap" $ \temp handle -> do
                         hPutUtf8 handle convertContents
-                        liftIO $ IO.hFlush handle
-                        liftIO $ gitDiff expectPath temp
+                        IO.hFlush handle
+                        gitDiff expectPath temp
                   pure
                     Spec.Result
                       { resultInfo = "The files did not match!",
@@ -257,18 +253,19 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec exampl
                     resultStatus = Spec.Failure Nothing Spec.NoReason
                   }
 
-gitDiff :: FilePath -> FilePath -> IO ()
+gitDiff :: MonadIO m => FilePath -> FilePath -> m ()
 gitDiff file file' = do
-  runEff $
-    Process.runProcess $
-      Process.callProcess
-        "git"
-        [ "diff",
-          "--no-index",
-          "--color=always",
-          file,
-          file'
-        ]
+  liftIO $
+    runEff $
+      Process.runProcess $
+        Process.callProcess
+          "git"
+          [ "diff",
+            "--no-index",
+            "--color=always",
+            file,
+            file'
+          ]
 
 stripLastNewline :: Text -> Text
 stripLastNewline (t :> '\n') = t

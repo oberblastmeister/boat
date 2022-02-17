@@ -5,10 +5,10 @@ module Data.Span
   ( Span (SpanP, SpanP'),
     new,
     unsafeNew,
-    new',
+    -- new',
     contains,
     empty,
-    empty',
+    -- empty',
   )
 where
 
@@ -33,14 +33,14 @@ new start@Pos {line, col} end@Pos {line = line', col = col'} =
       !_ = line /= line' || col > col' && error "Data.Span.new: start col must be less than end col when line is the same"
    in Span {start, end}
 
-new' :: Int -> Int -> Int -> Int -> Span
-new' line col line' col' = new (Pos line col) (Pos line' col')
+-- new' :: Int -> Int -> Int -> Int -> Span
+-- new' line col pos line' col'  pos = new (Pos line col pos) (Pos line' col' pos)
 
 empty :: Pos -> Span
 empty pos = Span {start = pos, end = pos}
 
-empty' :: Int -> Int -> Span
-empty' line = empty . Pos line
+-- empty' :: Int -> Int -> Span
+-- empty' line = empty . Pos line
 
 pattern SpanP :: Pos -> Pos -> Span
 pattern SpanP start end <-

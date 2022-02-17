@@ -96,9 +96,12 @@ common common-options
     hashable >= 1.2 && <1.4,
     bytestring ^>= 0.10.10.0,
     filepath ^>= 1.4.2.1,
+    directory ^>= 1.3.6.2,
     -- needed for alex
     array ^>= 0.5.4.0,
     vector ^>= 0.12.3.1,
+    vector-algorithms ^>= 0.8.0.4,
+    primitive ^>= 0.7.3.0,
     foldl ^>= 1.4.12,
     split ^>= 0.2.3.4,
     conduit ^>= 1.3.4.2,
@@ -108,11 +111,10 @@ common common-options
     pretty-simple ^>= 4.0.0.0,
     typed-process ^>= 0.2.8.0,
     optparse-applicative ^>= 0.16.1.0,
-    safe-exceptions ^>= 0.1.7.2,
     parallel ^>= 3.2.2.0,
     named ^>= 0.3.0.1,
-    directory ^>= 1.3.6.2,
     file-embed ^>= 0.0.15.0,
+    unliftio ^>= 0.2.21.0,
   build-tool-depends:
     hspec-discover:hspec-discover,
     alex:alex,
@@ -139,6 +141,7 @@ library
     Oat
     Oat.Driver
     Oat.Reporter
+    Oat.RunReporter
     Oat.Error
     Oat.PrettyUtil
     Oat.TH

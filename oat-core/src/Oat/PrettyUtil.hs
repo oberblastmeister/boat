@@ -1,9 +1,12 @@
 module Oat.PrettyUtil
-  ( ann,
-    Ann(..),
+  ( Ann (..),
     reAnnotateAnsi,
     putDoc,
-  )
+    pInfo,
+    pWarning,
+    pError,
+    (<#>),
+  pIf)
 where
 
 import Prettyprinter (Doc)
@@ -17,9 +20,6 @@ import Prettyprinter.Render.Terminal
 import Prettyprinter.Render.Terminal qualified as Pretty.Render.Terminal
 import System.IO qualified as IO
 
-ann :: ann -> Doc ann -> Doc ann
-ann = Pretty.annotate
-
 data Ann
   = Error
   | Warning
@@ -28,10 +28,29 @@ data Ann
 reAnnotateAnsi :: Ann -> AnsiStyle
 reAnnotateAnsi Error = color Red <> bold
 reAnnotateAnsi Warning = color Yellow <> bold
-reAnnotateAnsi Info = color Blue <> bold
+reAnnotateAnsi Info = color Cyan <> bold
+
+pIf :: Bool -> Doc ann -> Doc ann
+pIf cond doc
+  | cond = doc
+  | otherwise = mempty
 
 putDoc :: IOE :> es => Doc Ann -> Eff es ()
 putDoc doc = liftIO $ Pretty.Render.Terminal.renderIO IO.stdout docStream'
   where
     docStream' = Pretty.reAnnotateS reAnnotateAnsi docStream
     docStream = Pretty.layoutPretty Pretty.defaultLayoutOptions doc
+
+pError :: Doc Ann
+pError = Error <#> "error"
+
+pWarning :: Doc Ann
+pWarning = Warning <#> "warning"
+
+pInfo :: Doc Ann
+pInfo = Info <#> "info"
+
+(<#>) :: Ann -> Doc Ann -> Doc Ann
+ann <#> doc = Pretty.annotate ann doc
+
+infixr 9 <#>

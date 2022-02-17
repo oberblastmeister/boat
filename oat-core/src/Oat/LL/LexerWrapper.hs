@@ -62,8 +62,6 @@ stringKind f = do
 bytesKind :: (ByteString -> Kind) -> AlexAction Lexeme
 bytesKind f = do
   text <- gview #text
-  -- let !_ = trace "text" ()
-  -- let !_ = trace (show text) ()
   pure $ Right $ Token $ f $ Text.Encoding.encodeUtf8 text
 
 alexEOF :: Token

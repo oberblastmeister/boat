@@ -1,14 +1,11 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-{-# HLINT ignore "Redundant return" #-}
+{-# HLINT ignore "Redundant multi-way if" #-}
 
 module Oat.Driver where
 
-import Control.Exception.Safe qualified as Exception
-import Control.OnLeft (OnLeft (OnLeft))
-import Control.OnLeft qualified as OnLeft
 import Data.FileEmbed qualified as FileEmbed
 import Data.Text qualified as T
 import Data.Text.Encoding.Error (UnicodeException)
@@ -30,13 +27,14 @@ import Oat.Common (hPutUtf8, readFileUtf8, whenM, writeFileUtf8, type (++))
 import Oat.Error (CompileFail, reportFail)
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
-import Oat.PrettyUtil (Ann (..), ann)
 import Oat.Reporter
-import Prettyprinter (Doc, Pretty (pretty), (<+>))
 import Prettyprinter qualified
-import Prettyprinter qualified as Pretty
 import Prettyprinter.Render.Text qualified as Prettyprinter
-import System.IO qualified as IO
+import System.FilePath ((-<.>))
+import System.FilePath qualified as FilePath
+import System.IO qualified
+import UnliftIO.Exception qualified as Exception
+import UnliftIO.IO qualified as IO
 
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
@@ -52,6 +50,22 @@ type DriverEffs =
      FileSystem,
      Command
    ]
+
+drive :: DriverEffs :>> es => Eff es ()
+drive = do
+  opt <- ask @Opt
+  file <- case opt ^. #files of
+    [p] -> pure p
+    _ -> Exception.throwString "Only compiling one file is supported for now"
+  if
+      | opt ^. #emitAsm ->
+        compileLLFileToAsm file $
+          fromMaybe
+            (FilePath.takeFileName file -<.> ".s")
+            (opt ^. #output)
+      | otherwise ->
+        compileLLFile file $
+          fromMaybe "a.out" (opt ^. #output)
 
 compileLLFileToAsm :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
 compileLLFileToAsm llPath asmPath = do
@@ -87,7 +101,7 @@ compileLLTextToFile llText out = do
   asmText <- compileLLText llText
   Temporary.withSystemTempFile "oat.s" $ \asmTemp handle -> do
     FileSystem.IO.hSetBuffering handle IO.NoBuffering
-    liftIO $ IO.hSetEncoding handle IO.utf8
+    liftIO $ System.IO.hSetEncoding handle System.IO.utf8
     hPutUtf8 handle asmText
     FileSystem.IO.hFlush handle
     compileAsmPaths [asmTemp] out
@@ -119,7 +133,7 @@ linkRuntime :: DriverEffs :>> es => [FilePath] -> FilePath -> Eff es ()
 linkRuntime mods out = do
   Temporary.withSystemTempFile "oat.c" $ \runtimeTemp runtimeHandle -> do
     FileSystem.IO.hSetBuffering runtimeHandle IO.NoBuffering
-    liftIO $ IO.hSetEncoding runtimeHandle IO.utf8
+    liftIO $ System.IO.hSetEncoding runtimeHandle System.IO.utf8
     hPutUtf8 runtimeHandle $ runtimeTemplate "program"
     Command.link (runtimeTemp : mods) out
   permissions <- FileSystem.getPermissions out
@@ -153,9 +167,15 @@ data DriverError
   = DriverUnicodeException UnicodeException
   | DriverIOError Exception.IOException
   | DriverCommandError Command.CommandError
+  deriving (Show, Eq)
 
-runEffs :: '[IOE, Reporter [DriverError], Error CompileFail, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es a
-runEffs m = do
+runDriver ::
+  ( es' ~ DriverEffsRun ++ es,
+    '[IOE, Reporter [DriverError], Error CompileFail, Reader Opt] :>> es
+  ) =>
+  Eff es' a ->
+  Eff es a
+runDriver m = do
   let run =
         runErrorNoCallStack @UnicodeException
           >>> Temporary.runTemporary
@@ -168,20 +188,3 @@ runEffs m = do
     Right res -> case res of
       Left ex -> reportFail [DriverUnicodeException ex]
       Right res -> pure res
-
--- runEffs' :: '[IOE, Reader Opt] :>> es => Eff (DriverEffsRun ++ es) a -> Eff es a
--- runEffs' m =
---   runEffs m >>= \case
---     Left e -> undefined
---     Right a -> pure a
-
-type DriverErrors =
-  '[ [LL.ParseError],
-     NonEmpty LL.CheckError,
-     UnicodeException,
-     Command.CommandError
-   ]
-
-data HList ts where
-  HNil :: HList '[]
-  (:::) :: t -> HList ts -> HList (t ': ts)

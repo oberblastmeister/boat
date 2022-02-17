@@ -9,7 +9,7 @@ module Oat.Command
   )
 where
 
-import Control.Exception.Safe qualified as Exception
+import UnliftIO.Exception qualified as Exception
 import Effectful.Error.Static
 import Effectful.Process qualified as Process
 
@@ -34,7 +34,7 @@ link :: Command :> es => [FilePath] -> FilePath -> Eff es ()
 link mods out = send Link {mods, out}
 
 data CommandError = CommandError Exception.IOException
-  deriving (Show)
+  deriving (Show, Eq)
 
 runCommandClangIO :: ('[IOE, Error CommandError] :>> es) => Eff (Command ': es) a -> Eff es a
 runCommandClangIO = interpret $ \_ -> \case

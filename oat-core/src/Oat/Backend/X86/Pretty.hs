@@ -66,11 +66,6 @@ prettyByteReg = \case
   R15 -> "%r15b"
   Rip -> error "%rip does not have a byte register"
 
-pIf :: Bool -> Doc ann -> Doc ann
-pIf cond doc
-  | cond = doc
-  | otherwise = mempty
-
 prettyLab :: ByteString -> Doc ann
 prettyLab =
   pretty @Text

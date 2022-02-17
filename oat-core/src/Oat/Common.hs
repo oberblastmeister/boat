@@ -31,17 +31,26 @@ module Oat.Common
     maybeToLeft,
     rightToMaybe,
     leftToMaybe,
+    mVecFromList,
+    _neHead,
+    onOf,
+    timSortListBy,
+    timSortNEBy,
   )
 where
 
-import Control.Exception.Safe qualified as Exception
+import Control.Monad.Primitive (PrimMonad, PrimState)
 import Control.Parallel.Strategies qualified as Parallel
 import Data.ByteString qualified as ByteString
 import Data.HashSet qualified as HashSet
 import Data.IntMap qualified as IntMap
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Range (Range (RangeP))
 import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.Encoding.Error (UnicodeException)
+import Data.Vector qualified as VB
+import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
+import Data.Vector.Mutable qualified as VBM
 import Effectful.Error.Static (Error, runError, throwError)
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
@@ -49,6 +58,7 @@ import GHC.TypeLits (ErrorMessage (Text), Nat, TypeError, type (-))
 import System.FilePath ((</>))
 import System.FilePath qualified as FilePath
 import System.IO qualified as IO
+import UnliftIO.Exception qualified as Exception
 import Prelude hiding (Map)
 
 internalError :: forall a. HasCallStack => Text -> a
@@ -90,11 +100,11 @@ instance Exception.Exception ShowableException
 instance Show ShowableException where
   show (ShowableException e) = show e
 
-runErrorIO :: forall e es a. (Show e) => Eff (Error e ': es) a -> Eff es a
+runErrorIO :: forall e es a. (IOE :> es, Show e) => Eff (Error e ': es) a -> Eff es a
 runErrorIO m = do
   res <- runError m
   case res of
-    Left e -> Exception.throw $ ShowableException e
+    Left e -> Exception.throwIO $ ShowableException e
     Right a -> pure a
 
 liftEither :: (Error e :> es) => Either e a -> Eff es a
@@ -183,3 +193,25 @@ leftToMaybe (Right _) = Nothing
 rightToMaybe :: Either a b -> Maybe b
 rightToMaybe (Right b) = Just b
 rightToMaybe (Left _) = Nothing
+
+-- this is save because the created vector will never be used
+mVecFromList :: PrimMonad m => [a] -> m (VBM.MVector (PrimState m) a)
+mVecFromList = VB.unsafeThaw . VB.fromList
+
+_neHead :: Lens' (NonEmpty a) a
+_neHead = lens NonEmpty.head (\(_ :| as) a -> a :| as)
+
+onOf :: Is k A_Getter => (a -> a -> c) -> Optic' k is s a -> (s -> s -> c)
+onOf f o = f `on` (^. o)
+
+timSortListBy :: (a -> a -> Ordering) -> [a] -> [a]
+timSortListBy cmp as = VB.toList $
+  VB.create $ do
+    mv <- mVecFromList as
+    Vector.Algorithms.Tim.sortBy cmp mv
+    pure mv
+
+timSortNEBy :: (a -> a -> Ordering) -> NonEmpty a -> NonEmpty a
+timSortNEBy cmp = NonEmpty.fromList . timSortListBy cmp . NonEmpty.toList
+
+infixl 0 `onOf`
