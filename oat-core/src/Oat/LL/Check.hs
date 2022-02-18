@@ -19,7 +19,6 @@ import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter
 import Oat.Utils.Families (type (++))
-import Oat.Utils.Monad (whenJustM)
 
 data CheckState = CheckState
   { tempToTy :: !LL.TyMap,
@@ -117,20 +116,14 @@ checkOperand (LL.Const _) LL.I64 = pure ()
 checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
 checkOperand arg@(LL.Gid name) ty = do
   declMap <- ask @LL.DeclMap
-  -- TODO: check if this is correct
-  case declMap ^? #globalDecls % #map % ix name % #ty of
-    Nothing -> case declMap ^? #funDecls % #map % ix name % #funTy of
-      Nothing ->
-        use @LL.TyMap (at name)
-          >>= ( \case
-                  Nothing -> assign @LL.TyMap (at name) (Just ty)
-                  Just ty' -> tyAssert (Just "saved") (Just arg) [ty'] ty
-              )
-      Just funTy -> tyAssert (Just "fun decl") (Just arg) [LL.TyFun funTy] ty
-    Just globalTy -> tyAssert (Just "gid") (Just arg) [globalTy] ty
-
-  -- whenJustM (rview @LL.DeclMap $ #globalDecls % #map % at name) $
-  --   \globalDecl -> tyAssert (Just "gid") (Just arg) [globalDecl ^. #ty] ty
+  case headOf (LL.declMapTyAt name) declMap of
+    Nothing ->
+      use @LL.TyMap (at name)
+        >>= ( \case
+                Nothing -> assign @LL.TyMap (at name) (Just ty)
+                Just ty' -> tyAssert (Just "saved type") (Just arg) [ty'] ty
+            )
+    Just ty' -> tyAssert (Just "global decls") (Just arg) [ty'] ty
 checkOperand (LL.Nested _) _ = error "There must not be any nested when checking ll"
 checkOperand arg@(LL.Temp name) ty =
   rview @LL.TyMap (at name) >>= \case

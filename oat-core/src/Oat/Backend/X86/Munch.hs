@@ -183,8 +183,10 @@ munchIcmp LL.IcmpInst {name, op, arg1, arg2} = do
   emitMov arg1 (Asm.Reg Rax)
   emitInsts
     [ X86.Cmpq :@ [arg2, Asm.Reg Rax],
-      mapCmpOp op :@ [Asm.Temp name]
-      -- TODO: we need to do a movzbq for this to be correct I think
+      -- set only works on byte registers for now
+      mapCmpOp op :@ [Asm.Temp name],
+      -- only keep the lower order byte because set only sets the byte register
+      X86.Andq :@ [Asm.Imm $ X86.Lit 1, Asm.Temp name]
     ]
 
 munchBinOp :: BackendEffs :>> es => LL.BinOpInst -> Eff es ()

@@ -175,7 +175,6 @@ data Cond
 
 data OpCode
   = Movq
-  | Movzbq -- TODO: fix compilation fox this
   | Pushq
   | Popq
   | Leaq

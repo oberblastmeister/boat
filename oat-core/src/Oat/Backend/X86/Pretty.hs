@@ -94,7 +94,6 @@ prettyCond = \case
 prettyOpCode :: OpCode -> Doc ann
 prettyOpCode = \case
   Movq -> "movq"
-  Movzbq -> "movzbq"
   Pushq -> "pushq"
   Popq -> "popq"
   Leaq -> "leaq"
