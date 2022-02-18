@@ -8,12 +8,13 @@ import Data.Range (Range)
 import Data.Range qualified as Range
 import Data.Span (Span)
 import Data.Vector qualified as VB
-import Oat.Common (onOf, timSortNEBy)
+import Oat.Common (timSortNEBy)
 import Oat.Error (ErrorCode)
 import Oat.PrettyUtil (Ann)
+import Oat.Utils.Optics (onOf)
 import Prettyprinter (Doc)
 
-data DiagnosticLevel
+data DiagnosticSeverity
   = DiagnosticError
   | DaignosticWarning
   | DiagnosticInfo
@@ -30,12 +31,17 @@ data Label = Label
     lineRange :: LineRange
   }
 
+data Note = Note
+  { doc :: forall ann. Doc ann
+  }
+
 data Diagnostic = Diagnostic
   { msg :: forall ann. Doc ann,
     code :: !ErrorCode,
-    level :: !DiagnosticLevel,
-    labels :: [Label],
-    span :: !Span
+    level :: !DiagnosticSeverity,
+    notes :: [Note],
+    span :: !Span,
+    help :: forall ann. Doc ann
   }
 
 type Source = VB.Vector Text

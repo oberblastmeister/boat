@@ -20,7 +20,7 @@ import Oat.LL qualified as LL
 import Prelude
 
 compileProg :: '[Source LL.Name] :>> es => LL.Prog -> Eff es (Seq InstLab)
-compileProg LL.Prog {declMap}= compileDeclMap declMap
+compileProg LL.Prog {declMap} = compileDeclMap declMap
 
 compileDeclMap :: '[Source LL.Name] :>> es => LL.DeclMap -> Eff es (Seq InstLab)
 compileDeclMap declMap = runReader declMap $ do
@@ -79,7 +79,8 @@ prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)
           ]
     subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, Asm.Reg Rsp]]
     addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
-    stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
+    -- stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
+    stackSize = fromIntegral maxCall + Frame.getStackSize frameState
     stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
     maxCall = max 0 (fromMaybe 0 maybeMaxCall - X86.wordSize * length X86.paramRegs)
     -- TODO: do we need this?

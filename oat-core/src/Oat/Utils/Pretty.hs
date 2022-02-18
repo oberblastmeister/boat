@@ -1,4 +1,4 @@
-module Oat.PrettyUtil
+module Oat.Utils.Pretty
   ( Ann (..),
     reAnnotateAnsi,
     putDoc,
@@ -6,7 +6,9 @@ module Oat.PrettyUtil
     pWarning,
     pError,
     (<#>),
-  pIf)
+    pIf,
+    (<++>),
+  )
 where
 
 import Prettyprinter (Doc)
@@ -54,3 +56,8 @@ pInfo = Info <#> "info"
 ann <#> doc = Pretty.annotate ann doc
 
 infixr 9 <#>
+
+(<++>) :: Doc ann -> Doc ann -> Doc ann
+doc <++> doc' = doc <> Pretty.line <> doc'
+
+infixr 6 <++>

@@ -14,11 +14,12 @@ import Effectful.Reader.Static
 import Effectful.Reader.Static.Optics
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Common (unwrap, whenM, type (++))
-import Oat.Error (CompileFail, compileFail)
+import Oat.Error (CompileFail)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter
+import Oat.Utils.Families (type (++))
+import Oat.Utils.Monad (whenJustM)
 
 data CheckState = CheckState
   { tempToTy :: !LL.TyMap,
@@ -34,44 +35,52 @@ data CheckError
 
 makeFieldLabelsNoPrefix ''CheckState
 
-type StateCheckEffs =
-  '[ Reporter [CheckError],
-     State CheckState,
-     Reader LL.DeclMap
-   ]
-
 type CheckEffs =
   '[ Reporter [CheckError],
      Reader LL.TyMap,
-     Reader LL.DeclMap
+     Reader LL.DeclMap,
+     State LL.TyMap
    ]
 
--- type Reporter [CheckError] = Writer (Dual [CheckError])
-
 checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
-checkProg prog = runCheck (prog ^. #declMap) $ do
+checkProg prog = do
   checkDeclMap $ prog ^. #declMap
-  checkDecls $ prog ^. #decls
-  -- TODO:  somehow fix this
-  -- whenM (use @CheckState #didFail) compileFail
+  evalState @LL.TyMap mempty
+    . runReader @LL.DeclMap (prog ^. #declMap)
+    . checkDecls
+    $ prog ^. #decls
 
-checkDecls :: StateCheckEffs :>> es => [LL.Decl] -> Eff es ()
+-- TODO:  somehow fix this
+-- whenM (use @CheckState #didFail) compileFail
+
+checkDecls :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => [LL.Decl] -> Eff es ()
 checkDecls = traverse_ checkDecl
 
 checkDeclMap :: Reporter [CheckError] :> es => LL.DeclMap -> Eff es ()
 checkDeclMap declMap = do
   let gidUnion =
         (declMap ^. #globalDecls % to MapList.keysSet)
-          `HashSet.union` (declMap ^. #funDecls % to MapList.keysSet)
-          `HashSet.union` (declMap ^. #externDecls % to MapList.keysSet)
+          `HashSet.intersection` (declMap ^. #funDecls % to MapList.keysSet)
+          `HashSet.intersection` (declMap ^. #externDecls % to MapList.keysSet)
   unless (HashSet.null gidUnion) $
     report [InterferingGlobals]
 
-checkDecl :: StateCheckEffs :>> es => LL.Decl -> Eff es ()
-checkDecl (LL.DeclFun _name funDecl) = traverseOf_ (#body % LL.bodyBlocks) checkBlock funDecl
+checkDecl :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => LL.Decl -> Eff es ()
+checkDecl (LL.DeclFun _name funDecl) = evalState @CheckState defCheckState $ do
+  for_ (LL.funDeclTyParams funDecl) $ \(param, arg) ->
+    assign @CheckState (#tempToTy % at param) (Just arg)
+  traverseOf_ (#body % LL.bodyBlocks) checkBlock funDecl
 checkDecl _ = pure ()
 
-checkBlock :: StateCheckEffs :>> es => LL.Block -> Eff es ()
+checkBlock ::
+  '[ Reporter [CheckError],
+     Reader LL.DeclMap,
+     State CheckState,
+     State LL.TyMap
+   ]
+    :>> es =>
+  LL.Block ->
+  Eff es ()
 checkBlock block = do
   forOf_ (#insts % traversed) block $ \inst -> do
     tempToTy <- use @CheckState #tempToTy
@@ -107,10 +116,21 @@ checkOperand (LL.Const _) LL.I8 = pure ()
 checkOperand (LL.Const _) LL.I64 = pure ()
 checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
 checkOperand arg@(LL.Gid name) ty = do
-  rview @LL.DeclMap (#globalDecls % #map % at name)
-    >>= \case
-      Just globalDecl -> tyAssert (Just "gid") (Just arg) [globalDecl ^. #ty] ty
-      Nothing -> pure ()
+  declMap <- ask @LL.DeclMap
+  -- TODO: check if this is correct
+  case declMap ^? #globalDecls % #map % ix name % #ty of
+    Nothing -> case declMap ^? #funDecls % #map % ix name % #funTy of
+      Nothing ->
+        use @LL.TyMap (at name)
+          >>= ( \case
+                  Nothing -> assign @LL.TyMap (at name) (Just ty)
+                  Just ty' -> tyAssert (Just "saved") (Just arg) [ty'] ty
+              )
+      Just funTy -> tyAssert (Just "fun decl") (Just arg) [LL.TyFun funTy] ty
+    Just globalTy -> tyAssert (Just "gid") (Just arg) [globalTy] ty
+
+  -- whenJustM (rview @LL.DeclMap $ #globalDecls % #map % at name) $
+  --   \globalDecl -> tyAssert (Just "gid") (Just arg) [globalDecl ^. #ty] ty
 checkOperand (LL.Nested _) _ = error "There must not be any nested when checking ll"
 checkOperand arg@(LL.Temp name) ty =
   rview @LL.TyMap (at name) >>= \case
@@ -125,7 +145,7 @@ inferBinOp LL.BinOpInst {ty, arg1, arg2} = do
   pure ty
 
 inferAlloca :: LL.AllocaInst -> Eff es LL.Ty
-inferAlloca LL.AllocaInst {ty} = pure ty
+inferAlloca LL.AllocaInst {ty} = pure $ LL.TyPtr ty
 
 inferLoad :: CheckEffs :>> es => LL.LoadInst -> Eff es LL.Ty
 inferLoad LL.LoadInst {ty, arg} = do

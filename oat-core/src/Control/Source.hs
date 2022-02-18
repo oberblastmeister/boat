@@ -7,7 +7,6 @@ module Control.Source
 where
 
 import Data.Infinite (Infinite ((::>)))
-import Effectful.Error.Static
 
 data Source :: Type -> Effect
 

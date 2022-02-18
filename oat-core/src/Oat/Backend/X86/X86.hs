@@ -72,13 +72,25 @@ data Scale
   deriving (Show, Eq)
 
 pattern MemBaseSimple :: Int64 -> Mem
-pattern MemBaseSimple offset = Mem {offset = Just (Lit offset), base = Just (Asm.LReg Rbp), index = Nothing, scale = Nothing}
+pattern MemBaseSimple offset =
+  Mem
+    { offset = Just (Lit offset),
+      base = Just (Asm.LReg Rbp),
+      index = Nothing,
+      scale = Nothing
+    }
 
 pattern MemStackSimple :: Int64 -> Mem
 pattern MemStackSimple offset = MemStack (Just (Lit offset)) Nothing Nothing
 
 pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Scale -> Mem
-pattern MemStack offset index scale = Mem {offset, base = Just (Asm.LReg Rsp), index, scale}
+pattern MemStack offset index scale =
+  Mem
+    { offset,
+      base = Just (Asm.LReg Rsp),
+      index,
+      scale
+    }
 
 pattern MemImm :: Imm -> Mem
 pattern MemImm imm =
@@ -163,7 +175,7 @@ data Cond
 
 data OpCode
   = Movq
-  | Movzbq
+  | Movzbq -- TODO: fix compilation fox this
   | Pushq
   | Popq
   | Leaq

@@ -13,9 +13,10 @@ import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Common (inBetween, parOver)
+import Oat.Common (inBetween)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name (Name)
+import Oat.Utils.Optics (parOver)
 import Optics.Operators.Unsafe ((^?!))
 
 data CombineState = CombineState

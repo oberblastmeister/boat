@@ -139,11 +139,16 @@ library
     Data.Range
     Data.Infinite
     Oat
+    Oat.Utils.Impossible
+    Oat.Utils.Monad
+    Oat.Utils.CallStack
+    Oat.Utils.Optics
+    Oat.Utils.Families
+    Oat.Utils.Pretty
     Oat.Driver
     Oat.Reporter
     Oat.RunReporter
     Oat.Error
-    Oat.PrettyUtil
     Oat.TH
     Oat.Command
     Oat.Main

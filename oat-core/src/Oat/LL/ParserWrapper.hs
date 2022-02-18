@@ -27,6 +27,7 @@ import Oat.LL.Token (Token (..))
 import Oat.Reporter (Reporter)
 import Oat.TH (makeFieldLabelsForOnly)
 import Optics.State.Operators
+import Prelude hiding (exp)
 
 data ParseError
   = LexerError Text
@@ -62,13 +63,13 @@ defaultParseState :: Text -> ParseState
 defaultParseState text = ParseState {errors = [], alexState = defaultAlexState text}
 
 runParser :: ParseState -> Parser a -> (Either [ParseError] a, ParseState)
-runParser state parser = (res & _Left .~ (state'' ^. #errors), state'')
+runParser st parser = (res & _Left .~ (st'' ^. #errors), st'')
   where
-    state'' = state' & #errors %~ (res ^.. _Left ++)
-    (res, state') = parser & unParser & runExceptT & (`runState` state)
+    st'' = st' & #errors %~ (res ^.. _Left ++)
+    (res, st') = parser & unParser & runExceptT & (`runState` st)
 
 evalParser :: ParseState -> Parser a -> Either [ParseError] a
-evalParser state = fst . runParser state
+evalParser st = fst . runParser st
 
 liftAlex :: Alex a -> Parser a
 liftAlex alex = Parser $ zoom #alexState $ lift $ unAlex alex

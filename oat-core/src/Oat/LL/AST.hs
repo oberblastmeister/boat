@@ -43,6 +43,8 @@ module Oat.LL.AST
     doesInsAssign,
     tySize,
     maxCallSize,
+    funDeclTyParams,
+    declMapTyAt,
   )
 where
 
@@ -132,20 +134,6 @@ data FunTy = FunTy
   deriving (Show, Eq)
 
 type TyMap = HashMap Name Ty
-
-lookupTy :: Name -> TyMap -> Ty
-lookupTy name mp = mp ^. at name % unwrap (internalError $ "Could not find name " <> T.pack (show name) <> " in map")
-
--- note, for this to be valid, you must not change the type for TyNamed
--- also, this will panic if the HashMap does not contain the name
-plateTy :: TyMap -> Traversal' Ty Ty
-plateTy mp = traversalVL $ \f -> \case
-  TyPtr ty -> TyPtr <$> f ty
-  TyFun FunTy {args, ret} -> TyFun <$> (FunTy <$> traverse f args <*> f ret)
-  TyNamed name -> f (lookupTy name mp) $> TyNamed name
-  TyArray sz ty -> TyArray sz <$> f ty
-  TyStruct tys -> TyStruct <$> traverse f tys
-  other -> pure other
 
 data BinOp
   = Add
@@ -272,7 +260,8 @@ data CbrTerm = CbrTerm
   deriving (Show, Eq)
 
 data SelectInst = SelectInst
-  { cond :: Operand,
+  { name :: Name,
+    cond :: Operand,
     ty1 :: Ty,
     arg1 :: Operand,
     ty2 :: Ty,
@@ -289,7 +278,7 @@ $(makeFieldLabelsNoPrefix ''IcmpInst)
 $(makeFieldLabelsNoPrefix ''CallInst)
 $(makeFieldLabelsNoPrefix ''BitcastInst)
 $(makeFieldLabelsNoPrefix ''GepInst)
-$(makePrismLabels ''SelectInst)
+$(makeFieldLabelsNoPrefix ''SelectInst)
 $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
 $(makeFieldLabelsNoPrefix ''FunBody)
@@ -319,12 +308,14 @@ instName = atraversalVL go
     go :: AffineTraversalVL' Inst Name
     go point f = \case
       BinOp inst -> BinOp <$> atraverseOf #name point f inst
+      Alloca inst -> Alloca <$> atraverseOf #name point f inst
       Load inst -> Load <$> atraverseOf #name point f inst
+      inst@(Store _) -> point inst
       Icmp inst -> Icmp <$> atraverseOf #name point f inst
       Call inst -> Call <$> atraverseOf (#name % _Just) point f inst
       Bitcast inst -> Bitcast <$> atraverseOf #name point f inst
       Gep inst -> Gep <$> atraverseOf #name point f inst
-      other -> point other
+      Select inst -> Select <$> atraverseOf #name point f inst
 
 bodyBlocks :: Traversal' FunBody Block
 bodyBlocks = traversalVL $ \f body -> do
@@ -425,3 +416,30 @@ maxCallSize tyMap =
       % each
       % _1
       % O.to (tySize tyMap)
+
+lookupTy :: Name -> TyMap -> Ty
+lookupTy name mp = mp ^. at name % unwrap (internalError $ "Could not find name " <> T.pack (show name) <> " in map")
+
+-- note, for this to be valid, you must not change the type for TyNamed
+-- also, this will panic if the HashMap does not contain the name
+plateTy :: TyMap -> Traversal' Ty Ty
+plateTy mp = traversalVL $ \f -> \case
+  TyPtr ty -> TyPtr <$> f ty
+  TyFun FunTy {args, ret} -> TyFun <$> (FunTy <$> traverse f args <*> f ret)
+  TyNamed name -> f (lookupTy name mp) $> TyNamed name
+  TyArray sz ty -> TyArray sz <$> f ty
+  TyStruct tys -> TyStruct <$> traverse f tys
+  other -> pure other
+
+funDeclTyParams :: FunDecl -> [(Name, Ty)]
+funDeclTyParams funDecl = zip (funDecl ^. #params) (funDecl ^. #funTy % #args)
+
+declMapTyAt :: Name -> Fold DeclMap Ty
+declMapTyAt name =
+  #tyDecls % o
+    `failing` #funDecls % o % #funTy % O.to TyFun
+    `failing` #globalDecls % o % #ty
+    `failing` #externDecls % o
+  where
+    o :: AffineFold (MapList Name v) v
+    o = #map % ix name

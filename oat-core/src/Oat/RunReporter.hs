@@ -4,7 +4,7 @@
 module Oat.RunReporter where
 
 import Effectful.State.Static.Local
-import Oat.Common (type (++))
+import Oat.Utils.Families (type (++))
 import Oat.Driver qualified as Driver
 import Oat.LL qualified as LL
 import Oat.Reporter (Reporter (Report))

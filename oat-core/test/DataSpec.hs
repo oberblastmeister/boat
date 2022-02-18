@@ -134,7 +134,7 @@ possibleExtensions = [".ll", ".oat"]
 
 emitAsm :: FilePath -> IO ()
 emitAsm path =
-  Main.mainWithOpt $
+  Main.mainWithOpt_ $
     Opt.defOpt
       { Opt.emitAsm = True,
         Opt.checkLL = True,
@@ -159,7 +159,8 @@ runAsm :: FilePath -> IO ()
 runAsm path = do
   asmDir <- Directory.makeAbsolute "test_data/asm_compile"
   let exePath = asmDir </> FilePath.takeBaseName path
-  Main.runDriverMain Opt.defOpt $ Driver.compileAsmPaths [asmDir </> path] exePath
+  Main.runDriverMain_ Opt.defOpt {Opt.linkTestRuntime = True} $
+    Driver.compileAsmPaths [asmDir </> path] exePath
   runEff $ Process.runProcess $ Process.callProcess exePath []
 
 openLLData :: FilePath -> IO ()

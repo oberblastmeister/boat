@@ -23,11 +23,13 @@ import Oat.Backend.X86.Pretty qualified as Backend.X86.Pretty
 import Oat.Backend.X86.X86 qualified as Backend.X86
 import Oat.Command (Command)
 import Oat.Command qualified as Command
-import Oat.Common (hPutUtf8, readFileUtf8, whenM, writeFileUtf8, type (++))
+import Oat.Common (hPutUtf8, readFileUtf8, writeFileUtf8)
 import Oat.Error (CompileFail, reportFail)
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
 import Oat.Reporter
+import Oat.Utils.Families (type (++))
+import Oat.Utils.Monad (whenM)
 import Prettyprinter qualified
 import Prettyprinter.Render.Text qualified as Prettyprinter
 import System.FilePath ((-<.>))
@@ -35,6 +37,7 @@ import System.FilePath qualified as FilePath
 import System.IO qualified
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
+import Text.Pretty.Simple (pPrint, pShow)
 
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
@@ -58,12 +61,12 @@ drive = do
     [p] -> pure p
     _ -> Exception.throwString "Only compiling one file is supported for now"
   if
-      | opt ^. #emitAsm ->
+      | opt ^. #emitAsm -> do
         compileLLFileToAsm file $
           fromMaybe
             (FilePath.takeFileName file -<.> ".s")
             (opt ^. #output)
-      | otherwise ->
+      | otherwise -> do
         compileLLFile file $
           fromMaybe "a.out" (opt ^. #output)
 
@@ -79,7 +82,15 @@ compileLLFileToAsmShow llPath = do
   asmText <- compileLLText contents
   liftIO $ TIO.putStrLn asmText
 
-parseLLText :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es LL.Prog
+parseLLText ::
+  '[ Reader Opt,
+     Reporter [LL.ParseError],
+     Reporter [LL.CheckError],
+     Error CompileFail
+   ]
+    :>> es =>
+  Text ->
+  Eff es LL.Prog
 parseLLText text = do
   decls <- LL.parse text LL.prog
   let declMap = LL.declsToMap decls
@@ -106,7 +117,16 @@ compileLLTextToFile llText out = do
     FileSystem.IO.hFlush handle
     compileAsmPaths [asmTemp] out
 
-compileLLText :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es Text
+compileLLText ::
+  '[ Reader Opt,
+     Reporter [LL.ParseError],
+     Reporter [LL.CheckError],
+     IOE,
+     Error CompileFail
+   ]
+    :>> es =>
+  Text ->
+  Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
   let prog = Backend.X86.instLabToElems $ toList insts
@@ -114,7 +134,15 @@ compileLLText text = do
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
 
-compileLLTextToInsts :: '[Reader Opt, Reporter [LL.ParseError], Reporter [LL.CheckError], Error CompileFail] :>> es => Text -> Eff es (Seq Backend.X86.InstLab)
+compileLLTextToInsts ::
+  '[ Reader Opt,
+     Reporter [LL.ParseError],
+     Reporter [LL.CheckError],
+     Error CompileFail
+   ]
+    :>> es =>
+  Text ->
+  Eff es (Seq Backend.X86.InstLab)
 compileLLTextToInsts text = do
   prog <- parseLLText text
   LL.runNameSource $ Backend.X86.Codegen.compileProg prog
@@ -129,13 +157,29 @@ compileAsmPaths asmFiles out = loop asmFiles []
         Command.assemble asmFile objectTemp
         loop asmFiles (objectTemp : objectTemps)
 
+withTextInTemp ::
+  '[IOE, Temporary, FileSystem] :>> es =>
+  String ->
+  Text ->
+  (FilePath -> IO.Handle -> Eff es a) ->
+  Eff es a
+withTextInTemp name text f = Temporary.withSystemTempFile name $ \temp handle -> do
+  FileSystem.IO.hSetBuffering handle IO.NoBuffering
+  liftIO $ System.IO.hSetEncoding handle System.IO.utf8
+  hPutUtf8 handle text
+  f temp handle
+
 linkRuntime :: DriverEffs :>> es => [FilePath] -> FilePath -> Eff es ()
 linkRuntime mods out = do
   Temporary.withSystemTempFile "oat.c" $ \runtimeTemp runtimeHandle -> do
     FileSystem.IO.hSetBuffering runtimeHandle IO.NoBuffering
     liftIO $ System.IO.hSetEncoding runtimeHandle System.IO.utf8
     hPutUtf8 runtimeHandle $ runtimeTemplate "program"
-    Command.link (runtimeTemp : mods) out
+    shouldLinkTestRuntime <- rview @Opt #linkTestRuntime
+    if shouldLinkTestRuntime
+      then withTextInTemp "oat.c" testRuntime $ \testTemp _ -> do
+        Command.link (testTemp : runtimeTemp : mods) out
+      else Command.link (runtimeTemp : mods) out
   permissions <- FileSystem.getPermissions out
   FileSystem.setPermissions out $ FileSystem.setOwnerExecutable True permissions
 
@@ -148,10 +192,12 @@ compileSingleLLFileClang llPath out = do
       linkRuntime [objectTemp] out
 
 runtimeTemplate :: Text -> Text
-runtimeTemplate programName =
-  T.replace "/* MANGLED_PROGRAM_NAME */" programName template
+runtimeTemplate programName = T.replace "/* MANGLED_PROGRAM_NAME */" programName template
   where
     template = $(FileEmbed.makeRelativeToProject "../runtime/runtime.c" >>= FileEmbed.embedStringFile)
+
+testRuntime :: Text
+testRuntime = $(FileEmbed.makeRelativeToProject "../runtime/test_runtime.c" >>= FileEmbed.embedStringFile)
 
 -- the effects that we need to run
 type DriverEffsRun :: [Effect]
@@ -171,7 +217,12 @@ data DriverError
 
 runDriver ::
   ( es' ~ DriverEffsRun ++ es,
-    '[IOE, Reporter [DriverError], Error CompileFail, Reader Opt] :>> es
+    '[ IOE,
+       Reporter [DriverError],
+       Error CompileFail,
+       Reader Opt
+     ]
+      :>> es
   ) =>
   Eff es' a ->
   Eff es a
@@ -185,6 +236,6 @@ runDriver m = do
   res <- run m
   case res of
     Left e -> reportFail [DriverCommandError e]
-    Right res -> case res of
+    Right res' -> case res' of
       Left ex -> reportFail [DriverUnicodeException ex]
-      Right res -> pure res
+      Right res'' -> pure res''

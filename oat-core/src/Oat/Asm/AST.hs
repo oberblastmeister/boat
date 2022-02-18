@@ -13,8 +13,8 @@ module Oat.Asm.AST
 where
 
 import Oat.Asm.Class (Asm (..), AsmConstraint)
-import Oat.Common (swap)
 import Oat.LL qualified as LL
+import Oat.Utils.Optics (swap)
 
 type InstLab a = Either (ByteString, Bool) (Inst a)
 

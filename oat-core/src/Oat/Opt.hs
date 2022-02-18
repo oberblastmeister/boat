@@ -20,7 +20,8 @@ data Opt = Opt
     files :: [FilePath],
     regAllocKind :: !RegAllocKind,
     output :: Maybe FilePath,
-    callStack :: !Bool
+    callStack :: !Bool,
+    linkTestRuntime :: !Bool
   }
   deriving (Show, Eq)
 
@@ -99,7 +100,22 @@ parseOpt' = do
     switch $
       long "callstack"
         <> help "Show the callstack on errors"
-  pure Opt {clang, emitAsm, emitLL, checkLL, optimization, files, regAllocKind, output, callStack}
+  linkTestRuntime <-
+    switch $
+      long "link-test-runtime"
+  pure
+    Opt
+      { clang,
+        emitAsm,
+        emitLL,
+        checkLL,
+        optimization,
+        files,
+        regAllocKind,
+        output,
+        callStack,
+        linkTestRuntime
+      }
 
 defOpt :: Opt
 defOpt =
@@ -112,7 +128,8 @@ defOpt =
       files = [],
       regAllocKind = GraphReg,
       output = Nothing,
-      callStack = False
+      callStack = False,
+      linkTestRuntime = False
     }
 
 versionOption :: Parser (a -> a)

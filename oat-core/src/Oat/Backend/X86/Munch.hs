@@ -96,12 +96,19 @@ compileBody :: '[Reader LL.DeclMap, LL.NameSource, X86.Frame] :>> es => LL.FunBo
 compileBody = execWriter @(Seq _) . runState defBackendState . munchBody
 
 munchBody :: BackendEffs :>> es => LL.FunBody -> Eff es ()
-munchBody = traverseOf_ LL.bodyBlocks munchBlock
+munchBody body = do
+  munchBlock $ body ^. #entry
+  traverse_ munchLabBlock (body ^. #labeled)
 
 munchBlock :: BackendEffs :>> es => LL.Block -> Eff es ()
 munchBlock block = do
   traverseOf_ (#insts % traversed) munchInst block
   munchTerm $ block ^. #term
+
+munchLabBlock :: BackendEffs :>> es => LL.LabBlock -> Eff es ()
+munchLabBlock labBlock = do
+  emitLabel $ labBlock ^. #lab
+  munchBlock $ labBlock ^. #block
 
 munchInst :: BackendEffs :>> es => LL.Inst -> Eff es ()
 munchInst = \case
@@ -116,7 +123,7 @@ munchInst = \case
   LL.Store LL.StoreInst {arg1, arg2} -> do
     arg1 <- compileOperand arg1
     arg2 <- compileOperand arg2
-    emitMov arg2 (toMem arg1)
+    emitMov arg1 (toMem arg2)
   LL.Call inst -> compileCall inst
   LL.Bitcast LL.BitcastInst {name, arg} -> do
     arg <- compileOperand arg

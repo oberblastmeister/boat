@@ -20,9 +20,13 @@ import Oat.Backend.X86.X86 (Reg (..))
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.LL.Name qualified as LL
 
-type RegAllocMethod = forall es. '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
+type RegAllocMethod =
+  forall es.
+  '[X86.Frame, LL.NameSource] :>> es =>
+  Seq X86.InstLab ->
+  Eff es (Seq X86.InstLab)
 
-noReg :: '[X86.Frame, LL.NameSource] :>> es => Seq X86.InstLab -> Eff es (Seq X86.InstLab)
+noReg :: RegAllocMethod
 noReg insts = do
   let spills =
         -- TODO: List.nub is pretty bad I think, use some sort of ordered hashset, we are already converting to a hashmap anyway
@@ -60,15 +64,14 @@ type SpillEffs =
 type SpillMap = HashMap LL.Name X86.Mem
 
 spill :: '[LL.NameSource] :>> es => SpillMap -> Seq X86.InstLab -> Eff es (Seq X86.InstLab)
-spill spills insts = do
-  ((), insts') <- act'
-  pure insts'
+spill spills insts =
+  act
+    & execWriter @(Seq X86.InstLab)
+    & runReader spills
   where
-    act' =
-      act
-        & runWriter @(Seq X86.InstLab)
-        & runReader spills
-    act = forOf_ (each % _Right) insts spillInst
+    act = for_ insts $ \case
+      instLab@(Left _) -> tell $ fromList @(Seq _) [instLab]
+      Right inst -> spillInst inst
 
 spillInst :: SpillEffs :>> es => X86.Inst -> Eff es ()
 spillInst inst@(opcode :@ args)

@@ -9,6 +9,7 @@ module Data.Infinite
   )
 where
 
+import Oat.Utils.Impossible qualified as Impossible
 import Prelude hiding (cons, head, repeat, tail, uncons)
 import Prelude qualified
 
@@ -23,7 +24,7 @@ from a = Infinite [a ..]
 
 uncons :: Infinite a -> (a, Infinite a)
 uncons (Infinite (a : as)) = (a, Infinite as)
-uncons _ = error "impossible"
+uncons _ = Impossible.impossible
 
 cons :: a -> Infinite a -> Infinite a
 cons a (Infinite as) = Infinite $ a : as

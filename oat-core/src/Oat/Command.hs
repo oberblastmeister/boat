@@ -45,13 +45,3 @@ runCommandClangIO = interpret $ \_ -> \case
   where
     proc cmd args = adapt $ Process.callProcess cmd args
     adapt m = Process.runProcess m `Exception.catch` (throwError . CommandError)
-
--- runCommandClangIO' ::  Eff (Command ': es) a -> Eff (Error CommandError ': IOE ': es) a
--- runCommandClangIO' = interpret $ \_ -> \case
---   Assemble {dotS, dotO} -> proc "clang" ["-c", dotS, "-o", dotO]
---   Preprocess {dotOat, dotI} -> proc "cpp" ["-E", dotOat, dotI]
---   CompileLlvm {dotLL, dotS} -> proc "clang" ["-S", dotLL, "-o", dotS]
---   Link {mods, out} -> proc "clang" $ mods ++ ["-o", out]
---   where
---     proc cmd args = adapt $ Process.callProcess cmd args
---     adapt m = Process.runProcess m `Exception.catch` (throwError . CommandError)

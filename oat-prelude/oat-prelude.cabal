@@ -82,6 +82,7 @@ common common-options
     hashable >= 1.2 && <1.4,
     optics,
     optics-extra,
+    pretty-simple ^>= 4.0.0.0,
 
 library
   import: common-options
