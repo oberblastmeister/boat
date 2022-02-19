@@ -19,11 +19,9 @@ import Effectful.Reader.Static
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
-import Oat.Asm.AST (pattern (:@))
-import Oat.Asm.AST qualified as Asm
 import Oat.Backend.Frame qualified as Frame
-import Oat.Backend.X86.X86 (InstLab, Reg (..))
-import Oat.Backend.X86.Frame qualified as X86
+import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
+import Oat.Backend.X86.Frame qualified as X86.Frame
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.Common (concatToEither)
 import Oat.LL qualified as LL
@@ -45,22 +43,22 @@ type BackendEffs =
      State BackendState,
      Reader LL.DeclMap,
      Source LL.Name,
-     X86.Frame
+     X86.Frame.Frame
    ]
 
 defBackendState :: BackendState
 defBackendState = BackEndState {insts = mempty, allocaMems = mempty}
 
 compileOperand' :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand
-compileOperand' (LL.Const i) = pure $ Asm.Imm $ X86.Lit $ fromIntegral i
-compileOperand' (LL.Gid l) = pure $ Asm.Imm $ X86.Lab l
+compileOperand' (LL.Const i) = pure $ X86.OImm $ X86.Lit $ fromIntegral i
+compileOperand' (LL.Gid l) = pure $ X86.OImm $ X86.Lab l
 compileOperand' (LL.Temp t) = do
   mem <- use @BackendState $ #allocaMems % at t
   pure $ case mem of
-    Just mem -> Asm.Mem mem
-    Nothing -> Asm.Temp t
+    Just mem -> X86.OMem mem
+    Nothing -> X86.OTemp t
 -- invariant, it must have name
-compileOperand' (LL.Nested inst) = pure $ Asm.Temp $ inst ^?! LL.instName
+compileOperand' (LL.Nested inst) = pure $ X86.OTemp $ inst ^?! LL.instName
 
 compileOperand :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand
 compileOperand arg = munchNested arg *> compileOperand' arg
@@ -81,19 +79,19 @@ emitInsts insts = emit (Right <$> insts)
 -- In particular turns moves that have two memory locations with an intermediate temp in between
 emitMov :: '[Writer (Seq InstLab), LL.NameSource] :>> es => X86.Operand -> X86.Operand -> Eff es ()
 -- TODO: handle %rip relative global thingies
-emitMov arg1@(Asm.Mem _) arg2@(Asm.Mem _) = do
+emitMov arg1@(X86.OMem _) arg2@(X86.OMem _) = do
   temp <- Source.fresh
   emitInsts
-    [ X86.Movq :@ [arg1, Asm.Temp temp],
-      X86.Movq :@ [Asm.Temp temp, arg2]
+    [ X86.Movq :@ [arg1, X86.OTemp temp],
+      X86.Movq :@ [X86.OTemp temp, arg2]
     ]
 emitMov arg1 arg2 = emitInsts [X86.Movq :@ [arg1, arg2]]
 
 toMem :: X86.Operand -> X86.Operand
-toMem (Asm.Loc loc) = Asm.Mem $ X86.MemLoc loc
+toMem (X86.OLoc loc) = X86.OMem $ X86.MemLoc loc
 toMem other = other
 
-compileBody :: '[Reader LL.DeclMap, LL.NameSource, X86.Frame] :>> es => LL.FunBody -> Eff es (Seq InstLab)
+compileBody :: '[Reader LL.DeclMap, LL.NameSource, X86.Frame.Frame] :>> es => LL.FunBody -> Eff es (Seq InstLab)
 compileBody = execWriter @(Seq _) . runState defBackendState . munchBody
 
 munchBody :: BackendEffs :>> es => LL.FunBody -> Eff es ()
@@ -120,7 +118,7 @@ munchInst = \case
     assign @BackendState (#allocaMems % at (inst ^. #name)) (Just mem)
   LL.Load LL.LoadInst {name, arg} -> do
     arg <- compileOperand arg
-    emitMov arg (Asm.Temp name)
+    emitMov arg (X86.OTemp name)
   LL.Store LL.StoreInst {arg1, arg2} -> do
     arg1 <- compileOperand arg1
     arg2 <- compileOperand arg2
@@ -128,7 +126,7 @@ munchInst = \case
   LL.Call inst -> compileCall inst
   LL.Bitcast LL.BitcastInst {name, arg} -> do
     arg <- compileOperand arg
-    emitMov arg (Asm.Temp name)
+    emitMov arg (X86.OTemp name)
   LL.Gep inst -> undefined
   -- probably compile to conditional move instruction
   LL.Select inst -> undefined
@@ -137,15 +135,15 @@ munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()
 munchTerm = \case
   LL.Ret LL.RetTerm {arg = Just arg} -> do
     arg <- compileOperand arg
-    emitMov arg (Asm.Reg Rax)
+    emitMov arg (X86.OReg Rax)
   LL.Ret LL.RetTerm {arg = Nothing} -> pure ()
-  LL.Br name -> emitInsts [X86.Jmp :@ [Asm.Imm $ X86.Lab name]]
+  LL.Br name -> emitInsts [X86.Jmp :@ [X86.OImm $ X86.Lab name]]
   LL.Cbr LL.CbrTerm {arg, lab1, lab2} -> do
     arg <- compileOperand arg
     emitInsts
-      [ X86.Cmpq :@ [Asm.Imm $ X86.Lit 0, arg],
-        X86.J X86.Neq :@ [Asm.Imm $ X86.Lab lab1],
-        X86.Jmp :@ [Asm.Imm $ X86.Lab lab2]
+      [ X86.Cmpq :@ [X86.OImm $ X86.Lit 0, arg],
+        X86.J X86.Neq :@ [X86.OImm $ X86.Lab lab1],
+        X86.Jmp :@ [X86.OImm $ X86.Lab lab2]
       ]
 
 compileCall :: BackendEffs :>> es => LL.CallInst -> Eff es ()
@@ -156,7 +154,7 @@ compileCall LL.CallInst {name, fn, args} = do
   emitInst $ X86.Callq :@ [fn]
   case name of
     Nothing -> pure ()
-    Just name -> emitMov (Asm.Reg Rax) (Asm.Temp name)
+    Just name -> emitMov (X86.OReg Rax) (X86.OTemp name)
 
 viewShiftTo :: BackendEffs :>> es => [X86.Operand] -> Eff es ()
 viewShiftTo args =
@@ -165,12 +163,12 @@ viewShiftTo args =
     & mapM_
       ( \case
           (arg, Left reg) ->
-            emitMov arg (Asm.Reg reg)
+            emitMov arg (X86.OReg reg)
           (arg, Right n) ->
             -- the top of the stack (where the stack pointer is) is the argument build up area
             -- we assume we have subtracted the stack to the largest call
             -- so these moves cannot interfere with locals stored on the stack
-            emitMov arg (Asm.Mem $ X86.MemStackSimple n)
+            emitMov arg (X86.OMem $ X86.MemStackSimple n)
       )
 
 munchNested :: BackendEffs :>> es => LL.Operand -> Eff es ()
@@ -181,13 +179,13 @@ munchIcmp :: BackendEffs :>> es => LL.IcmpInst -> Eff es ()
 munchIcmp LL.IcmpInst {name, op, arg1, arg2} = do
   arg1 <- compileOperand arg1
   arg2 <- compileOperand arg2
-  emitMov arg1 (Asm.Reg Rax)
+  emitMov arg1 (X86.OReg Rax)
   emitInsts
-    [ X86.Cmpq :@ [arg2, Asm.Reg Rax],
+    [ X86.Cmpq :@ [arg2, X86.OReg Rax],
       -- set only works on byte registers for now
-      mapCmpOp op :@ [Asm.Temp name],
+      mapCmpOp op :@ [X86.OTemp name],
       -- only keep the lower order byte because set only sets the byte register
-      X86.Andq :@ [Asm.Imm $ X86.Lit 1, Asm.Temp name]
+      X86.Andq :@ [X86.OImm $ X86.Lit 1, X86.OTemp name]
     ]
 
 munchBinOp :: BackendEffs :>> es => LL.BinOpInst -> Eff es ()
@@ -195,15 +193,15 @@ munchBinOp LL.BinOpInst {name, op, arg1, arg2}
   | LL.Mul <- op = do
     arg2 <- compileOperand arg2
     arg1 <- compileOperand arg1
-    emitMov arg2 (Asm.Reg Rax)
-    emitInsts [X86.Imulq :@ [arg1, Asm.Reg Rax]]
-    emitMov (Asm.Reg Rax) (Asm.Temp name)
+    emitMov arg2 (X86.OReg Rax)
+    emitInsts [X86.Imulq :@ [arg1, X86.OReg Rax]]
+    emitMov (X86.OReg Rax) (X86.OTemp name)
   | otherwise = do
     arg2 <- compileOperand arg2
     arg1 <- compileOperand arg1
-    emitMov arg2 (Asm.Reg Rax)
-    emitInsts [mapBinOp op :@ [arg1, Asm.Reg Rax]]
-    emitMov (Asm.Reg Rax) (Asm.Temp name)
+    emitMov arg2 (X86.OReg Rax)
+    emitInsts [mapBinOp op :@ [arg1, X86.OReg Rax]]
+    emitMov (X86.OReg Rax) (X86.OTemp name)
 
 mapBinOp :: LL.BinOp -> X86.OpCode
 mapBinOp = \case

@@ -8,12 +8,10 @@ import Data.Int (Int64)
 import Data.Sequence qualified as Seq
 import Effectful.Reader.Static
 import Effectful.Reader.Static.Optics
-import Oat.Asm.AST (pattern (:@))
-import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.Frame qualified as Frame
 import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.RegAlloc qualified as RegAlloc
-import Oat.Backend.X86.X86 (InstLab, Reg (..))
+import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.Common (concatToEither)
 import Oat.LL qualified as LL
@@ -57,9 +55,9 @@ viewShiftFrom args =
     & fmap
       ( \case
           (name, Left reg) ->
-            X86.Movq :@ [Asm.Reg reg, Asm.Temp name]
+            X86.Movq :@ [X86.OReg reg, X86.OTemp name]
           (name, Right n) ->
-            X86.Movq :@ [Asm.Mem $ X86.MemStackSimple n, Asm.Temp name]
+            X86.Movq :@ [X86.OMem $ X86.MemStackSimple n, X86.OTemp name]
       )
 
 prologueEpilogue :: Maybe Int -> Frame.FrameState -> (Seq X86.Inst, Seq X86.Inst)
@@ -67,21 +65,21 @@ prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)
   where
     prologue =
       Seq.fromList
-        [ X86.Pushq :@ [Asm.Reg Rbp],
-          X86.Movq :@ [Asm.Reg Rsp, Asm.Reg Rbp]
+        [ X86.Pushq :@ [X86.OReg Rbp],
+          X86.Movq :@ [X86.OReg Rsp, X86.OReg Rbp]
         ]
         <> subStack
     epilogue =
       addStack
         <> Seq.fromList
-          [ X86.Popq :@ [Asm.Reg Rbp],
+          [ X86.Popq :@ [X86.OReg Rbp],
             X86.Retq :@ []
           ]
-    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, Asm.Reg Rsp]]
-    addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, Asm.Reg Rsp] | stackSize /= 0]
+    subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, X86.OReg Rsp]]
+    addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, X86.OReg Rsp] | stackSize /= 0]
     -- stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
     stackSize = fromIntegral maxCall + Frame.getStackSize frameState
-    stackSizeArg = Asm.Imm $ X86.Lit $ fromIntegral stackSize
+    stackSizeArg = X86.OImm $ X86.Lit $ fromIntegral stackSize
     maxCall = max 0 (fromMaybe 0 maybeMaxCall - X86.wordSize * length X86.paramRegs)
     -- TODO: do we need this?
     nextMultipleOf16 :: Int -> Int

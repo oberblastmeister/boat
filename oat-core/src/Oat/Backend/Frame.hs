@@ -5,8 +5,6 @@ module Oat.Backend.Frame
   )
 where
 
-import Oat.Asm qualified as Asm
-
 data Frame :: Type -> Effect where
   AllocLocalWith :: Int -> Frame a m a
 

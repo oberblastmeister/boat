@@ -170,9 +170,6 @@ library
     Oat.LL.Check
     Oat.LL.ParserWrapper
     Oat.LL.Name
-    Oat.Asm
-    Oat.Asm.AST
-    Oat.Asm.Class
     Oat.Backend.Frame
     Oat.Backend.X86.Frame
     Oat.Backend.X86.Pretty

@@ -12,13 +12,11 @@ import Data.HashMap.Strict qualified as HashMap
 import Data.List qualified as List
 import Effectful.Reader.Static
 import Effectful.Writer.Static.Local
-import Oat.Asm.AST (pattern (:@))
-import Oat.Asm.AST qualified as Asm
+import Oat.Backend.Frame qualified as Frame
 import Oat.Backend.X86.Frame qualified as X86
 import Oat.Backend.X86.Munch qualified as Munch
-import Oat.Backend.X86.X86 (Reg (..))
+import Oat.Backend.X86.X86 (Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
-import Oat.Backend.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
 
 type RegAllocMethod =
@@ -34,7 +32,8 @@ noReg insts = do
         List.nub $
           insts
             ^.. ( each % _Right
-                    % Asm.instOperands
+                    % #args
+                    % traversed
                     % X86.operandLocs
                     % #_LTemp
                 )
@@ -49,9 +48,10 @@ noReg insts = do
         spilledInsts
           & ( each
                 % _Right
-                % Asm.instOperands
+                % #args
+                % traversed
                 % X86.operandLocs
-                % Asm.tempToReg
+                % X86.tempToReg
             )
           %~ const R11
   pure res
@@ -81,26 +81,26 @@ spillInst inst@(opcode :@ args)
     arg1 <- spillOperand arg1
     arg2 <- spillOperand arg2
     case (arg1, arg2) of
-      (Asm.Mem mem1, Asm.Mem mem2) -> do
+      (X86.OMem mem1, X86.OMem mem2) -> do
         temp <- Source.fresh
-        Munch.emitMov (Asm.Mem mem1) (Asm.Temp temp)
-        Munch.emitInsts [inst {Asm.args = [Asm.Temp temp, Asm.Mem mem2]}]
-      args -> Munch.emitInsts [inst {Asm.args = args ^.. both}]
+        Munch.emitMov (X86.OMem mem1) (X86.OTemp temp)
+        Munch.emitInsts [inst {X86.args = [X86.OTemp temp, X86.OMem mem2]}]
+      args -> Munch.emitInsts [inst {X86.args = args ^.. both}]
   | X86.hasTwoOperands opcode = error "Instruction should have two operands"
   | otherwise = Munch.emitInst inst
 
 spillOperand :: SpillEffs :>> es => X86.Operand -> Eff es X86.Operand
-spillOperand arg@(Asm.Temp name) = do
+spillOperand arg@(X86.OTemp name) = do
   spills <- ask @SpillMap
-  pure $ spills ^. at name <&> Asm.Mem & fromMaybe arg
-spillOperand (Asm.Mem mem) = do
+  pure $ spills ^. at name <&> X86.OMem & fromMaybe arg
+spillOperand (X86.OMem mem) = do
   spills <- ask @SpillMap
   mem <- forOf (X86.memLocs % #_LTemp) mem $ \name -> do
     case spills ^. at name of
       Just mem -> do
         name' <- Source.fresh
-        Munch.emitMov (Asm.Mem mem) (Asm.Temp name')
+        Munch.emitMov (X86.OMem mem) (X86.OTemp name')
         pure name'
       Nothing -> pure name
-  pure $ Asm.Mem mem
+  pure $ X86.OMem mem
 spillOperand arg = pure arg

@@ -7,17 +7,16 @@ module Oat.Backend.X86.X86
     Reg (..),
     Cond (..),
     OpCode (..),
-    Inst,
     Data (..),
     Asm (..),
     Elem (..),
     Prog,
-    Operand,
-    Mem (.., MemImm, MemLoc, MemStack, MemStackSimple),
     Scale (..),
-    Loc,
     InstLab,
-    X86,
+    Inst(.., (:@)),
+    Operand(.., OReg, OTemp),
+    Loc(..),
+    Mem (.., MemImm, MemLoc, MemStack, MemStackSimple, MemBaseSimple),
     hasTwoOperands,
     dat,
     gText,
@@ -31,26 +30,37 @@ module Oat.Backend.X86.X86
     paramRegs,
     regs,
     instLabToElems,
-    pattern MemBaseSimple,
+    tempToReg,
   )
 where
 
 import Data.Int (Int64)
-import Oat.Asm qualified as Asm
+import Oat.LL qualified as LL
+import Oat.Utils.Optics (swap)
 
-data X86
+type InstLab = Either (LL.Name, Bool) Inst
 
-instance Asm.Asm X86 where
-  type Reg X86 = Reg
-  type Mem X86 = Mem
-  type Imm X86 = Imm
-  type OpCode X86 = OpCode
+data Inst = Inst
+  { opcode :: !OpCode,
+    args :: [Operand]
+  }
+  deriving (Show, Eq)
 
-type InstLab = Asm.InstLab X86
+pattern (:@) :: OpCode -> [Operand] -> Inst
+pattern opcode :@ args = Inst {opcode, args}
 
-type Inst = Asm.Inst X86
+{-# COMPLETE (:@) #-}
 
-type Loc = Asm.Loc X86
+data Operand
+  = OImm !Imm
+  | OMem !Mem
+  | OLoc !Loc
+  deriving (Show, Eq)
+
+data Loc
+  = LReg !Reg
+  | LTemp !LL.Name
+  deriving (Show, Eq)
 
 -- M[offset + R[base] + R[index] * scale]
 data Mem = Mem
@@ -67,12 +77,18 @@ data Scale
   | S4
   | S8
   deriving (Show, Eq)
+  
+pattern OReg :: Reg -> Operand
+pattern OReg reg = OLoc (LReg reg)
+
+pattern OTemp :: LL.Name -> Operand
+pattern OTemp temp = OLoc (LTemp temp)
 
 pattern MemBaseSimple :: Int64 -> Mem
 pattern MemBaseSimple offset =
   Mem
     { offset = Just (Lit offset),
-      base = Just (Asm.LReg Rbp),
+      base = Just (LReg Rbp),
       index = Nothing,
       scale = Nothing
     }
@@ -84,7 +100,7 @@ pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Scale -> Mem
 pattern MemStack offset index scale =
   Mem
     { offset,
-      base = Just (Asm.LReg Rsp),
+      base = Just (LReg Rsp),
       index,
       scale
     }
@@ -106,35 +122,6 @@ pattern MemLoc loc =
       index = Nothing,
       scale = Nothing
     }
-
-operandLocs :: Traversal' Operand Loc
-operandLocs = traversalVL $ \f -> \case
-  Asm.Mem mem -> do
-    mem <- traverseOf memLocs f mem
-    pure $ Asm.Mem mem
-  Asm.Loc loc -> Asm.Loc <$> f loc
-  other -> pure other
-
-memLocs :: Traversal' Mem Loc
-memLocs = traversalVL $ \f mem@Mem {base, index} -> do
-  base <- traverse f base
-  index <- traverse f index
-  pure $ mem {base, index}
-
-hasTwoOperands :: OpCode -> Bool
-hasTwoOperands = \case
-  Movq -> True
-  Leaq -> True
-  Addq -> True
-  Subq -> True
-  Xorq -> True
-  Orq -> True
-  Andq -> True
-  Shlq -> True
-  Sarq -> True
-  Shrq -> True
-  Cmpq -> True
-  _ -> False
 
 data Imm
   = Lit !Int64
@@ -196,8 +183,6 @@ data OpCode
   | Retq
   deriving (Show, Eq)
 
-type Operand = Asm.Operand X86
-
 data Data
   = Asciz !ByteString
   | Quad !Imm
@@ -217,9 +202,13 @@ data Elem = Elem
 
 type Prog = [Elem]
 
-makeFieldLabelsNoPrefix ''Mem
-makeFieldLabelsNoPrefix ''Elem
-makePrismLabels ''OpCode
+    
+$(makeFieldLabelsNoPrefix ''Inst)
+$(makeFieldLabelsNoPrefix ''Mem)
+$(makeFieldLabelsNoPrefix ''Elem)
+$(makePrismLabels ''Operand)
+$(makePrismLabels ''Loc)
+$(makePrismLabels ''Scale)
 
 -- instance Frame.IsFrame Frame where
 --   newFrame = undefined
@@ -289,3 +278,37 @@ instLabToElems instLabs =
       ([], [])
       instLabs
 
+-- instOperands :: Traversal' Inst Operand
+-- instOperands = undefined
+
+tempToReg :: Setter Loc Loc LL.Name Reg
+tempToReg = swap #_LTemp #_LReg
+
+operandLocs :: Traversal' Operand Loc
+operandLocs = traversalVL $ \f -> \case
+  OMem mem -> do
+    mem <- traverseOf memLocs f mem
+    pure $ OMem mem
+  OLoc loc -> OLoc <$> f loc
+  other -> pure other
+
+memLocs :: Traversal' Mem Loc
+memLocs = traversalVL $ \f mem@Mem {base, index} -> do
+  base <- traverse f base
+  index <- traverse f index
+  pure $ mem {base, index}
+
+hasTwoOperands :: OpCode -> Bool
+hasTwoOperands = \case
+  Movq -> True
+  Leaq -> True
+  Addq -> True
+  Subq -> True
+  Xorq -> True
+  Orq -> True
+  Andq -> True
+  Shlq -> True
+  Sarq -> True
+  Shrq -> True
+  Cmpq -> True
+  _ -> False

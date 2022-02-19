@@ -7,12 +7,13 @@ module Oat.Backend.X86.Frame
     defFrameState,
     runFrame,
     interpretFrame,
-  getStackSize)
+    getStackSize,
+  )
 where
 
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Backend.X86.X86 (X86, pattern MemBaseSimple)
+import Oat.Backend.X86.X86 (pattern MemBaseSimple)
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.Backend.Frame qualified as Frame
 

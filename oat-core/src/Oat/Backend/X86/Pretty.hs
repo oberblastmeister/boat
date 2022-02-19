@@ -1,7 +1,6 @@
 module Oat.Backend.X86.Pretty (prettyProg) where
 
 import Data.Text qualified as T
-import Oat.Asm.AST qualified as Asm
 import Oat.Backend.X86.X86
 import OatPrelude.Unsafe qualified as Unsafe
 import Prettyprinter (Doc, Pretty (pretty), (<+>))
@@ -118,17 +117,17 @@ prettyOpCode = \case
   Retq -> "retq"
 
 prettyLocWith :: (Reg -> Doc ann) -> Loc -> Doc ann
-prettyLocWith pReg (Asm.LReg r) = pReg r
-prettyLocWith _ (Asm.LTemp t) = "t" <> Pretty.viaShow t
+prettyLocWith pReg (LReg r) = pReg r
+prettyLocWith _ (LTemp t) = "t" <> Pretty.viaShow t
 
 prettyLoc :: Loc -> Doc ann
 prettyLoc = prettyLocWith prettyReg
 
 prettyOperandWith :: (Reg -> Doc ann) -> Operand -> Doc ann
 prettyOperandWith pReg = \case
-  Asm.Imm i -> "$" <> prettyImm i
-  Asm.Loc loc -> prettyLocWith pReg loc
-  Asm.Mem mem -> prettyMem mem
+  OImm i -> "$" <> prettyImm i
+  OLoc loc -> prettyLocWith pReg loc
+  OMem mem -> prettyMem mem
 
 prettyByteOperand :: Operand -> Doc ann
 prettyByteOperand = prettyOperandWith prettyByteReg
@@ -156,12 +155,12 @@ prettyScale S8 = "8"
 
 prettyJmpOperand :: Operand -> Doc ann
 prettyJmpOperand = \case
-  Asm.Imm imm -> prettyImm imm
-  Asm.Loc loc -> "*" <> prettyLoc loc
-  Asm.Mem mem -> "*" <> prettyMem mem
+  OImm imm -> prettyImm imm
+  OLoc loc -> "*" <> prettyLoc loc
+  OMem mem -> "*" <> prettyMem mem
 
 prettyInst :: Inst -> Doc ann
-prettyInst Asm.Inst {opcode, args} = case opcode of
+prettyInst Inst {opcode, args} = case opcode of
   Shlq -> handleShift
   Sarq -> handleShift
   Shrq -> handleShift
@@ -178,7 +177,7 @@ prettyInst Asm.Inst {opcode, args} = case opcode of
 
 prettyShift :: OpCode -> [Operand] -> Doc ann
 prettyShift opcode operands = case operands of
-  [Asm.Imm _, _] ->
+  [OImm _, _] ->
     "\t" <> prettyOpCode opcode
       <> "\t"
       <> Pretty.hsep
@@ -186,6 +185,6 @@ prettyShift opcode operands = case operands of
             Pretty.comma
             (prettyOperand <$> operands)
         )
-  [Asm.Reg Rcx, dst] ->
+  [OReg Rcx, dst] ->
     "\t" <> prettyOpCode opcode <> "\t%%cl" <> prettyOperand dst
   _ -> error "invalid shift operands"

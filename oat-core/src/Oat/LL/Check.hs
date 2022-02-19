@@ -18,7 +18,6 @@ import Oat.Error (CompileFail)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter
-import Oat.Utils.Families (type (++))
 
 data CheckState = CheckState
   { tempToTy :: !LL.TyMap,
@@ -182,13 +181,3 @@ tyAssert mess arg expectedTys actualTy =
 
 defCheckState :: CheckState
 defCheckState = CheckState {tempToTy = mempty, didFail = False}
-
-type StateCheckEffsRun =
-  '[ State CheckState,
-     Reader LL.DeclMap
-   ]
-
-runCheck :: LL.DeclMap -> Eff (StateCheckEffsRun ++ es) a -> Eff es a
-runCheck declMap =
-  evalState @CheckState defCheckState
-    >>> runReader @LL.DeclMap declMap
