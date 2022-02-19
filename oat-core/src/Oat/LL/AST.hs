@@ -45,6 +45,7 @@ module Oat.LL.AST
     maxCallSize,
     funDeclTyParams,
     declMapTyAt,
+    isShiftOp,
   )
 where
 
@@ -139,9 +140,9 @@ data BinOp
   = Add
   | Sub
   | Mul
-  | Shl
-  | Lshr
-  | Ashr
+  | Shl -- shift left
+  | Lshr -- logical shift right
+  | Ashr -- arithmetic shift right
   | And
   | Or
   | Xor
@@ -289,6 +290,7 @@ $(makeFieldLabelsNoPrefix ''GlobalDecl)
 $(makeFieldLabelsNoPrefix ''CbrTerm)
 $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
+$(makePrismLabels ''BinOp)
 $(makePrismLabels ''Inst)
 
 declsToMap :: [Decl] -> DeclMap
@@ -373,13 +375,10 @@ termOperands = traversalVL go
       Cbr inst -> Cbr <$> traverseOf #arg f inst
 
 operandName :: AffineTraversal' Operand Name
-operandName = atraversalVL go
-  where
-    go :: AffineTraversalVL' Operand Name
-    go point f = \case
-      Gid name -> Gid <$> f name
-      Temp name -> Temp <$> f name
-      other -> point other
+operandName = atraversalVL $ \point f -> \case
+  Gid name -> Gid <$> f name
+  Temp name -> Temp <$> f name
+  other -> point other
 
 doesInsAssign :: Inst -> Bool
 doesInsAssign (Call CallInst {ty = Void}) = False
@@ -443,3 +442,9 @@ declMapTyAt name =
   where
     o :: AffineFold (MapList Name v) v
     o = #map % ix name
+
+isShiftOp :: BinOp -> Bool
+isShiftOp Shl = True
+isShiftOp Lshr = True
+isShiftOp Ashr = True
+isShiftOp _ = False

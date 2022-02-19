@@ -20,16 +20,13 @@ import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
 import Oat.Backend.Frame qualified as Frame
-import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.Frame qualified as X86.Frame
+import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.Common (concatToEither)
 import Oat.LL qualified as LL
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
-
--- pattern With :: LL.Inst -> LL.Operand
--- pattern With inst <- LL.Nested inst
 
 data BackendState = BackEndState
   { insts :: !(Seq InstLab),
@@ -190,18 +187,28 @@ munchIcmp LL.IcmpInst {name, op, arg1, arg2} = do
 
 munchBinOp :: BackendEffs :>> es => LL.BinOpInst -> Eff es ()
 munchBinOp LL.BinOpInst {name, op, arg1, arg2}
+  | LL.isShiftOp op = do
+      arg2 <- compileOperand arg2
+      arg1 <- compileOperand arg1
+      -- this is actually a special case
+      -- shift operations actually use %cl which is the byte register for %rcx
+      -- we just use %rcx to simplify the handling of this
+      -- during prettying we will make sure to use %cl
+      emitMov arg2 (X86.OReg Rcx)
+      emitInsts [mapBinOp op :@ [X86.OReg Rcx, arg1]]
+      emitMov arg1 (X86.OTemp name)
   | LL.Mul <- op = do
-    arg2 <- compileOperand arg2
-    arg1 <- compileOperand arg1
-    emitMov arg2 (X86.OReg Rax)
-    emitInsts [X86.Imulq :@ [arg1, X86.OReg Rax]]
-    emitMov (X86.OReg Rax) (X86.OTemp name)
+      arg2 <- compileOperand arg2
+      arg1 <- compileOperand arg1
+      emitMov arg2 (X86.OReg Rax)
+      emitInsts [X86.Imulq :@ [arg1, X86.OReg Rax]]
+      emitMov (X86.OReg Rax) (X86.OTemp name)
   | otherwise = do
-    arg2 <- compileOperand arg2
-    arg1 <- compileOperand arg1
-    emitMov arg2 (X86.OReg Rax)
-    emitInsts [mapBinOp op :@ [arg1, X86.OReg Rax]]
-    emitMov (X86.OReg Rax) (X86.OTemp name)
+      arg2 <- compileOperand arg2
+      arg1 <- compileOperand arg1
+      emitMov arg2 (X86.OReg Rax)
+      emitInsts [mapBinOp op :@ [arg1, X86.OReg Rax]]
+      emitMov (X86.OReg Rax) (X86.OTemp name)
 
 mapBinOp :: LL.BinOp -> X86.OpCode
 mapBinOp = \case

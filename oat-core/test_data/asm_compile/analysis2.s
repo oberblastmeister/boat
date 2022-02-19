@@ -14,7 +14,8 @@ program:
 	movq	%rax, -40(%rbp)
 	movq	$0, %rax
 	cmpq	-32(%rbp), %rax
-	seteq	%r11b
+	sete	%r11b
+	andq	$1, -48(%rbp)
 	cmpq	$0, -48(%rbp)
 	jne	l1
 	jmp	l2

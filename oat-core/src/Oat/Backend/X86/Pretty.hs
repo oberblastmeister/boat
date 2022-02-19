@@ -83,7 +83,7 @@ prettyImm (Lab l) = prettyLab l
 
 prettyCond :: Cond -> Doc ann
 prettyCond = \case
-  Eq -> "eq"
+  Eq -> "e"
   Neq -> "ne"
   Gt -> "g"
   Ge -> "ge"
@@ -104,7 +104,7 @@ prettyOpCode = \case
   Subq -> "subq"
   Imulq -> "imulq"
   Xorq -> "xorq"
-  Orq -> "ordq"
+  Orq -> "orq"
   Andq -> "andq"
   Shlq -> "shlq"
   Sarq -> "sarq"
@@ -164,7 +164,11 @@ prettyInst Inst {opcode, args} = case opcode of
   Shlq -> handleShift
   Sarq -> handleShift
   Shrq -> handleShift
-  _ -> "\t" <> prettyOpCode opcode <> "\t" <> Pretty.hsep (Pretty.punctuate Pretty.comma (go <$> args))
+  _ ->
+    "\t"
+      <> prettyOpCode opcode
+      <> "\t"
+      <> Pretty.hsep (Pretty.punctuate Pretty.comma (go <$> args))
   where
     handleShift = prettyShift opcode args
 
@@ -178,7 +182,8 @@ prettyInst Inst {opcode, args} = case opcode of
 prettyShift :: OpCode -> [Operand] -> Doc ann
 prettyShift opcode operands = case operands of
   [OImm _, _] ->
-    "\t" <> prettyOpCode opcode
+    "\t"
+      <> prettyOpCode opcode
       <> "\t"
       <> Pretty.hsep
         ( Pretty.punctuate
@@ -186,5 +191,11 @@ prettyShift opcode operands = case operands of
             (prettyOperand <$> operands)
         )
   [OReg Rcx, dst] ->
-    "\t" <> prettyOpCode opcode <> "\t%%cl" <> prettyOperand dst
+    "\t"
+      <> prettyOpCode opcode
+      <> "\t"
+      <> prettyByteReg Rcx
+      <> Pretty.comma
+      <+> prettyOperand dst
+  OReg _ : _ -> error "The first register for a shift operand must be %rcx"
   _ -> error "invalid shift operands"

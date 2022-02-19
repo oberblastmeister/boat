@@ -22,6 +22,9 @@
             ormolu
             haskell-language-server
             clang_13
+            /* clang */
+            /* clangStdenv */
+            clang-tools
           ];
         };
       }

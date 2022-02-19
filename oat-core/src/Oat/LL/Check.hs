@@ -32,6 +32,8 @@ data CheckError
   | -- custom message, arg, expected, actual
     MismatchedTy (Maybe Text) (Maybe LL.Operand) [LL.Ty] LL.Ty
   | InterferingGlobals
+  | TypeNotAllowed LL.Ty
+  | ShiftTooMuch !Int
   deriving (Show, Eq)
 
 makeFieldLabelsNoPrefix ''CheckState
@@ -106,13 +108,12 @@ checkTerm :: CheckEffs :>> es => LL.Term -> Eff es ()
 checkTerm (LL.Ret LL.RetTerm {ty, arg}) = case arg of
   Nothing -> pure ()
   Just arg -> checkOperand arg ty
-checkTerm (LL.Cbr LL.CbrTerm {arg}) = checkOperand arg LL.I1
+checkTerm (LL.Cbr LL.CbrTerm {arg}) = checkOperand arg LL.I64
 checkTerm (LL.Br _) = pure ()
 
 checkOperand :: CheckEffs :>> es => LL.Operand -> LL.Ty -> Eff es ()
-checkOperand (LL.Const _) LL.I1 = pure ()
-checkOperand (LL.Const _) LL.I8 = pure ()
 checkOperand (LL.Const _) LL.I64 = pure ()
+checkOperand (LL.Const _) ty = report [TypeNotAllowed ty]
 checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
 checkOperand arg@(LL.Gid name) ty = do
   declMap <- ask @LL.DeclMap
@@ -131,11 +132,20 @@ checkOperand arg@(LL.Temp name) ty =
     Nothing -> report [NameNotFound name]
 
 inferBinOp :: CheckEffs :>> es => LL.BinOpInst -> Eff es LL.Ty
-inferBinOp LL.BinOpInst {ty, arg1, arg2} = do
-  tyAssert (Just "binary operator") Nothing [LL.I1, LL.I8, LL.I64] ty
-  checkOperand arg1 ty
-  checkOperand arg2 ty
-  pure ty
+inferBinOp LL.BinOpInst {ty, op, arg1, arg2}
+  | has #_Shl op || has #_Lshr op || has #_Ashr op = do
+      tyAssert (Just "binary operator") Nothing [LL.I64] ty
+      checkOperand arg1 ty
+      checkOperand arg2 ty
+      case arg2 of
+        LL.Const i | i >= 64 -> report [ShiftTooMuch i]
+        _ -> pure ()
+      pure ty
+  | otherwise = do
+      tyAssert (Just "binary operator") Nothing [LL.I64] ty
+      checkOperand arg1 ty
+      checkOperand arg2 ty
+      pure ty
 
 inferAlloca :: LL.AllocaInst -> Eff es LL.Ty
 inferAlloca LL.AllocaInst {ty} = pure $ LL.TyPtr ty
@@ -155,8 +165,8 @@ inferIcmp :: CheckEffs :>> es => LL.IcmpInst -> Eff es LL.Ty
 inferIcmp LL.IcmpInst {ty, arg1, arg2} = do
   checkOperand arg1 LL.I64
   checkOperand arg2 LL.I64
-  tyAssert (Just "icmp must return bool") Nothing [LL.I1] ty
-  pure LL.I1
+  tyAssert (Just "icmp") Nothing [LL.I64] ty
+  pure LL.I64
 
 inferCall :: CheckEffs :>> es => LL.CallInst -> Eff es LL.Ty
 inferCall LL.CallInst {ty, fn, args} = do

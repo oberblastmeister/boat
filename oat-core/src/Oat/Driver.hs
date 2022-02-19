@@ -37,7 +37,6 @@ import Prettyprinter.Render.Text qualified as Prettyprinter
 import System.FilePath ((-<.>))
 import System.FilePath qualified as FilePath
 import System.IO qualified
-import Text.Pretty.Simple (pPrint, pShow)
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
 
