@@ -13,7 +13,8 @@ where
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
 import Oat.Backend.X86.X86 (X86, pattern MemBaseSimple)
-import Oat.Frame qualified as Frame
+import Oat.Backend.X86.X86 qualified as X86
+import Oat.Backend.Frame qualified as Frame
 
 data FrameState = FrameState
   { base :: !Int
@@ -21,7 +22,7 @@ data FrameState = FrameState
 
 makeFieldLabelsNoPrefix ''FrameState
 
-type Frame = Frame.Frame X86
+type Frame = Frame.Frame X86.Mem
 
 defFrameState :: FrameState
 defFrameState = FrameState {base = -8}
@@ -34,7 +35,6 @@ interpretFrame (Frame.AllocLocalWith i) = do
   base <- use @FrameState #base
   modifying @FrameState #base (subtract $ fromIntegral i)
   pure $ MemBaseSimple $ fromIntegral base
-
 
 getStackSize :: FrameState -> Int
 getStackSize s = abs $ s ^. #base + 8

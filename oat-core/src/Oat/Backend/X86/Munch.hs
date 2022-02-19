@@ -21,8 +21,9 @@ import Effectful.State.Static.Local.Optics
 import Effectful.Writer.Static.Local
 import Oat.Asm.AST (pattern (:@))
 import Oat.Asm.AST qualified as Asm
-import Oat.Backend.X86.Frame as X86
+import Oat.Backend.Frame qualified as Frame
 import Oat.Backend.X86.X86 (InstLab, Reg (..))
+import Oat.Backend.X86.Frame qualified as X86
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.Common (concatToEither)
 import Oat.LL qualified as LL
@@ -115,7 +116,7 @@ munchInst = \case
   LL.BinOp inst -> munchBinOp inst
   LL.Icmp inst -> munchIcmp inst
   LL.Alloca inst -> do
-    mem <- X86.allocLocal
+    mem <- Frame.allocLocal
     assign @BackendState (#allocaMems % at (inst ^. #name)) (Just mem)
   LL.Load LL.LoadInst {name, arg} -> do
     arg <- compileOperand arg

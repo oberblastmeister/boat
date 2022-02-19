@@ -18,6 +18,7 @@ import Oat.Backend.X86.Frame qualified as X86
 import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.X86 (Reg (..))
 import Oat.Backend.X86.X86 qualified as X86
+import Oat.Backend.Frame qualified as Frame
 import Oat.LL.Name qualified as LL
 
 type RegAllocMethod =
@@ -38,7 +39,7 @@ noReg insts = do
                     % #_LTemp
                 )
   spillsMem <- for spills $ \spill -> do
-    mem <- X86.allocLocal
+    mem <- Frame.allocLocal
     pure (spill, mem)
   let spillsMap = HashMap.fromList spillsMem
   spilledInsts <- spill spillsMap insts

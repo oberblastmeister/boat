@@ -32,14 +32,11 @@ module Oat.Backend.X86.X86
     regs,
     instLabToElems,
     pattern MemBaseSimple,
-    allocLocal,
   )
 where
 
 import Data.Int (Int64)
 import Oat.Asm qualified as Asm
-import Oat.Frame (Frame)
-import Oat.Frame qualified as Frame
 
 data X86
 
@@ -292,5 +289,3 @@ instLabToElems instLabs =
       ([], [])
       instLabs
 
-allocLocal :: Frame X86 :> es => Eff es Mem
-allocLocal = Frame.allocLocal @X86
