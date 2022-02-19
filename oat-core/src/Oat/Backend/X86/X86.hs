@@ -32,28 +32,32 @@ module Oat.Backend.X86.X86
     regs,
     instLabToElems,
     pattern MemBaseSimple,
-    allocLocal,
   )
 where
 
 import Data.Int (Int64)
-import Oat.Asm qualified as Asm
-import Oat.Frame (Frame)
-import Oat.Frame qualified as Frame
+import Oat.LL qualified as LL
+
+type InstLab = Either (LL.Name, Bool) Inst
+
+data Inst = Inst
+  { opcode :: !OpCode,
+    args :: [Operand]
+  }
+  deriving (Show, Eq)
+
+data Operand
+  = OImm !Imm
+  | OMem !Mem
+  | OLoc !Loc
+  deriving (Show, Eq)
+
+data Loc
+  = LReg !Reg
+  | LTemp !LL.Name
+  deriving (Show, Eq)
 
 data X86
-
-instance Asm.Asm X86 where
-  type Reg X86 = Reg
-  type Mem X86 = Mem
-  type Imm X86 = Imm
-  type OpCode X86 = OpCode
-
-type InstLab = Asm.InstLab X86
-
-type Inst = Asm.Inst X86
-
-type Loc = Asm.Loc X86
 
 -- M[offset + R[base] + R[index] * scale]
 data Mem = Mem
@@ -75,7 +79,7 @@ pattern MemBaseSimple :: Int64 -> Mem
 pattern MemBaseSimple offset =
   Mem
     { offset = Just (Lit offset),
-      base = Just (Asm.LReg Rbp),
+      base = Just (LReg Rbp),
       index = Nothing,
       scale = Nothing
     }
@@ -87,7 +91,7 @@ pattern MemStack :: Maybe Imm -> Maybe Loc -> Maybe Scale -> Mem
 pattern MemStack offset index scale =
   Mem
     { offset,
-      base = Just (Asm.LReg Rsp),
+      base = Just (LReg Rsp),
       index,
       scale
     }
@@ -112,10 +116,10 @@ pattern MemLoc loc =
 
 operandLocs :: Traversal' Operand Loc
 operandLocs = traversalVL $ \f -> \case
-  Asm.Mem mem -> do
+  OMem mem -> do
     mem <- traverseOf memLocs f mem
-    pure $ Asm.Mem mem
-  Asm.Loc loc -> Asm.Loc <$> f loc
+    pure $ OMem mem
+  OLoc loc -> OLoc <$> f loc
   other -> pure other
 
 memLocs :: Traversal' Mem Loc
@@ -198,8 +202,6 @@ data OpCode
   | Callq
   | Retq
   deriving (Show, Eq)
-
-type Operand = Asm.Operand X86
 
 data Data
   = Asciz !ByteString
@@ -291,6 +293,3 @@ instLabToElems instLabs =
       )
       ([], [])
       instLabs
-
-allocLocal :: Frame X86 :> es => Eff es Mem
-allocLocal = Frame.allocLocal @X86
