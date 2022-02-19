@@ -140,9 +140,9 @@ alexMonadScan = do
       alexMonadScan
     AlexToken inp' len action -> do
       alexSetInput inp'
-      let text = T.take len $ inpText inp
-          pos1 = inpPos inp
-          pos2 = inpPos inp' 
+      let text = T.take len $ inp.inpText
+          pos1 = inp.inpPos
+          pos2 = inp'.inpPos 
           span = SpanP pos1 pos2
           env = AlexEnv text span
       runReaderT action env

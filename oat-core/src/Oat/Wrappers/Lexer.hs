@@ -1,4 +1,5 @@
 -- need these record extensions to not get errors about invalid variables because of record selectors
+{-# LANGUAGE FieldSelectors #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoDuplicateRecordFields #-}
@@ -39,7 +40,8 @@ makeLexer name defUserState = do
         stateBytes :: !ByteString,
         stateScd :: !Int, -- the current startcode
         user :: $con
-      } deriving (Show)
+      }
+      deriving (Show)
 
     newtype Alex a = Alex {unAlex :: (StateT AlexState Identity) a}
       deriving (Functor, Applicative, Monad, MonadState AlexState)
@@ -47,7 +49,8 @@ makeLexer name defUserState = do
     data AlexEnv = AlexEnv
       { text :: !Text,
         span :: !Span
-      } deriving (Show)
+      }
+      deriving (Show)
 
     type AlexAction a = ReaderT AlexEnv Alex a
 

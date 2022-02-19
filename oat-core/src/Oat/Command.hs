@@ -38,11 +38,21 @@ data CommandError = CommandError Exception.IOException
   deriving (Show, Eq)
 
 runCommandClangIO :: ('[IOE, Error CommandError] :>> es) => Eff (Command ': es) a -> Eff es a
-runCommandClangIO = interpret $ \_ -> \case
-  Assemble {dotS, dotO} -> proc "clang" ["-c", dotS, "-o", dotO]
+runCommandClangIO =
+  runCommandClangIOWith
+    [ -- errors like this happen in nix shell
+      "-Wno-unused-command-line-argument"
+    ]
+
+-- run with extra arguments
+runCommandClangIOWith :: forall es a. ('[IOE, Error CommandError] :>> es) => [String] -> Eff (Command ': es) a -> Eff es a
+runCommandClangIOWith opts = interpret $ \_ -> \case
+  Assemble {dotS, dotO} -> clang ["-c", dotS, "-o", dotO]
   Preprocess {dotOat, dotI} -> proc "cpp" ["-E", dotOat, dotI]
-  CompileLlvm {dotLL, dotS} -> proc "clang" ["-S", dotLL, "-o", dotS]
-  Link {mods, out} -> proc "clang" $ mods ++ ["-o", out]
+  CompileLlvm {dotLL, dotS} -> clang ["-S", dotLL, "-o", dotS]
+  Link {mods, out} -> clang $ mods ++ ["-o", out]
   where
+    clang opts' = proc "clang" (opts' ++ opts)
+    proc :: FilePath -> [String] -> Eff es ()
     proc cmd args = adapt $ Process.callProcess cmd args
     adapt m = Process.runProcess m `Exception.catch` (Error.throwError . CommandError)

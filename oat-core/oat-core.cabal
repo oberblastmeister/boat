@@ -41,6 +41,8 @@ common common-options
     ScopedTypeVariables,
     NamedFieldPuns,
     DuplicateRecordFields,
+    OverloadedRecordDot,
+    NoFieldSelectors,
     GeneralizedNewtypeDeriving,
     DataKinds,
     ConstraintKinds,
@@ -64,7 +66,6 @@ common common-options
     TypeOperators,
     OverloadedLabels,
     ImportQualifiedPost,
-    OverloadedRecordDot,
     ImpredicativeTypes,
   ghc-options:
     -Wall
@@ -154,10 +155,10 @@ library
     Oat.Command
     Oat.Main
     Oat.Opt
-    Oat.Interned
-    Oat.Interned.Internal
-    Oat.Interned.Text
-    Oat.Interned.ShortByteString
+    -- Oat.Interned
+    -- Oat.Interned.Internal
+    -- Oat.Interned.Text
+    -- Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
     Oat.Common
     Oat.LL

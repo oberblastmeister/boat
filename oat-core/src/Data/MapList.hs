@@ -42,7 +42,7 @@ instance (Eq k, Hashable k) => Semigroup (MapList k v) where
 instance (NFData k, NFData v) => NFData (MapList k v)
 
 instance AsEmpty (MapList k v) where
-  _Empty = nearly (MapList HashMap.empty []) (null . list)
+  _Empty = nearly (MapList HashMap.empty []) (null . (.list))
 
 instance (Eq k, Hashable k) => IsList (MapList k v) where
   type Item (MapList k v) = (k, v)
