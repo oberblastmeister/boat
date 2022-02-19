@@ -9,9 +9,10 @@ module Oat.Command
   )
 where
 
-import UnliftIO.Exception qualified as Exception
-import Effectful.Error.Static
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Effectful.Process qualified as Process
+import UnliftIO.Exception qualified as Exception
 
 data Command :: Effect where
   Assemble :: {dotS :: FilePath, dotO :: FilePath} -> Command m ()
@@ -44,4 +45,4 @@ runCommandClangIO = interpret $ \_ -> \case
   Link {mods, out} -> proc "clang" $ mods ++ ["-o", out]
   where
     proc cmd args = adapt $ Process.callProcess cmd args
-    adapt m = Process.runProcess m `Exception.catch` (throwError . CommandError)
+    adapt m = Process.runProcess m `Exception.catch` (Error.throwError . CommandError)

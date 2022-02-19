@@ -10,7 +10,6 @@ import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
 import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
-import Effectful.Error.Static (runErrorNoCallStack)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
 import Effectful.Temporary qualified as Temporary
@@ -33,6 +32,7 @@ import Text.Pretty.Simple (pShowNoColor)
 import UnliftIO.Directory qualified as Directory
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
+import qualified Effectful.Error.Static as Error
 
 data Config = Config
   { update :: Bool,
@@ -90,7 +90,7 @@ llParserSpec config = do
         let (res, parseErrors) =
               runPureEff $
                 Reporter.runReporterList @LL.ParseError $
-                  runErrorNoCallStack @CompileFail $
+                  Error.runErrorNoCallStack @CompileFail $
                     LL.parse text LL.prog
         case res of
           Left _ -> Exception.throwString $ LText.unpack $ pShowNoColor parseErrors

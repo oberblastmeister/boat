@@ -20,11 +20,12 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.List qualified as List
 import Effectful.Error.Static qualified as Error.Static
-import Oat.Error (CompileFail, reportFail)
+import Oat.Error (CompileFail)
 import Oat.LL.Lexer (alexMonadScan)
 import Oat.LL.LexerWrapper (Alex (..), AlexState (..), defaultAlexState)
 import Oat.LL.Token (Token (..))
 import Oat.Reporter (Reporter)
+import Oat.Reporter qualified as Reporter
 import Oat.TH (makeFieldLabelsForOnly)
 import Optics.State.Operators
 import Prelude hiding (exp)
@@ -56,7 +57,7 @@ instance LabelOptic "alexState" A_Lens ParseState ParseState AlexState AlexState
 
 parse :: '[Reporter [ParseError], Error.Static.Error CompileFail] :>> es => Text -> Parser a -> Eff es a
 parse text parser = case fst $ runParser (defaultParseState text) parser of
-  Left es -> reportFail es
+  Left es -> Reporter.reportFail es
   Right a -> pure a
 
 defaultParseState :: Text -> ParseState

@@ -20,9 +20,6 @@ packages:
     oat-core/
     oat-prelude/
     /home/brian/projects/effectful-contrib/effectful-optics/
-    -- /home/brian/projects/effectful/effectful/
-    -- /home/brian/projects/effectful/effectful-core/
-    -- /home/brian/projects/effectful/effectful-plugin/
 
 with-compiler: ghc-9.0.2
 

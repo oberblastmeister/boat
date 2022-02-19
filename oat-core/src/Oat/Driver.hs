@@ -10,7 +10,8 @@ import Data.FileEmbed qualified as FileEmbed
 import Data.Text qualified as T
 import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.IO qualified as TIO
-import Effectful.Error.Static
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.FileSystem.IO qualified as FileSystem.IO
@@ -24,10 +25,11 @@ import Oat.Backend.X86.X86 qualified as Backend.X86
 import Oat.Command (Command)
 import Oat.Command qualified as Command
 import Oat.Common (hPutUtf8, readFileUtf8, writeFileUtf8)
-import Oat.Error (CompileFail, reportFail)
+import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
 import Oat.Reporter
+import Oat.Reporter qualified as Reporter
 import Oat.Utils.Families (type (++))
 import Oat.Utils.Monad (whenM)
 import Prettyprinter qualified
@@ -35,9 +37,9 @@ import Prettyprinter.Render.Text qualified as Prettyprinter
 import System.FilePath ((-<.>))
 import System.FilePath qualified as FilePath
 import System.IO qualified
+import Text.Pretty.Simple (pPrint, pShow)
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
-import Text.Pretty.Simple (pPrint, pShow)
 
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
@@ -228,14 +230,14 @@ runDriver ::
   Eff es a
 runDriver m = do
   let run =
-        runErrorNoCallStack @UnicodeException
+        Error.runErrorNoCallStack @UnicodeException
           >>> Temporary.runTemporary
           >>> FileSystem.runFileSystem
           >>> Command.runCommandClangIO
-          >>> runErrorNoCallStack @Command.CommandError
+          >>> Error.runErrorNoCallStack @Command.CommandError
   res <- run m
   case res of
-    Left e -> reportFail [DriverCommandError e]
+    Left e -> Reporter.reportFail [DriverCommandError e]
     Right res' -> case res' of
-      Left ex -> reportFail [DriverUnicodeException ex]
+      Left ex -> Reporter.reportFail [DriverUnicodeException ex]
       Right res'' -> pure res''

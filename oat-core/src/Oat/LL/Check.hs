@@ -9,15 +9,18 @@ where
 
 import Data.HashSet qualified as HashSet
 import Data.MapList qualified as MapList
-import Effectful.Error.Static
-import Effectful.Reader.Static
-import Effectful.Reader.Static.Optics
-import Effectful.State.Static.Local
-import Effectful.State.Static.Local.Optics
+import Effectful.Error.Static (Error)
+import Effectful.Reader.Static (Reader, ask)
+import Effectful.Reader.Static qualified as Reader
+import Effectful.Reader.Static.Optics (rview)
+import Effectful.State.Static.Local (State)
+import Effectful.State.Static.Local qualified as State
+import Effectful.State.Static.Local.Optics (assign, use)
 import Oat.Error (CompileFail)
 import Oat.LL.AST qualified as LL
 import Oat.LL.Name qualified as LL
-import Oat.Reporter
+import Oat.Reporter (Reporter, report)
+import Oat.Reporter qualified as Reporter
 
 data CheckState = CheckState
   { tempToTy :: !LL.TyMap,
@@ -43,13 +46,11 @@ type CheckEffs =
 checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
 checkProg prog = do
   checkDeclMap $ prog ^. #declMap
-  evalState @LL.TyMap mempty
-    . runReader @LL.DeclMap (prog ^. #declMap)
+  State.evalState @LL.TyMap mempty
+    . Reader.runReader @LL.DeclMap (prog ^. #declMap)
     . checkDecls
     $ prog ^. #decls
-
--- TODO:  somehow fix this
--- whenM (use @CheckState #didFail) compileFail
+  Reporter.maybeFail @[CheckError]
 
 checkDecls :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => [LL.Decl] -> Eff es ()
 checkDecls = traverse_ checkDecl
@@ -64,7 +65,7 @@ checkDeclMap declMap = do
     report [InterferingGlobals]
 
 checkDecl :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => LL.Decl -> Eff es ()
-checkDecl (LL.DeclFun _name funDecl) = evalState @CheckState defCheckState $ do
+checkDecl (LL.DeclFun _name funDecl) = State.evalState @CheckState defCheckState $ do
   for_ (LL.funDeclTyParams funDecl) $ \(param, arg) ->
     assign @CheckState (#tempToTy % at param) (Just arg)
   traverseOf_ (#body % LL.bodyBlocks) checkBlock funDecl
@@ -82,12 +83,12 @@ checkBlock ::
 checkBlock block = do
   forOf_ (#insts % traversed) block $ \inst -> do
     tempToTy <- use @CheckState #tempToTy
-    ty <- runReader tempToTy $ inferInst inst
+    ty <- Reader.runReader tempToTy $ inferInst inst
     case inst ^? LL.instName of
       Nothing -> pure ()
       Just name -> assign @CheckState (#tempToTy % at name) (Just ty)
   tempToTy <- use @CheckState #tempToTy
-  runReader tempToTy $ checkTerm (block ^. #term)
+  Reader.runReader tempToTy $ checkTerm (block ^. #term)
 
 inferInst :: CheckEffs :>> es => LL.Inst -> Eff es LL.Ty
 inferInst = \case

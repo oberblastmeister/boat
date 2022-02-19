@@ -3,38 +3,45 @@
 module Oat.Reporter
   ( Reporter (..),
     report,
-    runReporterCallback,
-    runReporterPure,
     runReporterList,
+    hadFatal,
+    reportFail,
+    maybeFail,
   )
 where
 
-import Effectful.Writer.Static.Shared
+import Effectful.Error.Static (Error)
+import Effectful.Writer.Static.Shared qualified as Writer
+import Oat.Error (compileFail)
+import Oat.Error qualified
+import Oat.Utils.Monad (whenM)
 
 data Reporter :: Type -> Effect where
   Report :: w -> Reporter w m ()
+  HadFatal :: Reporter w m Bool
 
 type instance DispatchOf (Reporter w) = 'Dynamic
 
 report :: forall w es. Reporter w :> es => w -> Eff es ()
 report = send . Report
 
--- runReporterPure specialized to a list so that we don't get O(n^2) complexity
+hadFatal :: forall w es. Reporter w :> es => Eff es Bool
+hadFatal = send $ HadFatal @w
+
+maybeFail :: forall w es. '[Reporter w, Error Oat.Error.CompileFail] :>> es => Eff es ()
+maybeFail = whenM (hadFatal @w) compileFail
+
+reportFail :: forall w es a. '[Reporter w, Error Oat.Error.CompileFail] :>> es => w -> Eff es a
+reportFail w = report w *> compileFail
+
 runReporterList :: forall a es b. Eff (Reporter [a] ': es) b -> Eff es (b, [a])
 runReporterList m = do
   (b, Dual as) <-
     reinterpret
-      (runWriter @(Dual [a]))
+      (Writer.runWriter @(Dual [a]))
       ( \_ -> \case
-          Report w -> tell $ Dual w
+          Report w -> Writer.tell $ Dual w
+          HadFatal -> pure False
       )
       m
   pure (b, as)
-
-runReporterPure :: forall w es a. Monoid w => Eff (Reporter w ': es) a -> Eff es (a, w)
-runReporterPure = reinterpret (runWriter @w) $ \_ -> \case
-  Report w -> tell w
-
-runReporterCallback :: forall w es a. (w -> Eff es ()) -> Eff (Reporter w ': es) a -> Eff es a
-runReporterCallback f = interpret $ \_ -> \case
-  Report w -> f w

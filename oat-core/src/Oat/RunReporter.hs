@@ -4,12 +4,11 @@
 module Oat.RunReporter where
 
 import Effectful.State.Static.Local
-import Oat.Utils.Families (type (++))
+import Effectful.State.Static.Local.Optics (assign, modifying, use)
 import Oat.Driver qualified as Driver
 import Oat.LL qualified as LL
-import Oat.Reporter (Reporter (Report))
-import Oat.Reporter qualified as Reporter
-import Effectful.State.Static.Local.Optics (modifying)
+import Oat.Reporter (Reporter (..))
+import Oat.Utils.Families (type (++))
 
 type ReporterEffs =
   '[ Reporter [Driver.DriverError],
@@ -37,10 +36,21 @@ runAllReporters ::
   Eff (ReporterEffs ++ es) a ->
   Eff es (a, Reports)
 runAllReporters m = do
-  (((a, r1), r2), r3) <-
+  (((a, r1), r2), (r3, _)) <-
     run @Driver.DriverError m
       & run @LL.ParseError
-      & run @LL.CheckError
+      & reinterpret @(Reporter [LL.CheckError])
+        (runState (mempty @Reports, False))
+        ( \_ -> \case
+            Report w -> do
+              for_ w $ \x -> do
+                liftIO $ print x
+                assign @(Reports, Bool) _2 True
+                modifying @(Reports, Bool) (_1 % #errors) (+ 1)
+              traverse_ (liftIO . print) w
+            HadFatal -> use @(Reports, Bool) _2
+        )
+
   pure (a, r1 <> r2 <> r3)
   where
     run ::
@@ -52,20 +62,26 @@ runAllReporters m = do
       Eff (Reporter (f x) ': es) a ->
       Eff es (a, Reports)
     run =
-      runReporter
-        ( \x -> do
+      reinterpret (runState mempty) $ \_ -> \case
+        Report w -> traverse_ (\x -> do
             liftIO $ print x
-            modifying @Reports #errors (+ 1)
-        )
+            modifying @Reports #errors (+ 1)) w
+        HadFatal -> pure False
 
-runReporter :: (Foldable f) => (x -> Eff (State Reports ': es) ()) -> Eff (Reporter (f x) ': es) a -> Eff es (a, Reports)
-runReporter report = reinterpret (runState mempty) $ \_ -> \case
-  Report w -> traverse_ report w
+      -- runReporter
+      --   ( \x -> do
+      --       liftIO $ print x
+      --       modifying @Reports #errors (+ 1)
+      --   )
 
-runReporterCallBackEach ::
-  forall f x es a.
-  Foldable f =>
-  (x -> Eff es ()) ->
-  Eff (Reporter (f x) ': es) a ->
-  Eff es a
-runReporterCallBackEach f = Reporter.runReporterCallback (traverse_ f)
+-- runReporter :: (Foldable f) => (x -> Eff (State Reports ': es) ()) -> Eff (Reporter (f x) ': es) a -> Eff es (a, Reports)
+-- runReporter report = reinterpret (runState mempty) $ \_ -> \case
+--   Report w -> traverse_ report w
+
+-- runReporterCallBackEach ::
+--   forall f x es a.
+--   Foldable f =>
+--   (x -> Eff es ()) ->
+--   Eff (Reporter (f x) ': es) a ->
+--   Eff es a
+-- runReporterCallBackEach f = Reporter.runReporterCallback (traverse_ f)

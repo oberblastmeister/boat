@@ -35,7 +35,8 @@ import Data.Text.Encoding.Error (UnicodeException)
 import Data.Vector qualified as VB
 import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
 import Data.Vector.Mutable qualified as VBM
-import Effectful.Error.Static (Error, runError, throwError)
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Oat.Utils.Monad (unlessM)
@@ -80,13 +81,13 @@ instance Show ShowableException where
 
 runErrorIO :: forall e es a. (IOE :> es, Show e) => Eff (Error e ': es) a -> Eff es a
 runErrorIO m = do
-  res <- runError m
+  res <- Error.runError m
   case res of
     Left e -> Exception.throwIO $ ShowableException e
     Right a -> pure a
 
 liftEither :: (Error e :> es) => Either e a -> Eff es a
-liftEither (Left e) = throwError e
+liftEither (Left e) = Error.throwError e
 liftEither (Right a) = pure a
 
 readFileUtf8 :: '[Error UnicodeException, IOE] :>> es => FilePath -> Eff es Text

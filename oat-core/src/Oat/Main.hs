@@ -9,7 +9,8 @@ module Oat.Main
   )
 where
 
-import Effectful.Error.Static (CallStack, Error, prettyCallStack, runError)
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, runReader)
 import Effectful.Reader.Static.Optics (rview)
 import Oat.Driver qualified as Driver
@@ -54,7 +55,7 @@ runMain opt m = do
   runEff $
     runReader opt $
       RunReporter.runAllReporters
-        (runError @CompileFail m)
+        (Error.runError @CompileFail m)
         >>= \case
           (Left (callStack, _), reports) -> do
             printCompileResult (Just callStack) reports
@@ -72,7 +73,7 @@ runDriverMain_ opt m = runMain_ opt $ Driver.runDriver m
 runDriverMain :: (es' ~ Driver.DriverEffsRun ++ MainEffs) => Opt -> Eff es' () -> IO Bool
 runDriverMain opt m = runMain opt $ Driver.runDriver m
 
-printCompileResult :: '[IOE, Reader Opt] :>> es => Maybe CallStack -> RunReporter.Reports -> Eff es ()
+printCompileResult :: '[IOE, Reader Opt] :>> es => Maybe Error.CallStack -> RunReporter.Reports -> Eff es ()
 printCompileResult callStack reports = do
   Utils.Pretty.putDoc $
     pIf
@@ -94,4 +95,4 @@ printCompileResult callStack reports = do
     whenM (rview @Opt #callStack) $
       Utils.Pretty.putDoc $
         Info <#> "Callstack:"
-          <++> pretty (prettyCallStack callStack)
+          <++> pretty (Error.prettyCallStack callStack)
