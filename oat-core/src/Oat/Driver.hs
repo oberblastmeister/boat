@@ -64,13 +64,13 @@ drive = do
     _ -> Exception.throwString "Only compiling one file is supported for now"
   if
       | opt ^. #emitAsm -> do
-        compileLLFileToAsm file $
-          fromMaybe
-            (FilePath.takeFileName file -<.> ".s")
-            (opt ^. #output)
+          compileLLFileToAsm file $
+            fromMaybe
+              (FilePath.takeFileName file -<.> ".s")
+              (opt ^. #output)
       | otherwise -> do
-        compileLLFile file $
-          fromMaybe "a.out" (opt ^. #output)
+          compileLLFile file $
+            fromMaybe "a.out" (opt ^. #output)
 
 compileLLFileToAsm :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
 compileLLFileToAsm llPath asmPath = do

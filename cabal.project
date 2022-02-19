@@ -4,12 +4,6 @@ source-repository-package
     tag: 82f4b8c4957e927147c7ca61b86d9629d1894ea5
     subdir: optics optics-extra optics-core optics-th optics-vl
 
--- source-repository-package
---     type: git
---     location: https://github.com/Kleidukos/effectful-contrib.git
---     tag: a68a03ec0e26097884b713abcf545396203f7a79
---     subdir: effectful-typed-process
-
 source-repository-package
     type: git
     location: https://github.com/arybczak/effectful.git
@@ -21,7 +15,7 @@ packages:
     oat-prelude/
     /home/brian/projects/effectful-contrib/effectful-optics/
 
-with-compiler: ghc-9.0.2
+with-compiler: ghc-9.2.1
 
 tests: True
 -- benchmarks: True

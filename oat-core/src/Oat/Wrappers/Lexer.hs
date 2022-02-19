@@ -2,6 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoDuplicateRecordFields #-}
+{-# LANGUAGE NoOverloadedRecordDot #-}
 
 -- you need to define alexEOF and also import this wrapper
 module Oat.Wrappers.Lexer
