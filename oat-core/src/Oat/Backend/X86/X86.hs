@@ -13,9 +13,9 @@ module Oat.Backend.X86.X86
     Prog,
     Scale (..),
     InstLab,
-    Inst(.., (:@)),
-    Operand(.., OReg, OTemp),
-    Loc(..),
+    Inst (.., (:@)),
+    Operand (.., OReg, OTemp),
+    Loc (..),
     Mem (.., MemImm, MemLoc, MemStack, MemStackSimple, MemBaseSimple),
     hasTwoOperands,
     dat,
@@ -77,7 +77,7 @@ data Scale
   | S4
   | S8
   deriving (Show, Eq)
-  
+
 pattern OReg :: Reg -> Operand
 pattern OReg reg = OLoc (LReg reg)
 
@@ -202,7 +202,6 @@ data Elem = Elem
 
 type Prog = [Elem]
 
-    
 $(makeFieldLabelsNoPrefix ''Inst)
 $(makeFieldLabelsNoPrefix ''Mem)
 $(makeFieldLabelsNoPrefix ''Elem)
