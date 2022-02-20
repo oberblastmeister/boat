@@ -24,13 +24,13 @@ import Oat.Backend.X86.Pretty qualified as Backend.X86.Pretty
 import Oat.Backend.X86.X86 qualified as Backend.X86
 import Oat.Command (Command)
 import Oat.Command qualified as Command
-import Oat.Common (hPutUtf8, readFileUtf8, writeFileUtf8)
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
 import Oat.Opt (Opt)
 import Oat.Reporter
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.Families (type (++))
+import Oat.Utils.IO (hPutUtf8, readFileUtf8, writeFileUtf8)
 import Oat.Utils.Monad (whenM)
 import Prettyprinter qualified
 import Prettyprinter.Render.Text qualified as Prettyprinter

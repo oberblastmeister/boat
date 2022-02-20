@@ -23,7 +23,7 @@ import Oat.Backend.Frame qualified as Frame
 import Oat.Backend.X86.Frame qualified as X86.Frame
 import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
-import Oat.Common (concatToEither)
+import Oat.Utils.Misc (concatToEither)
 import Oat.LL qualified as LL
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
@@ -124,8 +124,7 @@ munchInst = \case
   LL.Bitcast LL.BitcastInst {name, arg} -> do
     arg <- compileOperand arg
     emitMov arg (X86.OTemp name)
-  LL.Gep inst -> undefined
-  -- probably compile to conditional move instruction
+  LL.Gep _ -> error "gep should be lowered before this"
   LL.Select inst -> undefined
   LL.Sext inst -> undefined
 

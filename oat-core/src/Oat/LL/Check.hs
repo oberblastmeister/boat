@@ -44,6 +44,7 @@ data CheckError
   | NotPointerTy LL.Ty
   | -- expected actual
     MismatchedOperand LL.Operand LL.Operand
+  | GepThroughPointer LL.Ty
   deriving (Show, Eq)
 
 makeFieldLabelsNoPrefix ''CheckState
@@ -54,7 +55,7 @@ type CheckEffs =
      Reader LL.DeclMap,
      State LL.TyMap
    ]
-   
+
 checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
 checkProg prog = do
   checkDeclMap $ prog ^. #declMap
@@ -189,43 +190,45 @@ inferBitcast LL.BitcastInst {ty1, ty2, arg} = do
   pure ty2
 
 inferGep :: CheckEffs :>> es => LL.GepInst -> Eff es LL.Ty
-inferGep LL.GepInst {ty', ty, arg, args} = run $ do
-  tyAssert (Just "gep") Nothing [ty] (LL.TyPtr ty')
-  checkOperand arg ty
-  (tySt, args) <- case (ty, args) of
+inferGep LL.GepInst {ty', ty = tyPtr, arg, args} = run $ do
+  tyAssert (Just "gep") Nothing [tyPtr] (LL.TyPtr ty')
+  checkOperand arg tyPtr
+  (ty, args) <- case (tyPtr, args) of
     (LL.TyPtr ty, (argTy, arg) :| args) -> do
       checkNumTy argTy
       case arg of
         LL.Const 0 -> pure ()
         _ -> report [MismatchedOperand (LL.Const 0) arg]
       pure (ty, args)
-    _ -> reportThrow [NotPointerTy ty]
+    _ -> reportThrow [NotPointerTy tyPtr]
+  tyAssert (Just "gep") Nothing [ty] ty'
   void $
     foldM
-      ( \tySt (argTy, arg) -> do
+      ( \ty (argTy, arg) -> do
           unless (LL.isNumTy argTy) $
             reportThrow [NotNumTy argTy]
           let checkInBounds i i' =
                 unless (i' < i) $
                   reportThrow [IndexExceeded i' i]
-          case (tySt, arg) of
+          case (ty, arg) of
+            (LL.TyPtr _, _) -> do
+              reportThrow [GepThroughPointer ty]
             (LL.TyStruct tys, LL.Const i) -> do
               checkInBounds (length tys) i
               pure $ tys !! i
             (LL.TyStruct _, _) ->
               reportThrow [OperandNotConst arg]
-            (LL.TyArray size tySt', LL.Const i) -> do
+            (LL.TyArray size ty', LL.Const i) -> do
               checkInBounds size i
-              pure tySt'
-            (LL.TyArray _size tySt', _) -> pure tySt'
+              pure ty'
+            (LL.TyArray _size ty', _) -> pure ty'
             (ty, _) ->
               reportThrow [MalformedGep ty]
       )
-      tySt
+      ty
       args
-  pure ()
   where
-    run m = ty <$ Error.runError @() m
+    run m = tyPtr <$ Error.runError @() m
     reportThrow es = report es *> Error.throwError ()
 
 inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty

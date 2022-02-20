@@ -3,12 +3,13 @@ module Oat.LL.Name
     NameSource,
     infiniteNames,
     runNameSource,
+    freshName,
   )
 where
 
-import Data.Infinite qualified as Infinite
 import Control.Source (Source)
-import qualified Control.Source as Source
+import Control.Source qualified as Source
+import Data.Infinite qualified as Infinite
 
 type Name = ByteString
 
@@ -19,3 +20,6 @@ infiniteNames = fromString . show <$> Infinite.from (0 :: Int)
 
 runNameSource :: Eff (NameSource ': es) a -> Eff es a
 runNameSource = Source.evalSource infiniteNames
+
+freshName :: NameSource :> es => Eff es Name
+freshName = Source.fresh

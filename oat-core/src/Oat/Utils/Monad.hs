@@ -11,9 +11,12 @@ module Oat.Utils.Monad
     unlessOfM,
     whenOfM_,
     whenOf_,
+    liftEither,
   )
 where
 
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Prelude hiding (maybe)
 
 unlessM :: Monad m => m Bool -> m () -> m ()
@@ -55,3 +58,7 @@ unlessOf o s m = whenNothing (s ^? o) m
 
 unlessOfM :: (Is k An_AffineFold, Monad m) => Optic' k is s a -> m s -> m () -> m ()
 unlessOfM o ms m = ms >>= (\s -> unlessOf o s m)
+
+liftEither :: (Error e :> es) => Either e a -> Eff es a
+liftEither (Left e) = Error.throwError e
+liftEither (Right a) = pure a

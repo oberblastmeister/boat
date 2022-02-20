@@ -55,8 +55,11 @@ import Data.Int (Int64)
 import Data.MapList (MapList)
 import Data.MapList qualified as MapList
 import Data.Text qualified as T
-import Oat.Common (internalError, unwrap)
+import Effectful.Reader.Static (Reader, ask)
+import Effectful.Reader.Static qualified as Reader
+import Effectful.Reader.Static.Optics (rview)
 import Oat.LL.Name (Name)
+import Oat.Utils.Optics (unwrap)
 import Optics as O
 
 data Prog = Prog
@@ -414,9 +417,10 @@ doesInsAssign (Store _) = False
 doesInsAssign _ = True
 
 -- the size of the type in bytes
-tySize :: TyMap -> Ty -> Int
-tySize tyDecls =
-  paraOf (plateTy tyDecls) go
+tySize :: Reader DeclMap :> es => Ty -> Eff es Int
+tySize ty = do
+  tyDecls <- rview @DeclMap (#tyDecls % #map)
+  pure $ paraOf (plateTy tyDecls) go ty
   where
     go ty rs =
       case ty of
@@ -434,18 +438,22 @@ tySize tyDecls =
         size = sum rs
 
 -- maximum call size of them in bytes
-maxCallSize :: TyMap -> FunBody -> Maybe Int
-maxCallSize tyMap =
-  maximumOf $
-    bodyInsts
-      % #_Call
-      % #args
-      % each
-      % _1
-      % O.to (tySize tyMap)
+maxCallSize :: Reader DeclMap :> es => FunBody -> Eff es (Maybe Int)
+maxCallSize body = do
+  declMap <- ask @DeclMap
+  pure $
+    maximumOf
+      ( bodyInsts
+          % #_Call
+          % #args
+          % each
+          % _1
+          % O.to (runPureEff . Reader.runReader declMap . tySize)
+      )
+      body
 
 lookupTy :: Name -> TyMap -> Ty
-lookupTy name mp = mp ^. at name % unwrap (internalError $ "Could not find name " <> T.pack (show name) <> " in map")
+lookupTy name mp = mp ^. at name % unwrap (error $ "Could not find name " <> T.pack (show name) <> " in map")
 
 -- note, for this to be valid, you must not change the type for TyNamed
 -- also, this will panic if the HashMap does not contain the name

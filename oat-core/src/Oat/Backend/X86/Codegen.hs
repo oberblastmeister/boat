@@ -7,14 +7,14 @@ import Control.Source (Source)
 import Data.Int (Int64)
 import Data.Sequence qualified as Seq
 import Effectful.Reader.Static
-import Effectful.Reader.Static.Optics
 import Oat.Backend.X86.Frame qualified as Frame
 import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.RegAlloc qualified as RegAlloc
 import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
-import Oat.Common (concatToEither)
+import Oat.Utils.Misc (concatToEither)
 import Oat.LL qualified as LL
+import Oat.LL.LowerGep qualified as LL.LowerGep
 import Prelude
 
 compileProg :: '[Source LL.Name] :>> es => LL.Prog -> Eff es (Seq InstLab)
@@ -39,12 +39,12 @@ compileFunDecl ::
   Eff es (Seq InstLab)
 compileFunDecl name funDecl = do
   (insts, frameState) <- Frame.runFrame $ do
+    funDecl <- LL.LowerGep.lowerFunDecl funDecl
     insts <- Munch.compileBody $ funDecl ^. #body
     let viewShiftedInsts = Seq.fromList (Right <$> viewShiftFrom (funDecl ^. #params)) <> insts
     RegAlloc.noReg viewShiftedInsts
-  tyMap <- rview @LL.DeclMap $ #tyDecls % #map
-  let maxCall = LL.maxCallSize tyMap (funDecl ^. #body)
-      (prologue, epilogue) = prologueEpilogue maxCall frameState
+  maxCall <- LL.maxCallSize $ funDecl ^. #body
+  let (prologue, epilogue) = prologueEpilogue maxCall frameState
   pure $ Left (name, True) :< (fmap Right prologue <> insts <> fmap Right epilogue)
 
 viewShiftFrom :: [LL.Name] -> [X86.Inst]
@@ -77,8 +77,7 @@ prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)
           ]
     subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, X86.OReg Rsp]]
     addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, X86.OReg Rsp] | stackSize /= 0]
-    -- stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
-    stackSize = fromIntegral maxCall + Frame.getStackSize frameState
+    stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
     stackSizeArg = X86.OImm $ X86.Lit $ fromIntegral stackSize
     maxCall = max 0 (fromMaybe 0 maybeMaxCall - X86.wordSize * length X86.paramRegs)
     -- TODO: do we need this?

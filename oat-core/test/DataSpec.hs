@@ -10,11 +10,13 @@ import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
 import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
+import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
+import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
+import Effectful.Temporary (Temporary)
 import Effectful.Temporary qualified as Temporary
-import Oat.Common (hPutUtf8, runErrorIO, writeFileUtf8)
-import Oat.Common qualified
 import Oat.Driver qualified as Driver
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
@@ -22,6 +24,7 @@ import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.Main qualified as Main
 import Oat.Opt qualified as Opt
 import Oat.Reporter qualified as Reporter
+import Oat.Utils.IO (hPutUtf8, readFileUtf8, runErrorIO, writeFileUtf8)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
 import Test.Hspec
@@ -32,7 +35,6 @@ import Text.Pretty.Simple (pShowNoColor)
 import UnliftIO.Directory qualified as Directory
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
-import qualified Effectful.Error.Static as Error
 
 data Config = Config
   { update :: Bool,
@@ -185,7 +187,7 @@ defConfig =
       filterPred = const True
     }
 
-makeSnapshotSpec :: Config -> (Text -> IO Text) -> FilePath -> Spec
+makeSnapshotSpec :: Config -> (Text -> Eff '[IOE] Text) -> FilePath -> Spec
 makeSnapshotSpec config convert dirPath = do
   llCompileOk <- runIOE $ FileSystem.runFileSystem $ FileSystem.listDirectory $ "test_data" </> dirPath
   describe dirPath $
@@ -196,17 +198,23 @@ makeSnapshotSpec config convert dirPath = do
 notExpectPath :: FilePath -> Bool
 notExpectPath path = FilePath.takeExtension path /= ".expect"
 
-makeSnapshotFileSpec :: Config -> (Text -> IO Text) -> FilePath -> FilePath -> Spec
-makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec example
+makeSnapshotFileSpec :: Config -> (Text -> Eff '[IOE] Text) -> FilePath -> FilePath -> Spec
+makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run example
   where
     fullPath = "test_data" </> dirPath </> path
 
-    example :: IO Spec.Result
+    run =
+      runEff
+        . FileSystem.runFileSystem
+        . Temporary.runTemporary
+        . runErrorIO @UnicodeException
+
+    example :: '[IOE, FileSystem, Temporary, Error UnicodeException] :>> es => Eff es Spec.Result
     example = do
       contents <- readFileUtf8 fullPath
       let expectPath = fullPath -<.> "expect"
-      existsExpect <- Directory.doesFileExist expectPath
-      convertContents <- convert contents
+      existsExpect <- FileSystem.doesFileExist expectPath
+      convertContents <- liftIO $ runEff $ convert contents
       if existsExpect
         then do
           expectContents <- readFileUtf8 expectPath <&> stripLastNewline
@@ -214,19 +222,17 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec exampl
             then
               if config ^. #update
                 then do
-                  runEff $ writeFileUtf8 expectPath convertContents
+                  writeFileUtf8 expectPath convertContents
                   pure
                     Spec.Result
                       { resultInfo = "Updating the .expect file!",
                         resultStatus = Spec.Success
                       }
                 else do
-                  runEff $
-                    Temporary.runTemporary $
-                      Temporary.withSystemTempFile "snap" $ \temp handle -> do
-                        hPutUtf8 handle convertContents
-                        IO.hFlush handle
-                        gitDiff expectPath temp
+                  Temporary.withSystemTempFile "snap" $ \temp handle -> do
+                    hPutUtf8 handle convertContents
+                    IO.hFlush handle
+                    gitDiff expectPath temp
                   pure
                     Spec.Result
                       { resultInfo = "The files did not match!",
@@ -241,7 +247,7 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec exampl
         else
           if config ^. #firstTimeUpdate
             then do
-              runEff $ writeFileUtf8 expectPath convertContents
+              writeFileUtf8 expectPath convertContents
               pure
                 Spec.Result
                   { resultInfo = "First time running. Updating the .expect file!",
@@ -271,9 +277,6 @@ gitDiff file file' = do
 stripLastNewline :: Text -> Text
 stripLastNewline (t :> '\n') = t
 stripLastNewline t = t
-
-readFileUtf8 :: FilePath -> IO Text
-readFileUtf8 = runEff . runErrorIO @UnicodeException . Oat.Common.readFileUtf8
 
 runIOE :: Eff '[IOE] a -> SpecM arg a
 runIOE = runIO . runEff

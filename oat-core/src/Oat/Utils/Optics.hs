@@ -6,6 +6,7 @@ module Oat.Utils.Optics
     onOf,
     swap,
     fromOf,
+    unwrap,
   )
 where
 
@@ -45,3 +46,12 @@ fromOf o def = to $ \s -> case s ^? o of
   Just a -> a
   Nothing -> def
 {-# INLINE fromOf #-}
+
+unwrap :: a -> Lens' (Maybe a) a
+unwrap def =
+  lens
+    (fromMaybe def)
+    ( \m b -> case m of
+        Just _ -> Just b
+        Nothing -> Just def
+    )

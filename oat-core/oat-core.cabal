@@ -142,6 +142,8 @@ library
     Data.Range
     Data.Infinite
     Oat
+    Oat.Utils.Misc
+    Oat.Utils.IO
     Oat.Utils.Impossible
     Oat.Utils.Monad
     Oat.Utils.CallStack
@@ -161,13 +163,13 @@ library
     -- Oat.Interned.Text
     -- Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
-    Oat.Common
     Oat.LL
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer
     Oat.LL.Parser
     Oat.LL.AST
+    Oat.LL.LowerGep
     Oat.LL.Combine
     Oat.LL.LexerWrapper
     Oat.LL.Check
