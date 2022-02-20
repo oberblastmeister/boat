@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+
 module Oat.Backend.Frame
   ( Frame (..),
     allocLocalWith,

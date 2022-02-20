@@ -5,6 +5,7 @@ module Oat.Utils.Optics
     _neHead,
     onOf,
     swap,
+    fromOf,
   )
 where
 
@@ -31,8 +32,16 @@ parOf o strat = traverseOf o $ Parallel.rparWith strat
 
 _neHead :: Lens' (NonEmpty a) a
 _neHead = lens NonEmpty.head (\(_ :| as) a -> a :| as)
+{-# INLINE _neHead #-}
 
 onOf :: Is k A_Getter => (a -> a -> c) -> Optic' k is s a -> (s -> s -> c)
 onOf f o = f `on` (^. o)
+{-# INLINE onOf #-}
 
 infixl 0 `onOf`
+
+fromOf :: Is k An_AffineFold => Optic' k is s a -> a -> Getter s a
+fromOf o def = to $ \s -> case s ^? o of
+  Just a -> a
+  Nothing -> def
+{-# INLINE fromOf #-}

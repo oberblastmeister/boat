@@ -10,6 +10,7 @@ where
 import Data.HashSet qualified as HashSet
 import Data.MapList qualified as MapList
 import Effectful.Error.Static (Error)
+import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, ask)
 import Effectful.Reader.Static qualified as Reader
 import Effectful.Reader.Static.Optics (rview)
@@ -28,12 +29,21 @@ data CheckState = CheckState
   }
 
 data CheckError
-  = NameNotFound LL.Name
+  = NameNotFound !LL.Name
   | -- custom message, arg, expected, actual
     MismatchedTy (Maybe Text) (Maybe LL.Operand) [LL.Ty] LL.Ty
   | InterferingGlobals
   | TypeNotAllowed LL.Ty
   | ShiftTooMuch !Int
+  | -- unexpected gep ty
+    MalformedGep LL.Ty
+  | -- expected actual
+    IndexExceeded !Int !Int
+  | NotNumTy LL.Ty
+  | OperandNotConst LL.Operand
+  | NotPointerTy LL.Ty
+  | -- expected actual
+    MismatchedOperand LL.Operand LL.Operand
   deriving (Show, Eq)
 
 makeFieldLabelsNoPrefix ''CheckState
@@ -44,7 +54,7 @@ type CheckEffs =
      Reader LL.DeclMap,
      State LL.TyMap
    ]
-
+   
 checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
 checkProg prog = do
   checkDeclMap $ prog ^. #declMap
@@ -103,6 +113,7 @@ inferInst = \case
   LL.Bitcast inst -> inferBitcast inst
   LL.Gep inst -> inferGep inst
   LL.Select inst -> inferSelect inst
+  LL.Sext inst -> inferSext inst
 
 checkTerm :: CheckEffs :>> es => LL.Term -> Eff es ()
 checkTerm (LL.Ret LL.RetTerm {ty, arg}) = case arg of
@@ -112,9 +123,7 @@ checkTerm (LL.Cbr LL.CbrTerm {arg}) = checkOperand arg LL.I64
 checkTerm (LL.Br _) = pure ()
 
 checkOperand :: CheckEffs :>> es => LL.Operand -> LL.Ty -> Eff es ()
-checkOperand (LL.Const _) LL.I64 = pure ()
-checkOperand (LL.Const _) ty = report [TypeNotAllowed ty]
-checkOperand arg@(LL.Const _) ty = report [MismatchedTy Nothing (Just arg) [LL.I1, LL.I8, LL.I64] ty]
+checkOperand (LL.Const _) ty = checkNumTy ty
 checkOperand arg@(LL.Gid name) ty = do
   declMap <- ask @LL.DeclMap
   case headOf (LL.declMapTyAt name) declMap of
@@ -165,8 +174,8 @@ inferIcmp :: CheckEffs :>> es => LL.IcmpInst -> Eff es LL.Ty
 inferIcmp LL.IcmpInst {ty, arg1, arg2} = do
   checkOperand arg1 LL.I64
   checkOperand arg2 LL.I64
-  tyAssert (Just "icmp") Nothing [LL.I64] ty
-  pure LL.I64
+  tyAssert (Just "icmp") Nothing [LL.I1] ty
+  pure LL.I1
 
 inferCall :: CheckEffs :>> es => LL.CallInst -> Eff es LL.Ty
 inferCall LL.CallInst {ty, fn, args} = do
@@ -175,20 +184,70 @@ inferCall LL.CallInst {ty, fn, args} = do
   pure ty
 
 inferBitcast :: CheckEffs :>> es => LL.BitcastInst -> Eff es LL.Ty
-inferBitcast LL.BitcastInst {from, to, arg} = do
-  checkOperand arg from
-  pure to
+inferBitcast LL.BitcastInst {ty1, ty2, arg} = do
+  checkOperand arg ty1
+  pure ty2
 
 inferGep :: CheckEffs :>> es => LL.GepInst -> Eff es LL.Ty
-inferGep = undefined
+inferGep LL.GepInst {ty', ty, arg, args} = run $ do
+  tyAssert (Just "gep") Nothing [ty] (LL.TyPtr ty')
+  checkOperand arg ty
+  (tySt, args) <- case (ty, args) of
+    (LL.TyPtr ty, (argTy, arg) :| args) -> do
+      checkNumTy argTy
+      case arg of
+        LL.Const 0 -> pure ()
+        _ -> report [MismatchedOperand (LL.Const 0) arg]
+      pure (ty, args)
+    _ -> reportThrow [NotPointerTy ty]
+  void $
+    foldM
+      ( \tySt (argTy, arg) -> do
+          unless (LL.isNumTy argTy) $
+            reportThrow [NotNumTy argTy]
+          let checkInBounds i i' =
+                unless (i' < i) $
+                  reportThrow [IndexExceeded i' i]
+          case (tySt, arg) of
+            (LL.TyStruct tys, LL.Const i) -> do
+              checkInBounds (length tys) i
+              pure $ tys !! i
+            (LL.TyStruct _, _) ->
+              reportThrow [OperandNotConst arg]
+            (LL.TyArray size tySt', LL.Const i) -> do
+              checkInBounds size i
+              pure tySt'
+            (LL.TyArray _size tySt', _) -> pure tySt'
+            (ty, _) ->
+              reportThrow [MalformedGep ty]
+      )
+      tySt
+      args
+  pure ()
+  where
+    run m = ty <$ Error.runError @() m
+    reportThrow es = report es *> Error.throwError ()
 
 inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
-inferSelect = undefined
+-- TODO: this is not correct
+inferSelect LL.SelectInst {condTy, ty2} = do
+  tyAssert (Just "select") Nothing [LL.I1] condTy
+  pure ty2
+
+inferSext :: CheckEffs :>> es => LL.SextInst -> Eff es LL.Ty
+inferSext LL.SextInst {ty1, ty2, arg} = do
+  checkOperand arg ty1
+  pure ty2
 
 tyAssert :: Reporter [CheckError] :> es => Maybe Text -> Maybe LL.Operand -> [LL.Ty] -> LL.Ty -> Eff es ()
 tyAssert mess arg expectedTys actualTy =
   unless (actualTy `elem` expectedTys) $
     report [MismatchedTy mess arg expectedTys actualTy]
+
+checkNumTy :: Reporter [CheckError] :> es => LL.Ty -> Eff es ()
+checkNumTy ty
+  | LL.isNumTy ty = pure ()
+  | otherwise = report [NotNumTy ty]
 
 defCheckState :: CheckState
 defCheckState = CheckState {tempToTy = mempty, didFail = False}

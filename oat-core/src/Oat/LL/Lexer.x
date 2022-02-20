@@ -90,6 +90,8 @@ tokens :-
   <0> "external" { kind Kind.External }
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
+  <0> "select" { kind Kind.Select }
+  <0> "sext" { kind Kind.Sext }
   <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.drop 1 }
   <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.drop 1 }
   <0> "x" { kind Kind.Cross }

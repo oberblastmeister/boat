@@ -49,6 +49,8 @@ data Kind
   | External
   | Alloca
   | Bitcast
+  | Select
+  | Sext
   | Gep
   | Int !Int
   | Lab !ByteString

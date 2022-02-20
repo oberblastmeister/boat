@@ -20,13 +20,14 @@
           nativeBuildInputs = with pkgs; [
             # needs to be in nativeBuildInputs or clangd will complain about missing headers
             clang-tools
-            clang_13
           ];
           buildInputs = with pkgs; [
             haskell.compiler.ghc921
             ormolu
             haskell-language-server
             clang_13
+            haskellPackages.alex
+            haskellPackages.happy
             # for some reason this doesn't show up
             # need to do additional `nix-shell -p clang-tools`
             # clang-tools

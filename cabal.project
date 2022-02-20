@@ -14,8 +14,15 @@ packages:
     oat-core/
     oat-prelude/
     /home/brian/projects/effectful-contrib/effectful-optics/
+    
+package oat-core
+    ghc-options: -j
+    
+package oat-prelude
+    ghc-options: -j
 
 with-compiler: ghc-9.2.1
 
 tests: True
+jobs: $ncpus
 -- benchmarks: True

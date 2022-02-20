@@ -75,19 +75,20 @@ spill spills insts =
       Right inst -> spillInst inst
 
 spillInst :: SpillEffs :>> es => X86.Inst -> Eff es ()
-spillInst inst@(opcode :@ args)
-  | X86.hasTwoOperands opcode,
-    [arg1, arg2] <- args = do
-    arg1 <- spillOperand arg1
-    arg2 <- spillOperand arg2
-    case (arg1, arg2) of
-      (X86.OMem mem1, X86.OMem mem2) -> do
-        temp <- Source.fresh
-        Munch.emitMov (X86.OMem mem1) (X86.OTemp temp)
-        Munch.emitInsts [inst {X86.args = [X86.OTemp temp, X86.OMem mem2]}]
-      args -> Munch.emitInsts [inst {X86.args = args ^.. both}]
-  | X86.hasTwoOperands opcode = error "Instruction should have two operands"
-  | otherwise = Munch.emitInst inst
+spillInst inst@(_ :@ args)
+  | _ : _ : _ : _ <- args = error "Instructions should not have more than two operands"
+  -- if there are two arguments, we need to make sure that both are not memory operands
+  | [arg1, arg2] <- args = do
+      arg1 <- spillOperand arg1
+      arg2 <- spillOperand arg2
+      case (arg1, arg2) of
+        (X86.OMem mem1, X86.OMem mem2) -> do
+          temp <- Source.fresh
+          Munch.emitMov (X86.OMem mem1) (X86.OTemp temp)
+          Munch.emitInsts [inst {X86.args = [X86.OTemp temp, X86.OMem mem2]}]
+        args -> Munch.emitInsts [inst {X86.args = args ^.. both}]
+  -- if there is less than two arguments, we can freely spill
+  | otherwise = traverseOf (#args % each) spillOperand inst >>= Munch.emitInst
 
 spillOperand :: SpillEffs :>> es => X86.Operand -> Eff es X86.Operand
 spillOperand arg@(X86.OTemp name) = do

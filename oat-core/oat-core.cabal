@@ -61,6 +61,7 @@ common common-options
     ViewPatterns,
     PatternSynonyms,
     TypeFamilies,
+    TypeFamilyDependencies,
     FunctionalDependencies,
     ExistentialQuantification,
     TypeOperators,

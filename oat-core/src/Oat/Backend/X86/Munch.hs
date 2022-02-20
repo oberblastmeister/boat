@@ -127,6 +127,7 @@ munchInst = \case
   LL.Gep inst -> undefined
   -- probably compile to conditional move instruction
   LL.Select inst -> undefined
+  LL.Sext inst -> undefined
 
 munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()
 munchTerm = \case
@@ -201,6 +202,7 @@ munchBinOp LL.BinOpInst {name, op, arg1, arg2}
       arg2 <- compileOperand arg2
       arg1 <- compileOperand arg1
       emitMov arg2 (X86.OReg Rax)
+      -- imulq must use %rax
       emitInsts [X86.Imulq :@ [arg1, X86.OReg Rax]]
       emitMov (X86.OReg Rax) (X86.OTemp name)
   | otherwise = do

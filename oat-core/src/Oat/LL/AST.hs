@@ -20,6 +20,7 @@ module Oat.LL.AST
     IcmpInst (..),
     CallInst (..),
     BitcastInst (..),
+    SextInst (..),
     GepInst (..),
     SelectInst (..),
     RetTerm (..),
@@ -46,6 +47,7 @@ module Oat.LL.AST
     funDeclTyParams,
     declMapTyAt,
     isShiftOp,
+    isNumTy,
   )
 where
 
@@ -140,21 +142,30 @@ data BinOp
   = Add
   | Sub
   | Mul
-  | Shl -- shift left
-  | Lshr -- logical shift right
-  | Ashr -- arithmetic shift right
+  | -- | shift left
+    Shl
+  | -- | logical shift right
+    Lshr
+  | -- | arithmetic shift right
+    Ashr
   | And
   | Or
   | Xor
   deriving (Show, Eq)
 
 data CmpOp
-  = Eq
-  | Neq
-  | Slt
-  | Sle
-  | Sgt
-  | Sge
+  = -- | equal
+    Eq
+  | -- | not equal
+    Neq
+  | -- | signed less than
+    Slt
+  | -- signed less than or equal
+    Sle
+  | -- | signed greater than
+    Sgt
+  | -- | signed greater than or equal
+    Sge
   deriving (Show, Eq)
 
 data Inst where
@@ -167,6 +178,7 @@ data Inst where
   Bitcast :: BitcastInst -> Inst
   Gep :: GepInst -> Inst
   Select :: SelectInst -> Inst
+  Sext :: SextInst -> Inst
   deriving (Show, Eq)
 
 data Term where
@@ -233,17 +245,18 @@ data CallInst = CallInst
 
 data BitcastInst = BitcastInst
   { name :: Name,
-    from :: Ty,
+    ty1 :: Ty,
     arg :: Operand,
-    to :: Ty
+    ty2 :: Ty
   }
   deriving (Show, Eq)
 
 data GepInst = GepInst
   { name :: Name,
+    ty' :: Ty,
     ty :: Ty,
     arg :: Operand,
-    args :: [Operand]
+    args :: NonEmpty (Ty, Operand)
   }
   deriving (Show, Eq)
 
@@ -254,19 +267,29 @@ data RetTerm = RetTerm
   deriving (Show, Eq)
 
 data CbrTerm = CbrTerm
-  { arg :: Operand,
+  { ty :: Ty,
+    arg :: Operand,
     lab1 :: !Name,
     lab2 :: !Name
   }
   deriving (Show, Eq)
 
 data SelectInst = SelectInst
-  { name :: Name,
+  { name :: !Name,
+    condTy :: Ty,
     cond :: Operand,
     ty1 :: Ty,
     arg1 :: Operand,
     ty2 :: Ty,
     arg2 :: Operand
+  }
+  deriving (Show, Eq)
+
+data SextInst = SextInst
+  { name :: !Name,
+    ty1 :: Ty,
+    arg :: Operand,
+    ty2 :: Ty
   }
   deriving (Show, Eq)
 
@@ -280,6 +303,7 @@ $(makeFieldLabelsNoPrefix ''CallInst)
 $(makeFieldLabelsNoPrefix ''BitcastInst)
 $(makeFieldLabelsNoPrefix ''GepInst)
 $(makeFieldLabelsNoPrefix ''SelectInst)
+$(makeFieldLabelsNoPrefix ''SextInst)
 $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
 $(makeFieldLabelsNoPrefix ''FunBody)
@@ -318,6 +342,7 @@ instName = atraversalVL go
       Bitcast inst -> Bitcast <$> atraverseOf #name point f inst
       Gep inst -> Gep <$> atraverseOf #name point f inst
       Select inst -> Select <$> atraverseOf #name point f inst
+      Sext inst -> Sext <$> atraverseOf #name point f inst
 
 bodyBlocks :: Traversal' FunBody Block
 bodyBlocks = traversalVL $ \f body -> do
@@ -358,12 +383,15 @@ instOperands = traversalVL go
         pure $ Bitcast inst {arg}
       Gep inst@GepInst {arg, args} -> do
         arg <- f arg
-        args <- traverse f args
+        args <- traverseOf (each % _2) f args
         pure $ Gep inst {arg, args}
       Select inst@SelectInst {arg1, arg2} -> do
         arg1 <- f arg1
         arg2 <- f arg2
         pure $ Select inst {arg1, arg2}
+      Sext inst@SextInst {arg} -> do
+        arg <- f arg
+        pure $ Sext inst {arg}
 
 termOperands :: Traversal' Term Operand
 termOperands = traversalVL go
@@ -448,3 +476,9 @@ isShiftOp Shl = True
 isShiftOp Lshr = True
 isShiftOp Ashr = True
 isShiftOp _ = False
+
+isNumTy :: Ty -> Bool
+isNumTy I1 = True
+isNumTy I8 = True
+isNumTy I64 = True
+isNumTy _ = False

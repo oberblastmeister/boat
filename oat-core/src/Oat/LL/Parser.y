@@ -77,6 +77,8 @@ import Data.ByteString (ByteString)
   alloca { Token {kind = Kind.Alloca} }
   bitcast { Token {kind = Kind.Bitcast} }
   getelementptr { Token {kind = Kind.Gep} }
+  select { Token {kind = Kind.Select} }
+  sext { Token {kind = Kind.Sext} }
   int { Token {kind = Kind.Int $$} }
   lab { Token {kind = Kind.Lab $$} }
   gid { Token {kind = Kind.Gid $$} }
@@ -172,9 +174,19 @@ Inst :: { Inst }
   | BitcastInst { Bitcast $1 }
   | GepInst { Gep $1 }
   | SelectInst { Select $1 }
+  | SextInst { Sext $1 }
 
 BinOpInst :: { BinOpInst }
-  : uid '=' BinOp Ty Operand ',' Operand  { BinOpInst {name = $1, op = $3, ty = $4, arg1 = $5, arg2 = $7} }
+  : uid '=' BinOp Ty Operand ',' Operand 
+    {
+      BinOpInst
+        { name = $1,
+          op = $3,
+          ty = $4,
+          arg1 = $5,
+          arg2 = $7
+        }
+    }
   
 AllocaInst :: { AllocaInst }
   : uid '=' alloca Ty { AllocaInst {name = $1, ty = $4} }
@@ -183,29 +195,96 @@ LoadInst :: { LoadInst }
   : uid '=' load Ty ',' Ty Operand { LoadInst {name = $1, ty = $4, ty' = $6, arg = $7} }
 
 StoreInst :: { StoreInst }
-  : store Ty Operand ',' Ty Operand { StoreInst {ty1 = $2, arg1 = $3, ty2 = $5, arg2 = $6} }
+  : store Ty Operand ',' Ty Operand
+    {
+      StoreInst
+        { ty1 = $2,
+          arg1 = $3,
+          ty2 = $5,
+          arg2 = $6
+        }
+    }
   
 IcmpInst :: { IcmpInst }
-  : uid '=' icmp CmpOp Ty Operand ',' Operand { IcmpInst {name = $1, op = $4, ty = $5, arg1 = $6, arg2 = $8} }
+  : uid '=' icmp CmpOp Ty Operand ',' Operand
+    {
+      IcmpInst
+        { name = $1,
+          op = $4,
+          ty = $5,
+          arg1 = $6,
+          arg2 = $8
+        }
+    }
 
 CallInst :: { CallInst }
-  : Maybe(CallUid) call Ty Operand '(' ArgList ')' { CallInst {name = $1, ty = $3, fn = $4, args = $6} }
+  : Maybe(CallUid) call Ty Operand '(' ArgList ')'
+    {
+      CallInst
+        { name = $1,
+          ty = $3,
+          fn = $4,
+          args = $6
+        }
+    }
   
 CallUid :: { Name }
   : uid '=' { $1 }
   
 BitcastInst :: { BitcastInst }
-  : uid '=' bitcast Ty Operand to Ty { BitcastInst {name = $1, from = $4, arg = $5, to = $7} }
+  : uid '=' bitcast Ty Operand to Ty
+    {
+      BitcastInst
+        { name = $1,
+          ty1 = $4,
+          arg = $5,
+          ty2 = $7
+        }
+    }
 
 GepInst :: { GepInst }
-  : uid '=' getelementptr Ty ',' Ty Operand ',' ListSep(GepOperand, ',') { GepInst {name = $1, ty = $6, arg = $7, args = $9} }
+  : uid '=' getelementptr Ty ',' Ty Operand ',' ListSep1(GepOperand, ',')
+    {
+      GepInst
+        { name = $1,
+          ty' = $4,
+          ty = $6,
+          arg = $7,
+          args = $9
+        }
+    }
   
-GepOperand :: { Operand }
-  : i64 Operand { $2 }
-  | i32 Operand { $2 }
+GepOperand :: { (Ty, Operand) }
+  : Ty Operand { ($1, $2) }
+  -- this is the only place where we allow i32
+  -- usually in LLVM i32 is used to index into structs
+  -- we want to keep compatibility
+  | i32 Operand { (I64, $2) }
 
 SelectInst :: { SelectInst }
-  : uid '=' Operand ',' Ty Operand ',' Ty Operand ',' { SelectInst {cond = $3, ty1 = $5, arg1 = $6, ty2 = $8, arg2 = $9} }
+  : uid '=' select Ty Operand ',' Ty Operand ',' Ty Operand ','
+    {
+      SelectInst
+        { name = $1,
+          condTy = $4,
+          cond = $5,
+          ty1 = $7,
+          arg1 = $8,
+          ty2 = $10,
+          arg2 = $11
+        }
+    }
+    
+SextInst :: { SextInst }
+  : uid '=' sext Ty Operand to Ty
+    {
+      SextInst
+        { name = $1,
+          ty1 = $4,
+          arg = $5,
+          ty2 = $7
+        }
+    }
 
 ArgList :: { [(Ty, Operand)] }
   : ListSep(Arg, ',') { $1 }
@@ -235,7 +314,16 @@ BinOp :: { BinOp }
 Term :: { Term }
   : ret Ty Maybe(Operand) { Ret RetTerm {ty = $2, arg = $3} }
   | br label uid { Br $3 }
-  | br i1 Operand ',' label uid ',' label uid { Cbr CbrTerm {arg = $3, lab1 = $6, lab2 = $9} }
+  | br Ty Operand ',' label uid ',' label uid
+    {
+      Cbr
+        CbrTerm
+          { ty = $2,
+            arg = $3,
+            lab1 = $6,
+            lab2 = $9
+          }
+    }
 
 Operand :: { Operand }
   : null { Const $ fromIntegral 0 }
