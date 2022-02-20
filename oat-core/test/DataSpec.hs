@@ -5,9 +5,11 @@ module DataSpec where
 
 import Conduit (runConduit, runConduitRes, (.|))
 import Data.ByteString.Char8 qualified as ByteString.Char8
+import Data.ByteString.Lazy qualified as LByteString
 import Data.Conduit.Combinators qualified as C
 import Data.HashSet qualified as HashSet
 import Data.IORef qualified as IORef
+import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.Encoding.Error (UnicodeException)
 import Data.Text.Lazy qualified as LText
 import Effectful.Error.Static (Error)
@@ -24,9 +26,11 @@ import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.Main qualified as Main
 import Oat.Opt qualified as Opt
 import Oat.Reporter qualified as Reporter
-import Oat.Utils.IO (hPutUtf8, readFileUtf8, runErrorIO, writeFileUtf8)
+import Oat.Utils.IO (hPutUtf8, readFileUtf8, runErrorIO, writeFileLnUtf8, writeFileUtf8)
+import Oat.Utils.Misc (timSort)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
+import System.Process.Typed (proc, readProcessStdout)
 import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
 import Test.Hspec.Core.Spec (SpecM)
@@ -37,18 +41,19 @@ import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
 
 data Config = Config
-  { update :: Bool,
-    firstTimeUpdate :: Bool,
-    filterPred :: Pred
+  { update :: !Bool,
+    parallel :: !Bool,
+    firstTimeUpdate :: !Bool,
+    filter :: Pred
   }
 
 type Pred = FilePath -> Bool
 
-(</&&>) :: Pred -> Pred -> Pred
-pred </&&> pred' = (&&) <$> pred <*> pred'
+(<&&>) :: Pred -> Pred -> Pred
+pred <&&> pred' = (&&) <$> pred <*> pred'
 
-(</||>) :: Pred -> Pred -> Pred
-pred </||> pred' = (||) <$> pred <*> pred'
+(<||>) :: Pred -> Pred -> Pred
+pred <||> pred' = (||) <$> pred <*> pred'
 
 makeFieldLabelsNoPrefix ''Config
 
@@ -66,17 +71,18 @@ run config =
     $ specWith config
   where
     filterFun :: ([FilePath], FilePath) -> Bool
-    filterFun (ps, p) = config ^. #filterPred $ FilePath.joinPath ps </> p
+    filterFun (ps, p) = config ^. #filter $ FilePath.joinPath ps </> p
 
 specWith :: Config -> Spec
 specWith config = do
   llLexerSpec config
   llParserSpec config
+  llCompileSpec config
 
 llLexerSpec :: Config -> Spec
 llLexerSpec config = do
   makeSnapshotSpec
-    config
+    config {parallel = True}
     ( pure
         . LText.toStrict
         . pShowNoColor
@@ -87,7 +93,7 @@ llLexerSpec config = do
 llParserSpec :: Config -> Spec
 llParserSpec config = do
   makeSnapshotSpec
-    config
+    config {parallel = True}
     ( \text -> do
         let (res, parseErrors) =
               runPureEff $
@@ -101,7 +107,19 @@ llParserSpec config = do
     "ll_parser/ok"
 
 llCompileSpec :: Config -> Spec
-llCompileSpec config = pure ()
+llCompileSpec config = do
+  makeSnapshotSpec
+    config {parallel = False}
+    ( \text -> Temporary.runTemporary $ do
+        Temporary.withSystemTempFile "oat" $ \temp handle -> do
+          liftIO $
+            Main.runDriverMain_ Opt.defOpt {Opt.linkTestRuntime = True} $
+              Driver.compileLLTextToFile text temp
+          IO.hClose handle
+          (exit, stdout) <- readProcessStdout (proc temp [])
+          pure $ Text.Encoding.decodeUtf8 $ LByteString.toStrict stdout
+    )
+    "ll_compile/ok"
 
 -- | cleans .expect files that do not have a matching file
 clean :: IO ()
@@ -157,13 +175,18 @@ openAsm path = do
     Process.runProcess $ do
       Process.callProcess "code" ["test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s"]
 
-runAsm :: FilePath -> IO ()
-runAsm path = do
+compileAsm :: FilePath -> IO ()
+compileAsm path = do
   asmDir <- Directory.makeAbsolute "test_data/asm_compile"
   let exePath = asmDir </> FilePath.takeBaseName path
   Main.runDriverMain_ Opt.defOpt {Opt.linkTestRuntime = True} $
     Driver.compileAsmPaths [asmDir </> path] exePath
-  runEff $ Process.runProcess $ Process.callProcess exePath []
+
+runAsm :: FilePath -> IO ()
+runAsm path = do
+  compileAsm path
+  asmDir <- Directory.makeAbsolute "test_data/asm_compile"
+  runEff $ Process.runProcess $ Process.callProcess (asmDir </> FilePath.takeBaseName path) []
 
 openLLData :: FilePath -> IO ()
 openLLData path = runEff $ Process.runProcess $ Process.callProcess "code" ["test_data/ll_compile" </> path]
@@ -184,16 +207,22 @@ defConfig =
   Config
     { update = False,
       firstTimeUpdate = True,
-      filterPred = const True
+      filter = const True,
+      parallel = False
     }
 
 makeSnapshotSpec :: Config -> (Text -> Eff '[IOE] Text) -> FilePath -> Spec
 makeSnapshotSpec config convert dirPath = do
-  llCompileOk <- runIOE $ FileSystem.runFileSystem $ FileSystem.listDirectory $ "test_data" </> dirPath
-  describe dirPath $
-    traverse_
-      (makeSnapshotFileSpec config convert dirPath)
-      (filter notExpectPath llCompileOk)
+  llCompileOk <-
+    runIOE
+      . FileSystem.runFileSystem
+      . FileSystem.listDirectory
+      $ "test_data" </> dirPath
+  (if config ^. #parallel then parallel else id) $
+    describe dirPath $
+      traverse_
+        (makeSnapshotFileSpec config convert dirPath)
+        (timSort $ filter notExpectPath llCompileOk)
 
 notExpectPath :: FilePath -> Bool
 notExpectPath path = FilePath.takeExtension path /= ".expect"
@@ -247,7 +276,7 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run 
         else
           if config ^. #firstTimeUpdate
             then do
-              writeFileUtf8 expectPath convertContents
+              writeFileLnUtf8 expectPath convertContents
               pure
                 Spec.Result
                   { resultInfo = "First time running. Updating the .expect file!",

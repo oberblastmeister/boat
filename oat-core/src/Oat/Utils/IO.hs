@@ -6,10 +6,12 @@ module Oat.Utils.IO
     listDirectory',
     createFileIfMissing,
     hPutUtf8,
+    writeFileLnUtf8,
   )
 where
 
 import Data.ByteString qualified as ByteString
+import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.Encoding.Error (UnicodeException)
 import Effectful.Error.Static (Error)
@@ -18,8 +20,8 @@ import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Oat.Utils.Monad (liftEither, unlessM)
 import System.FilePath ((</>))
-import System.IO qualified as IO
 import UnliftIO.Exception qualified as Exception
+import UnliftIO.IO qualified as IO
 
 readFileUtf8 :: '[Error UnicodeException, IOE] :>> es => FilePath -> Eff es Text
 readFileUtf8 path = do
@@ -28,6 +30,12 @@ readFileUtf8 path = do
 
 writeFileUtf8 :: IOE :> es => FilePath -> Text -> Eff es ()
 writeFileUtf8 path = liftIO . ByteString.writeFile path . Text.Encoding.encodeUtf8
+
+modifyFileLn :: IOE :> es => IO.IOMode -> FilePath -> ByteString -> Eff es ()
+modifyFileLn mode f txt = IO.withBinaryFile f mode (liftIO . (`ByteString.Char8.hPutStrLn` txt))
+
+writeFileLnUtf8 :: IOE :> es => FilePath -> Text -> Eff es ()
+writeFileLnUtf8 path = modifyFileLn IO.WriteMode path . Text.Encoding.encodeUtf8
 
 hPutUtf8 :: IOE :> es => IO.Handle -> Text -> Eff es ()
 hPutUtf8 handle = liftIO . ByteString.hPutStr handle . Text.Encoding.encodeUtf8

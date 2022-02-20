@@ -1,4 +1,4 @@
-module Oat.Utils.Misc 
+module Oat.Utils.Misc
   ( inBetween,
     pathTail,
     concatToEither,
@@ -7,9 +7,10 @@ module Oat.Utils.Misc
     rightToMaybe,
     leftToMaybe,
     mVecFromList,
-    timSortListBy,
     timSortNEBy,
-  )
+    vecSortBy,
+    timSortBy,
+  timSort)
 where
 
 import Control.Monad.Primitive (PrimMonad, PrimState)
@@ -18,11 +19,10 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Range (Range (RangeP))
 import Data.Vector qualified as VB
 import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
+import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Mutable qualified as VBM
 import System.FilePath qualified as FilePath
 import Prelude hiding (Map, imap)
-
--- non but only a lens
 
 inBetween :: Range -> IntMap a -> IntMap a
 inBetween (RangeP start end) imap = imap''
@@ -56,13 +56,30 @@ rightToMaybe (Left _) = Nothing
 mVecFromList :: PrimMonad m => [a] -> m (VBM.MVector (PrimState m) a)
 mVecFromList = VB.unsafeThaw . VB.fromList
 
-timSortListBy :: (a -> a -> Ordering) -> [a] -> [a]
-timSortListBy cmp as = VB.toList $
+type Comparison e = e -> e -> Ordering
+
+type VecSorter =
+  forall (m :: Type -> Type) (v :: Type -> Type -> Type) e.
+  (PrimMonad m, VM.MVector v e) =>
+  Comparison e ->
+  v (PrimState m) e ->
+  m ()
+
+vecSortBy :: VecSorter -> (a -> a -> Ordering) -> [a] -> [a]
+vecSortBy sorter cmp as = VB.toList $
   VB.create $ do
     mv <- mVecFromList as
-    Vector.Algorithms.Tim.sortBy cmp mv
+    sorter cmp mv
     pure mv
 
-timSortNEBy :: (a -> a -> Ordering) -> NonEmpty a -> NonEmpty a
-timSortNEBy cmp = NonEmpty.fromList . timSortListBy cmp . NonEmpty.toList
+vecSortNEBy :: VecSorter -> (a -> a -> Ordering) -> NonEmpty a -> NonEmpty a
+vecSortNEBy sorter cmp = NonEmpty.fromList . vecSortBy sorter cmp . NonEmpty.toList
 
+timSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+timSortBy = vecSortBy Vector.Algorithms.Tim.sortBy
+
+timSort :: Ord a => [a] -> [a]
+timSort = timSortBy compare
+
+timSortNEBy :: (a -> a -> Ordering) -> NonEmpty a -> NonEmpty a
+timSortNEBy = vecSortNEBy Vector.Algorithms.Tim.sortBy

@@ -1,6 +1,5 @@
 module Oat.Utils.Impossible
   ( Impossible (..),
-    throwImpossible,
     impossible,
   )
 where
@@ -27,10 +26,5 @@ instance Show Impossible where
 
 instance Exception Impossible
 
--- | Abort by throwing an \"impossible\" error. You should not use
--- this function directly. Instead use impossible
-throwImpossible :: Impossible -> a
-throwImpossible = throw
-
 impossible :: HasCallStack => a
-impossible = withCallerCallStack $ throwImpossible . Impossible
+impossible = withCallerCallStack $ throw . Impossible

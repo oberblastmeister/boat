@@ -8,9 +8,9 @@ import Data.Range (Range)
 import Data.Range qualified as Range
 import Data.Span (Span)
 import Data.Vector qualified as VB
-import Oat.Common (timSortNEBy)
+import Oat.Utils.Misc (timSortNEBy)
 import Oat.Error (ErrorCode)
-import Oat.PrettyUtil (Ann)
+import Oat.Utils.Pretty (Ann)
 import Oat.Utils.Optics (onOf)
 import Prettyprinter (Doc)
 

@@ -11,7 +11,7 @@ where
 
 import Effectful.Error.Static (Error)
 import Effectful.Error.Static qualified as Error
-import Effectful.Process qualified as Process
+import System.Process.Typed (proc, runProcess_)
 import UnliftIO.Exception qualified as Exception
 
 data Command :: Effect where
@@ -48,11 +48,10 @@ runCommandClangIO =
 runCommandClangIOWith :: forall es a. ('[IOE, Error CommandError] :>> es) => [String] -> Eff (Command ': es) a -> Eff es a
 runCommandClangIOWith opts = interpret $ \_ -> \case
   Assemble {dotS, dotO} -> clang ["-c", dotS, "-o", dotO]
-  Preprocess {dotOat, dotI} -> proc "cpp" ["-E", dotOat, dotI]
+  Preprocess {dotOat, dotI} -> run $ proc "cpp" ["-E", dotOat, dotI]
   CompileLlvm {dotLL, dotS} -> clang ["-S", dotLL, "-o", dotS]
   Link {mods, out} -> clang $ mods ++ ["-o", out]
   where
-    clang opts' = proc "clang" (opts' ++ opts)
-    proc :: FilePath -> [String] -> Eff es ()
-    proc cmd args = adapt $ Process.callProcess cmd args
-    adapt m = Process.runProcess m `Exception.catch` (Error.throwError . CommandError)
+    clang opts' = run $ proc "clang" (opts' ++ opts)
+    run = adapt . runProcess_ @(Eff es)
+    adapt m = m `Exception.catch` (Error.throwError . CommandError)
