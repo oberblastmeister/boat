@@ -77,9 +77,9 @@ prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)
           ]
     subStack = Seq.fromList [X86.Subq :@ [stackSizeArg, X86.OReg Rsp]]
     addStack = Seq.fromList [X86.Addq :@ [stackSizeArg, X86.OReg Rsp] | stackSize /= 0]
+    -- the stack must be aligned to 16 bytes as mandated by the System-V calling convention
     stackSize = nextMultipleOf16 (fromIntegral maxCall + Frame.getStackSize frameState)
     stackSizeArg = X86.OImm $ X86.Lit $ fromIntegral stackSize
     maxCall = max 0 (fromMaybe 0 maybeMaxCall - X86.wordSize * length X86.paramRegs)
-    -- TODO: do we need this?
     nextMultipleOf16 :: Int -> Int
     nextMultipleOf16 n = 16 * ((n + 15) `div` 16)

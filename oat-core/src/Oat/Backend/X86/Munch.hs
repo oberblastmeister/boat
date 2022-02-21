@@ -23,8 +23,8 @@ import Oat.Backend.Frame qualified as Frame
 import Oat.Backend.X86.Frame qualified as X86.Frame
 import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
-import Oat.Utils.Misc (concatToEither)
 import Oat.LL qualified as LL
+import Oat.Utils.Misc (concatToEither)
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
 
@@ -126,6 +126,11 @@ munchInst = \case
     emitMov arg (X86.OTemp name)
   LL.Gep _ -> error "gep should be lowered before this"
   LL.Select inst -> undefined
+  LL.Zext LL.ZextInst {name, arg} -> do
+    arg <- compileOperand arg
+    -- everything is already represented using 64 bytes
+    -- so zero extension just doesn't do anything
+    emitMov arg (X86.OTemp name)
   LL.Sext inst -> undefined
 
 munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()

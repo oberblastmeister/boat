@@ -4,6 +4,7 @@
 module DataSpec where
 
 import Conduit (runConduit, runConduitRes, (.|))
+import Control.Arrow ((^>>))
 import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.ByteString.Lazy qualified as LByteString
 import Data.Conduit.Combinators qualified as C
@@ -26,7 +27,7 @@ import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.Main qualified as Main
 import Oat.Opt qualified as Opt
 import Oat.Reporter qualified as Reporter
-import Oat.Utils.IO (hPutUtf8, readFileUtf8, runErrorIO, writeFileLnUtf8, writeFileUtf8)
+import Oat.Utils.IO (hPutLnUtf8, listDirectory', readFileUtf8, runErrorIO, writeFileLnUtf8)
 import Oat.Utils.Misc (timSort)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
@@ -55,23 +56,28 @@ pred <&&> pred' = (&&) <$> pred <*> pred'
 (<||>) :: Pred -> Pred -> Pred
 pred <||> pred' = (||) <$> pred <*> pred'
 
+(<//>) :: FilePath -> Pred -> Pred
+path <//> pred = FilePath.makeRelative path ^>> pred
+
+infixr 6 <&&>, <||>
+
+infixr 5 <//>
+
+predNot :: Pred -> Pred
+predNot = fmap not
+
+filterPred :: Pred -> [FilePath] -> [FilePath]
+filterPred = filter
+
 makeFieldLabelsNoPrefix ''Config
 
 spec :: Spec
 spec = do
-  specWith defConfig
+  specWith
+    defConfig
 
 run :: Config -> IO ()
-run config =
-  Spec.hspecWith
-    ( Spec.defaultConfig
-        { Spec.configFilterPredicate = Just filterFun
-        }
-    )
-    $ specWith config
-  where
-    filterFun :: ([FilePath], FilePath) -> Bool
-    filterFun (ps, p) = config ^. #filter $ FilePath.joinPath ps </> p
+run config = Spec.hspecWith Spec.defaultConfig $ specWith config
 
 specWith :: Config -> Spec
 specWith config = do
@@ -113,8 +119,12 @@ llCompileSpec config = do
     ( \text -> Temporary.runTemporary $ do
         Temporary.withSystemTempFile "oat" $ \temp handle -> do
           liftIO $
-            Main.runDriverMain_ Opt.defOpt {Opt.linkTestRuntime = True} $
-              Driver.compileLLTextToFile text temp
+            Main.runDriverMain_
+              Opt.defOpt
+                { Opt.linkTestRuntime = True,
+                  Opt.checkLL = True
+                }
+              $ Driver.compileLLTextToFile text temp
           IO.hClose handle
           (exit, stdout) <- readProcessStdout (proc temp [])
           pure $ Text.Encoding.decodeUtf8 $ LByteString.toStrict stdout
@@ -207,6 +217,7 @@ defConfig =
   Config
     { update = False,
       firstTimeUpdate = True,
+      -- filter = predNot $ matchTail "gep1.ll",
       filter = const True,
       parallel = False
     }
@@ -216,22 +227,21 @@ makeSnapshotSpec config convert dirPath = do
   llCompileOk <-
     runIOE
       . FileSystem.runFileSystem
-      . FileSystem.listDirectory
+      . listDirectory'
       $ "test_data" </> dirPath
+  let pred = "test_data" <//> (notExpectPath <&&> config ^. #filter)
   (if config ^. #parallel then parallel else id) $
     describe dirPath $
       traverse_
-        (makeSnapshotFileSpec config convert dirPath)
-        (timSort $ filter notExpectPath llCompileOk)
+        (makeSnapshotFileSpec config convert)
+        (timSort $ filterPred pred llCompileOk)
 
-notExpectPath :: FilePath -> Bool
+notExpectPath :: Pred
 notExpectPath path = FilePath.takeExtension path /= ".expect"
 
-makeSnapshotFileSpec :: Config -> (Text -> Eff '[IOE] Text) -> FilePath -> FilePath -> Spec
-makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run example
+makeSnapshotFileSpec :: Config -> (Text -> Eff '[IOE] Text) -> FilePath -> Spec
+makeSnapshotFileSpec config convert path = it (FilePath.takeFileName path) $ IOResultSpec $ run example
   where
-    fullPath = "test_data" </> dirPath </> path
-
     run =
       runEff
         . FileSystem.runFileSystem
@@ -240,8 +250,8 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run 
 
     example :: '[IOE, FileSystem, Temporary, Error UnicodeException] :>> es => Eff es Spec.Result
     example = do
-      contents <- readFileUtf8 fullPath
-      let expectPath = fullPath -<.> "expect"
+      contents <- readFileUtf8 path
+      let expectPath = path -<.> "expect"
       existsExpect <- FileSystem.doesFileExist expectPath
       convertContents <- liftIO $ runEff $ convert contents
       if existsExpect
@@ -251,7 +261,7 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run 
             then
               if config ^. #update
                 then do
-                  writeFileUtf8 expectPath convertContents
+                  writeFileLnUtf8 expectPath convertContents
                   pure
                     Spec.Result
                       { resultInfo = "Updating the .expect file!",
@@ -259,7 +269,7 @@ makeSnapshotFileSpec config convert dirPath path = it path $ IOResultSpec $ run 
                       }
                 else do
                   Temporary.withSystemTempFile "snap" $ \temp handle -> do
-                    hPutUtf8 handle convertContents
+                    hPutLnUtf8 handle convertContents
                     IO.hFlush handle
                     gitDiff expectPath temp
                   pure
@@ -296,7 +306,8 @@ gitDiff file file' = do
       Process.runProcess $
         Process.callProcess
           "git"
-          [ "diff",
+          [ "--no-pager",
+            "diff",
             "--no-index",
             "--color=always",
             file,

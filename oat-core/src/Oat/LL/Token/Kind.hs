@@ -50,6 +50,7 @@ data Kind
   | Alloca
   | Bitcast
   | Select
+  | Zext
   | Sext
   | Gep
   | Int !Int

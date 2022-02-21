@@ -10,10 +10,15 @@ module Oat.Utils.Misc
     timSortNEBy,
     vecSortBy,
     timSortBy,
-  timSort)
+    timSort,
+    isPowerOf2,
+    alignForward,
+  )
 where
 
 import Control.Monad.Primitive (PrimMonad, PrimState)
+import Data.Bits ((.&.))
+import Data.Int (Int64)
 import Data.IntMap qualified as IntMap
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Range (Range (RangeP))
@@ -21,6 +26,7 @@ import Data.Vector qualified as VB
 import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
 import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Mutable qualified as VBM
+import Data.Word (Word64)
 import System.FilePath qualified as FilePath
 import Prelude hiding (Map, imap)
 
@@ -83,3 +89,12 @@ timSort = timSortBy compare
 
 timSortNEBy :: (a -> a -> Ordering) -> NonEmpty a -> NonEmpty a
 timSortNEBy = vecSortNEBy Vector.Algorithms.Tim.sortBy
+
+isPowerOf2 :: Word64 -> Bool
+isPowerOf2 i = (i .&. (i - 1)) == 0
+
+alignForward :: Int64 -> Word64 -> Int
+alignForward addr align
+  | align <= 1 = error "mult cannot be less than 1"
+  | not $ isPowerOf2 align = error "align must be a power of 2"
+  | otherwise = undefined

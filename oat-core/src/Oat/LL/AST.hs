@@ -21,6 +21,7 @@ module Oat.LL.AST
     CallInst (..),
     BitcastInst (..),
     SextInst (..),
+    ZextInst (..),
     GepInst (..),
     SelectInst (..),
     RetTerm (..),
@@ -181,6 +182,7 @@ data Inst where
   Bitcast :: BitcastInst -> Inst
   Gep :: GepInst -> Inst
   Select :: SelectInst -> Inst
+  Zext :: ZextInst -> Inst
   Sext :: SextInst -> Inst
   deriving (Show, Eq)
 
@@ -288,6 +290,14 @@ data SelectInst = SelectInst
   }
   deriving (Show, Eq)
 
+data ZextInst = ZextInst
+  { name :: !Name,
+    ty1 :: Ty,
+    arg :: Operand,
+    ty2 :: Ty
+  }
+  deriving (Show, Eq)
+
 data SextInst = SextInst
   { name :: !Name,
     ty1 :: Ty,
@@ -306,6 +316,7 @@ $(makeFieldLabelsNoPrefix ''CallInst)
 $(makeFieldLabelsNoPrefix ''BitcastInst)
 $(makeFieldLabelsNoPrefix ''GepInst)
 $(makeFieldLabelsNoPrefix ''SelectInst)
+$(makeFieldLabelsNoPrefix ''ZextInst)
 $(makeFieldLabelsNoPrefix ''SextInst)
 $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
@@ -345,6 +356,7 @@ instName = atraversalVL go
       Bitcast inst -> Bitcast <$> atraverseOf #name point f inst
       Gep inst -> Gep <$> atraverseOf #name point f inst
       Select inst -> Select <$> atraverseOf #name point f inst
+      Zext inst -> Zext <$> atraverseOf #name point f inst
       Sext inst -> Sext <$> atraverseOf #name point f inst
 
 bodyBlocks :: Traversal' FunBody Block
@@ -392,6 +404,9 @@ instOperands = traversalVL go
         arg1 <- f arg1
         arg2 <- f arg2
         pure $ Select inst {arg1, arg2}
+      Zext inst@ZextInst {arg} -> do
+        arg <- f arg
+        pure $ Zext inst {arg}
       Sext inst@SextInst {arg} -> do
         arg <- f arg
         pure $ Sext inst {arg}

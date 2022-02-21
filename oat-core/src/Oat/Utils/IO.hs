@@ -7,7 +7,7 @@ module Oat.Utils.IO
     createFileIfMissing,
     hPutUtf8,
     writeFileLnUtf8,
-  )
+  hPutLnUtf8)
 where
 
 import Data.ByteString qualified as ByteString
@@ -39,6 +39,9 @@ writeFileLnUtf8 path = modifyFileLn IO.WriteMode path . Text.Encoding.encodeUtf8
 
 hPutUtf8 :: IOE :> es => IO.Handle -> Text -> Eff es ()
 hPutUtf8 handle = liftIO . ByteString.hPutStr handle . Text.Encoding.encodeUtf8
+
+hPutLnUtf8 :: IOE :> es => IO.Handle -> Text -> Eff es ()
+hPutLnUtf8 handle = liftIO . ByteString.Char8.hPutStrLn handle . Text.Encoding.encodeUtf8
 
 listDirectory' :: FileSystem :> es => FilePath -> Eff es [FilePath]
 listDirectory' dirPath = do

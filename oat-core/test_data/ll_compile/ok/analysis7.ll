@@ -8,7 +8,7 @@ define i64 @program(i64 %argc, i8** %argv) {
   br label %guard
 guard:
   %5 = load i64, i64* %4
-  %6 = icmp slt i64 %5, %1
+  %6 = icmp slt i1 %5, %1
   br i1 %6, label %body, label %end
 body:
   %7 = load i64, i64* %4

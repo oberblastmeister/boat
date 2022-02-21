@@ -30,7 +30,7 @@ import Oat.Opt (Opt)
 import Oat.Reporter
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.Families (type (++))
-import Oat.Utils.IO (hPutUtf8, readFileUtf8, writeFileUtf8)
+import Oat.Utils.IO (hPutLnUtf8, hPutUtf8, readFileUtf8, writeFileUtf8)
 import Oat.Utils.Monad (whenM)
 import Prettyprinter qualified
 import Prettyprinter.Render.Text qualified as Prettyprinter
@@ -114,7 +114,7 @@ compileLLTextToFile llText out = do
   Temporary.withSystemTempFile "oat.s" $ \asmTemp handle -> do
     FileSystem.IO.hSetBuffering handle IO.NoBuffering
     liftIO $ System.IO.hSetEncoding handle System.IO.utf8
-    hPutUtf8 handle asmText
+    hPutLnUtf8 handle asmText
     FileSystem.IO.hFlush handle
     compileAsmPaths [asmTemp] out
 
@@ -167,7 +167,7 @@ withTextInTemp ::
 withTextInTemp name text f = Temporary.withSystemTempFile name $ \temp handle -> do
   FileSystem.IO.hSetBuffering handle IO.NoBuffering
   liftIO $ System.IO.hSetEncoding handle System.IO.utf8
-  hPutUtf8 handle text
+  hPutLnUtf8 handle text
   f temp handle
 
 linkRuntime :: DriverEffs :>> es => [FilePath] -> FilePath -> Eff es ()

@@ -41,7 +41,7 @@ $newline = [\n]
 tokens :-
   <0> $newline { skip }
   <0> $white+ { skip }
-  <0> \"  { start string } -- "
+  <0> c \"  { start string } -- "
   <0> "*" { kind Kind.Star }
   <0> "," { kind Kind.Comma }
   <0> ":" { kind Kind.Colon }
@@ -91,6 +91,7 @@ tokens :-
   <0> "alloca" { kind Kind.Alloca }
   <0> "bitcast" { kind Kind.Bitcast }
   <0> "select" { kind Kind.Select }
+  <0> "zext" { kind Kind.Zext }
   <0> "sext" { kind Kind.Sext }
   <0> "%" "."? @ident { bytesKind $ Kind.Uid . ByteString.drop 1 }
   <0> "@" "."? @ident { bytesKind $ Kind.Gid . ByteString.drop 1 }

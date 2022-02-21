@@ -114,13 +114,14 @@ inferInst = \case
   LL.Bitcast inst -> inferBitcast inst
   LL.Gep inst -> inferGep inst
   LL.Select inst -> inferSelect inst
+  LL.Zext inst -> inferZext inst
   LL.Sext inst -> inferSext inst
 
 checkTerm :: CheckEffs :>> es => LL.Term -> Eff es ()
 checkTerm (LL.Ret LL.RetTerm {ty, arg}) = case arg of
   Nothing -> pure ()
   Just arg -> checkOperand arg ty
-checkTerm (LL.Cbr LL.CbrTerm {arg}) = checkOperand arg LL.I64
+checkTerm (LL.Cbr LL.CbrTerm {arg}) = checkOperand arg LL.I1
 checkTerm (LL.Br _) = pure ()
 
 checkOperand :: CheckEffs :>> es => LL.Operand -> LL.Ty -> Eff es ()
@@ -138,7 +139,8 @@ checkOperand arg@(LL.Gid name) ty = do
 checkOperand (LL.Nested _) _ = error "There must not be any nested when checking ll"
 checkOperand arg@(LL.Temp name) ty =
   rview @LL.TyMap (at name) >>= \case
-    Just ty' -> tyAssert (Just "name") (Just arg) [ty] ty'
+    Just ty' -> do
+      tyAssert (Just "name") (Just arg) [ty] ty'
     Nothing -> report [NameNotFound name]
 
 inferBinOp :: CheckEffs :>> es => LL.BinOpInst -> Eff es LL.Ty
@@ -189,6 +191,7 @@ inferBitcast LL.BitcastInst {ty1, ty2, arg} = do
   checkOperand arg ty1
   pure ty2
 
+-- TODO: handle defined types
 inferGep :: CheckEffs :>> es => LL.GepInst -> Eff es LL.Ty
 inferGep LL.GepInst {ty', ty = tyPtr, arg, args} = run $ do
   tyAssert (Just "gep") Nothing [tyPtr] (LL.TyPtr ty')
@@ -222,8 +225,7 @@ inferGep LL.GepInst {ty', ty = tyPtr, arg, args} = run $ do
               checkInBounds size i
               pure ty'
             (LL.TyArray _size ty', _) -> pure ty'
-            (ty, _) ->
-              reportThrow [MalformedGep ty]
+            (ty, _) -> reportThrow [MalformedGep ty]
       )
       ty
       args
@@ -236,6 +238,8 @@ inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
 inferSelect LL.SelectInst {condTy, ty2} = do
   tyAssert (Just "select") Nothing [LL.I1] condTy
   pure ty2
+
+inferZext = undefined
 
 inferSext :: CheckEffs :>> es => LL.SextInst -> Eff es LL.Ty
 inferSext LL.SextInst {ty1, ty2, arg} = do

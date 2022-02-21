@@ -27,6 +27,8 @@ module Oat.LL.LexerWrapper
     stringKind,
     bytesKind,
     alexEOF,
+    addChar,
+    addText,
   )
 where
 
@@ -35,6 +37,7 @@ import Oat.LL.Token (Token (Token))
 import Oat.LL.Token.Kind (Kind)
 import Oat.LL.Token.Kind qualified as TK
 import Oat.Wrappers.Lexer (makeLexer)
+import Optics.State.Operators ((%=))
 import Text.Builder qualified
 
 data User = User
@@ -66,3 +69,9 @@ bytesKind f = do
 
 alexEOF :: Token
 alexEOF = Token TK.Eof
+
+addChar :: Char -> AlexAction ()
+addChar c = #user % #stringBuilder %= (<> Text.Builder.char c)
+
+addText :: Text -> AlexAction ()
+addText t = #user % #stringBuilder %= (<> Text.Builder.text t)

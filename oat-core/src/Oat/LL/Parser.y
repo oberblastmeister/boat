@@ -36,8 +36,8 @@ import Data.ByteString (ByteString)
   ')' { Token {kind = Kind.RParen} }
   '{' { Token {kind = Kind.LBrace} }
   '}' { Token {kind = Kind.RBrace} }
-  '[' { Token {kind = Kind.LParen} }
-  ']' { Token {kind = Kind.RParen} }
+  '[' { Token {kind = Kind.LBracket} }
+  ']' { Token {kind = Kind.RBracket} }
   x { Token {kind = Kind.Cross} }
   i1 { Token {kind = Kind.I1} }
   i8 { Token {kind = Kind.I8} }
@@ -78,6 +78,7 @@ import Data.ByteString (ByteString)
   bitcast { Token {kind = Kind.Bitcast} }
   getelementptr { Token {kind = Kind.Gep} }
   select { Token {kind = Kind.Select} }
+  zext { Token {kind = Kind.Zext} }
   sext { Token {kind = Kind.Sext} }
   int { Token {kind = Kind.Int $$} }
   lab { Token {kind = Kind.Lab $$} }
@@ -118,7 +119,7 @@ ExternDecl :: { Decl }
   | gid '=' external global Ty { DeclExtern $1 $5 }
 
 GlobalDecl :: { Decl }
-  : gid '=' global Ty GlobalInit { DeclGlobal $1 GlobalDecl {ty = $4, globalInit = $5} }
+  : gid '=' global Ty GlobalInit { DeclGlobal $1 GlobalDecl {ty = TyPtr $4, globalInit = $5} }
   
 GlobalInit :: { GlobalInit }
   : null { GlobalNull }
@@ -174,6 +175,7 @@ Inst :: { Inst }
   | BitcastInst { Bitcast $1 }
   | GepInst { Gep $1 }
   | SelectInst { Select $1 }
+  | ZextInst { Zext $1 }
   | SextInst { Sext $1 }
 
 BinOpInst :: { BinOpInst }
@@ -275,6 +277,17 @@ SelectInst :: { SelectInst }
         }
     }
     
+ZextInst :: { ZextInst }
+  : uid '=' zext Ty Operand to Ty
+    {
+      ZextInst
+        { name = $1,
+          ty1 = $4,
+          arg = $5,
+          ty2 = $7
+        }
+    }
+
 SextInst :: { SextInst }
   : uid '=' sext Ty Operand to Ty
     {

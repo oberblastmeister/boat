@@ -1,0 +1,59 @@
+[ DeclTy "disju"
+    ( TyStruct
+        [ I64
+        , TyPtr I8
+        ]
+    )
+, DeclTy "var1"
+    ( TyStruct
+        [ I64
+        , TyPtr I64
+        ]
+    )
+, DeclTy "var2"
+    ( TyStruct
+        [ I64
+        , TyPtr ( TyPtr I8 )
+        ]
+    )
+, DeclTy "test"
+    ( TyArray 10 I8 )
+, DeclGlobal "gint"
+    ( GlobalDecl
+        { ty = TyPtr I64
+        , globalInit = GlobalInt 42
+        }
+    )
+, DeclGlobal "v1"
+    ( GlobalDecl
+        { ty = TyPtr
+            ( TyNamed "var1" )
+        , globalInit = GlobalStruct
+            [ GlobalDecl
+                { ty = I64
+                , globalInit = GlobalInt 0
+                }
+            , GlobalDecl
+                { ty = TyPtr I64
+                , globalInit = GlobalGid "gint"
+                }
+            ]
+        }
+    )
+, DeclGlobal "v2"
+    ( GlobalDecl
+        { ty = TyPtr
+            ( TyNamed "var2" )
+        , globalInit = GlobalStruct
+            [ GlobalDecl
+                { ty = I64
+                , globalInit = GlobalInt 1
+                }
+            , GlobalDecl
+                { ty = TyPtr ( TyPtr I8 )
+                , globalInit = GlobalNull
+                }
+            ]
+        }
+    )
+]

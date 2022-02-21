@@ -9,7 +9,7 @@ define i64 @program(i64 %argc, i8** %argv) {
   %7 = alloca i64
   store i64 %6, i64* %7
   %8 = load i64, i64* %7
-  %9 = icmp sgt i64 %6, 10
+  %9 = icmp sgt i1 %6, 10
   br i1 %9, label %then, label %else
 then:
   %10 = load i64, i64* %7
