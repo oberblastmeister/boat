@@ -4,12 +4,8 @@
 module Data.IdMap where
 
 import Data.IntMap.Strict qualified as IntMap
+import Data.Pair (Pair (P))
 import Oat.TH (addUnderscoreLenses, getterFieldLabels)
-
-data Pair a b = P !a !b
-
-pairToTuple :: Pair a b -> (a, b)
-pairToTuple (P a b) = (a, b)
 
 data IdMap k v = IdMap
   { map :: !(HashMap k v),

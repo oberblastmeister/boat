@@ -7,6 +7,7 @@ module Oat.Utils.Optics
     swap,
     fromOf,
     unwrap,
+    leafChildrenOf,
   )
 where
 
@@ -55,3 +56,11 @@ unwrap def =
         Just _ -> Just b
         Nothing -> Just def
     )
+{-# INLINE unwrap #-}
+
+-- | get all the leaf children
+leafChildrenOf :: Is k A_Fold => Optic' k is a a -> a -> [a]
+leafChildrenOf o = go
+  where
+    go a = foldMapOf o go a
+{-# INLINE leafChildrenOf #-}

@@ -9,12 +9,13 @@ module Data.Infinite
   )
 where
 
+import Data.Data (Data)
 import Oat.Utils.Impossible qualified as Impossible
 import Prelude hiding (cons, head, repeat, tail, uncons)
 import Prelude qualified
 
 newtype Infinite a = Infinite [a]
-  deriving (Functor)
+  deriving (Functor, Data, Typeable, Generic)
 
 repeat :: a -> Infinite a
 repeat = Infinite . Prelude.repeat
@@ -29,11 +30,11 @@ uncons _ = Impossible.impossible
 cons :: a -> Infinite a -> Infinite a
 cons a (Infinite as) = Infinite $ a : as
 
-head :: Infinite a -> a
-head = fst . uncons
+head :: Lens' (Infinite a) a
+head = lens (fst . uncons) (\inf a -> cons a $ snd $ uncons inf)
 
-tail :: Infinite a -> Infinite a
-tail = snd . uncons
+tail :: Getter (Infinite a) (Infinite a)
+tail = to $ snd . uncons
 
 pattern (::>) :: a -> Infinite a -> Infinite a
 pattern a ::> as <-

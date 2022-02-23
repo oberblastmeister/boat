@@ -64,7 +64,6 @@ module OatPrelude.Debug
     traceShowM,
 
     -- * Imprecise error
-    error,
     Undefined (..),
     undefined,
     dbg,
@@ -77,18 +76,14 @@ import Data.Data (Data)
 -- import Relude.Enum (Bounded, Enum)
 -- import Relude.String (Read, String, Text, toString)
 
-import Data.Kind (Constraint, Type)
-import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Typeable (Typeable)
 import Debug.Trace qualified as Debug
 import GHC.Exts (RuntimeRep, TYPE)
 import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
-import GHC.TypeLits (ErrorMessage (..), TypeError)
 import System.IO.Unsafe qualified
-import Text.Pretty.Simple (pPrint, pShow)
-import Prelude (Applicative, Bounded, Char, Enum, Eq, Ord, Read, Show, String, ($))
+import Text.Pretty.Simple (pPrint)
+import Prelude (Applicative, Bounded, Enum, Eq, Ord, Read, Show, String, ($))
 import Prelude qualified
 
 -- $setup
@@ -229,66 +224,6 @@ traceId :: String -> String
 traceId = Debug.traceId
 {-# WARNING traceId "'traceId' remains in code" #-}
 
-----------------------------------------------------------------------------
--- error
-----------------------------------------------------------------------------
-
--- | Throw pure errors. Use this function only to when you are sure that this
--- branch of code execution is not possible.  __DO NOT USE__ 'error' as a normal
--- error handling mechanism.
---
--- #ifdef mingw32_HOST_OS
--- >>> error "oops"
--- *** Exception: oops
--- CallStack (from HasCallStack):
---  error, called at src\\Relude\\Debug.hs:288:11 in ...
---  ...
--- #else
--- >>> error "oops"
--- *** Exception: oops
--- CallStack (from HasCallStack):
---  error, called at src/Relude/Debug.hs:288:11 in ...
--- ...
--- #endif
---
--- ⚠️__CAUTION__⚠️  Unlike "Prelude" version, 'error' takes 'Relude.Text' as an
--- argument. In case it used by mistake, the user will see the following:
---
--- >>> error ("oops" :: String)
--- ...
--- ... 'error' expects 'Text' but was given 'String'.
---      Possible fixes:
---          * Make sure OverloadedStrings extension is enabled
---          * Use 'error (toText msg)' instead of 'error msg'
--- ...
--- >>> error False
--- ...
--- ... 'error' works with 'Text'
---      But given: Bool
--- ...
-error ::
-  forall (r :: RuntimeRep) (a :: TYPE r) (t :: Type).
-  (HasCallStack, IsText t) =>
-  t ->
-  a
-error e = Prelude.error (T.unpack e)
-
-type IsText (t :: Type) = (t ~ Text, CheckIsText t)
-
-type family CheckIsText (t :: Type) :: Constraint where
-  CheckIsText Text = ()
-  CheckIsText [Char] =
-    TypeError
-      ( 'Text "'error' expects 'Text' but was given 'String'."
-          ':$$: 'Text "Possible fixes:"
-          ':$$: 'Text "    * Make sure OverloadedStrings extension is enabled"
-          ':$$: 'Text "    * Use 'error (toText msg)' instead of 'error msg'"
-      )
-  CheckIsText a =
-    TypeError
-      ( 'Text "'error' works with 'Text'"
-          ':$$: 'Text "But given: " ':<>: 'ShowType a
-      )
 
 ----------------------------------------------------------------------------
 -- Undefined and undefined

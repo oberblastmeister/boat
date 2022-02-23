@@ -135,13 +135,19 @@ library
     Control.Source
     Control.Fuel
     Control.OnLeft
+    Data.Pair
     Data.Pos
+    Data.IdSet
     Data.IdMap
     Data.MapList
     Data.Span
     Data.Range
     Data.Infinite
     Oat
+    Oat.Optimize.Block
+    Oat.Optimize.LabelMap
+    Oat.Optimize.Graph
+    Oat.Optimize.Dataflow
     Oat.Utils.Misc
     Oat.Utils.IO
     Oat.Utils.Impossible
@@ -157,7 +163,7 @@ library
     Oat.TH
     Oat.Command
     Oat.Main
-    Oat.Opt
+    Oat.Cli
     -- Oat.Interned
     -- Oat.Interned.Internal
     -- Oat.Interned.Text

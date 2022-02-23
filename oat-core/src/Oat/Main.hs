@@ -1,7 +1,7 @@
 module Oat.Main
   ( main,
-    mainWithOpt,
-    mainWithOpt_,
+    mainWithArgs,
+    mainWithArgs_,
     runMain,
     runMain_,
     runDriverMain,
@@ -15,8 +15,8 @@ import Effectful.Reader.Static (Reader, runReader)
 import Effectful.Reader.Static.Optics (rview)
 import Oat.Driver qualified as Driver
 import Oat.Error (CompileFail)
-import Oat.Opt (Opt)
-import Oat.Opt qualified as Opt
+import Oat.Cli (Args)
+import Oat.Cli qualified as Cli
 import Oat.RunReporter qualified as RunReporter
 import Oat.Utils.Families (type (++))
 import Oat.Utils.Monad (whenJust, whenM)
@@ -29,31 +29,31 @@ import UnliftIO.Exception qualified as Exception
 
 main :: IO ()
 main =
-  Opt.opt >>= mainWithOpt >>= \case
+  Cli.args >>= mainWithArgs >>= \case
     True -> liftIO Exit.exitSuccess
     False -> liftIO Exit.exitFailure
 
-mainWithOpt_ :: Opt -> IO ()
-mainWithOpt_ opt = runMain_ opt $ Driver.runDriver Driver.drive
+mainWithArgs_ :: Args -> IO ()
+mainWithArgs_ args = runMain_ args $ Driver.runDriver Driver.drive
 
-mainWithOpt :: Opt -> IO Bool
-mainWithOpt opt = runMain opt $ Driver.runDriver Driver.drive
+mainWithArgs :: Args -> IO Bool
+mainWithArgs args = runMain args $ Driver.runDriver Driver.drive
 
 type MainEffs =
   '[Error CompileFail]
     ++ RunReporter.ReporterEffs
-    ++ '[Reader Opt, IOE]
+    ++ '[Reader Args, IOE]
 
-runMain_ :: (es' ~ MainEffs) => Opt -> Eff es' () -> IO ()
-runMain_ opt m =
-  runMain opt m >>= \case
+runMain_ :: (es' ~ MainEffs) => Args -> Eff es' () -> IO ()
+runMain_ args m =
+  runMain args m >>= \case
     True -> pure ()
     False -> Exception.throwString "Throwing exception due to compilation failure"
 
-runMain :: (es' ~ MainEffs) => Opt -> Eff es' () -> IO Bool
-runMain opt m = do
+runMain :: (es' ~ MainEffs) => Args -> Eff es' () -> IO Bool
+runMain args m = do
   runEff $
-    runReader opt $
+    runReader args $
       RunReporter.runAllReporters
         (Error.runError @CompileFail m)
         >>= \case
@@ -67,13 +67,13 @@ runMain opt m = do
                 pure False
               else pure True
 
-runDriverMain_ :: (es' ~ Driver.DriverEffsRun ++ MainEffs) => Opt -> Eff es' () -> IO ()
-runDriverMain_ opt m = runMain_ opt $ Driver.runDriver m
+runDriverMain_ :: (es' ~ Driver.DriverEffsRun ++ MainEffs) => Args -> Eff es' () -> IO ()
+runDriverMain_ args m = runMain_ args $ Driver.runDriver m
 
-runDriverMain :: (es' ~ Driver.DriverEffsRun ++ MainEffs) => Opt -> Eff es' () -> IO Bool
-runDriverMain opt m = runMain opt $ Driver.runDriver m
+runDriverMain :: (es' ~ Driver.DriverEffsRun ++ MainEffs) => Args -> Eff es' () -> IO Bool
+runDriverMain args m = runMain args $ Driver.runDriver m
 
-printCompileResult :: '[IOE, Reader Opt] :>> es => Maybe Error.CallStack -> RunReporter.Reports -> Eff es ()
+printCompileResult :: '[IOE, Reader Args] :>> es => Maybe Error.CallStack -> RunReporter.Reports -> Eff es ()
 printCompileResult callStack reports = do
   Utils.Pretty.putDoc $
     pIf
@@ -92,7 +92,7 @@ printCompileResult callStack reports = do
           )
       <> Pretty.hardline
   whenJust callStack $ \callStack ->
-    whenM (rview @Opt #callStack) $
+    whenM (rview @Args #callStack) $
       Utils.Pretty.putDoc $
         Info <#> "Callstack:"
           <++> pretty (Error.prettyCallStack callStack)

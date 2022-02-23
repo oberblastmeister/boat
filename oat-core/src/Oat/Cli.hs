@@ -2,16 +2,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.Opt
-  ( Opt (..),
-    opt,
-    defOpt,
+module Oat.Cli
+  ( Args (..),
+    args,
+    defArgs,
   )
 where
 
 import Options.Applicative
 
-data Opt = Opt
+data Args = Args
   { clang :: !Text,
     emitAsm :: !Bool,
     emitLL :: !Bool,
@@ -38,10 +38,10 @@ data Optimization
   | O3
   deriving (Show, Eq)
 
-$(makeFieldLabelsNoPrefix ''Opt)
+$(makeFieldLabelsNoPrefix ''Args)
 
-opt :: IO Opt
-opt = customExecParser optPrefs parseOpt
+args :: IO Args
+args = customExecParser optPrefs parseArgs
 
 optPrefs :: ParserPrefs
 optPrefs =
@@ -50,16 +50,16 @@ optPrefs =
       <> showHelpOnError
       <> showHelpOnEmpty
 
-parseOpt :: ParserInfo Opt
-parseOpt =
+parseArgs :: ParserInfo Args
+parseArgs =
   info
-    (helper <*> versionOption <*> parseOpt')
+    (helper <*> versionOption <*> parseArgs')
     ( fullDesc
         <> progDesc "Compiler for the oat language"
     )
 
-parseOpt' :: Parser Opt
-parseOpt' = do
+parseArgs' :: Parser Args
+parseArgs' = do
   clang <-
     strOption $
       long "clang"
@@ -104,7 +104,7 @@ parseOpt' = do
     switch $
       long "link-test-runtime"
   pure
-    Opt
+    Args
       { clang,
         emitAsm,
         emitLL,
@@ -117,9 +117,9 @@ parseOpt' = do
         linkTestRuntime
       }
 
-defOpt :: Opt
-defOpt =
-  Opt
+defArgs :: Args
+defArgs =
+  Args
     { clang = "clang",
       emitAsm = False,
       emitLL = False,

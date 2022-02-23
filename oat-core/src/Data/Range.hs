@@ -86,11 +86,11 @@ tuple = iso (\Range {start, end} -> (start, end)) (\(start, end) -> Range {start
 unsafeNew :: Int -> Int -> Range
 unsafeNew = Range
 
-validateRange :: Text -> Range -> ()
+validateRange :: String -> Range -> ()
 validateRange name Range {start, end}
-  | start > end = error $ prefix <> "start cannot be greater than end"
-  | start < 0 = error $ prefix <> "start cannot be negative"
-  | end < 0 = error $ prefix <> "end cannot be negative"
+  | start > end = error $ prefix ++ "start cannot be greater than end"
+  | start < 0 = error $ prefix ++ "start cannot be negative"
+  | end < 0 = error $ prefix ++ "end cannot be negative"
   | otherwise = ()
   where
     prefix = "Data.Range." <> name <> ": "

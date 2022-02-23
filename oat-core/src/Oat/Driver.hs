@@ -26,7 +26,7 @@ import Oat.Command (Command)
 import Oat.Command qualified as Command
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
-import Oat.Opt (Opt)
+import Oat.Cli (Args)
 import Oat.Reporter
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.Families (type (++))
@@ -45,7 +45,7 @@ type DriverEffs :: [Effect]
 -- type DriverEffs = IOE ': DriverEffsRun
 type DriverEffs =
   '[ IOE,
-     Reader Opt,
+     Reader Args,
      Reporter [LL.ParseError],
      Reporter [LL.CheckError],
      Error UnicodeException,
@@ -57,7 +57,7 @@ type DriverEffs =
 
 drive :: DriverEffs :>> es => Eff es ()
 drive = do
-  opt <- ask @Opt
+  opt <- ask @Args
   file <- case opt ^. #files of
     [p] -> pure p
     _ -> Exception.throwString "Only compiling one file is supported for now"
@@ -84,7 +84,7 @@ compileLLFileToAsmShow llPath = do
   liftIO $ TIO.putStrLn asmText
 
 parseLLText ::
-  '[ Reader Opt,
+  '[ Reader Args,
      Reporter [LL.ParseError],
      Reporter [LL.CheckError],
      Error CompileFail
@@ -96,7 +96,7 @@ parseLLText text = do
   decls <- LL.parse text LL.prog
   let declMap = LL.declsToMap decls
       prog = LL.Prog {decls, declMap}
-  whenM (rview @Opt #checkLL) $ do
+  whenM (rview @Args #checkLL) $ do
     LL.checkProg prog
   pure prog
 
@@ -119,7 +119,7 @@ compileLLTextToFile llText out = do
     compileAsmPaths [asmTemp] out
 
 compileLLText ::
-  '[ Reader Opt,
+  '[ Reader Args,
      Reporter [LL.ParseError],
      Reporter [LL.CheckError],
      IOE,
@@ -136,7 +136,7 @@ compileLLText text = do
   pure asmText
 
 compileLLTextToInsts ::
-  '[ Reader Opt,
+  '[ Reader Args,
      Reporter [LL.ParseError],
      Reporter [LL.CheckError],
      Error CompileFail
@@ -176,7 +176,7 @@ linkRuntime mods out = do
     FileSystem.IO.hSetBuffering runtimeHandle IO.NoBuffering
     liftIO $ System.IO.hSetEncoding runtimeHandle System.IO.utf8
     hPutUtf8 runtimeHandle $ runtimeTemplate "program"
-    shouldLinkTestRuntime <- rview @Opt #linkTestRuntime
+    shouldLinkTestRuntime <- rview @Args #linkTestRuntime
     if shouldLinkTestRuntime
       then withTextInTemp "oat.c" testRuntime $ \testTemp _ -> do
         Command.link (testTemp : runtimeTemp : mods) out
@@ -221,7 +221,7 @@ runDriver ::
     '[ IOE,
        Reporter [DriverError],
        Error CompileFail,
-       Reader Opt
+       Reader Args
      ]
       :>> es
   ) =>

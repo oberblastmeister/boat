@@ -25,7 +25,7 @@ import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
 import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.Main qualified as Main
-import Oat.Opt qualified as Opt
+import Oat.Cli qualified as Cli
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.IO (hPutLnUtf8, listDirectory', readFileUtf8, runErrorIO, writeFileLnUtf8)
 import Oat.Utils.Misc (timSort)
@@ -120,9 +120,9 @@ llCompileSpec config = do
         Temporary.withSystemTempFile "oat" $ \temp handle -> do
           liftIO $
             Main.runDriverMain_
-              Opt.defOpt
-                { Opt.linkTestRuntime = True,
-                  Opt.checkLL = True
+              Cli.defArgs
+                { Cli.linkTestRuntime = True,
+                  Cli.checkLL = True
                 }
               $ Driver.compileLLTextToFile text temp
           IO.hClose handle
@@ -164,12 +164,12 @@ possibleExtensions = [".ll", ".oat"]
 
 emitAsm :: FilePath -> IO ()
 emitAsm path =
-  Main.mainWithOpt_ $
-    Opt.defOpt
-      { Opt.emitAsm = True,
-        Opt.checkLL = True,
-        Opt.files = ["test_data/ll_compile" </> path],
-        Opt.output = Just $ "test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s"
+  Main.mainWithArgs_ $
+    Cli.defArgs
+      { Cli.emitAsm = True,
+        Cli.checkLL = True,
+        Cli.files = ["test_data/ll_compile" </> path],
+        Cli.output = Just $ "test_data/asm_compile" </> FilePath.takeFileName path -<.> ".s"
       }
 
 showAsm :: FilePath -> IO ()
@@ -189,7 +189,7 @@ compileAsm :: FilePath -> IO ()
 compileAsm path = do
   asmDir <- Directory.makeAbsolute "test_data/asm_compile"
   let exePath = asmDir </> FilePath.takeBaseName path
-  Main.runDriverMain_ Opt.defOpt {Opt.linkTestRuntime = True} $
+  Main.runDriverMain_ Cli.defArgs {Cli.linkTestRuntime = True} $
     Driver.compileAsmPaths [asmDir </> path] exePath
 
 runAsm :: FilePath -> IO ()

@@ -468,7 +468,7 @@ maxCallSize body = do
       body
 
 lookupTy :: Name -> TyMap -> Ty
-lookupTy name mp = mp ^. at name % unwrap (error $ "Could not find name " <> T.pack (show name) <> " in map")
+lookupTy name mp = mp ^. at name % unwrap (error $ "Could not find name " ++ show name ++ " in map")
 
 -- note, for this to be valid, you must not change the type for TyNamed
 -- also, this will panic if the HashMap does not contain the name
