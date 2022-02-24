@@ -1,6 +1,7 @@
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
-module Oat.Optimize.Graph
+module Oat.Dataflow.Graph
   ( Body,
     Body',
     emptyBody,
@@ -9,10 +10,11 @@ module Oat.Optimize.Graph
     NonLocal (..),
     fromBody,
     bodyUnion,
-    spliceAppend',
+    splice',
     splice,
-    spliceAppend,
+    spliceClosed,
     dfs,
+    dfs',
     dfsFrom,
     append,
     entry,
@@ -20,20 +22,23 @@ module Oat.Optimize.Graph
     first,
     last,
     middle,
+    single,
+    emptyClosed,
+    empty,
   )
 where
 
 import Control.Monad.State.Strict (State, evalState, get)
 import Data.Tree (Tree)
 import Data.Tree qualified as Tree
-import Oat.Optimize.Block (Block, BlockK, MaybeO (..), Node, Shape (..))
-import Oat.Optimize.Block qualified as Block
-import Oat.Optimize.LabelMap (Label, LabelMap)
-import Oat.Optimize.LabelMap qualified as LabelMap
-import Oat.Optimize.LabelSet (LabelSet)
+import Oat.Dataflow.Block (Block, BlockK, MaybeO (..), Node, Shape (..))
+import Oat.Dataflow.Block qualified as Block
+import Oat.Dataflow.LabelMap (Label, LabelMap)
+import Oat.Dataflow.LabelMap qualified as LabelMap
+import Oat.Dataflow.LabelSet (LabelSet)
 import Oat.Utils.Optics (unwrap)
 import Optics.State.Operators ((?=))
-import Prelude hiding (Empty, first, last)
+import Prelude hiding (Empty, empty, first, last)
 
 -- | A (possible empty) collection of closed/closed blocks
 type Body :: Node -> Type
@@ -68,6 +73,10 @@ data Graph' :: BlockK -> Node -> Shape -> Shape -> Type where
     !(MaybeO x (block n C O)) ->
     Graph' block n e x
 
+deriving instance (forall e x. Show (block n e x)) => (Show (Graph' block n e x))
+
+deriving instance (forall e x. Eq (block n e x)) => (Eq (Graph' block n e x))
+
 class NonLocal n where
   entryLabel :: n C x -> Label
   successorLabels :: n e C -> [Label]
@@ -84,7 +93,7 @@ fromBody b = Many NothingO b NothingO
 
 type BlockCatFun block n = forall e x. block n e O -> block n O x -> block n e x
 
-spliceAppend' ::
+splice' ::
   forall block n e a x.
   NonLocal (block n) =>
   BlockCatFun block n ->
@@ -92,7 +101,7 @@ spliceAppend' ::
     Graph' block n a x ->
     Graph' block n e x
   )
-spliceAppend' bcat = sp
+splice' bcat = sp
   where
     sp :: forall e a x. Graph' block n e a -> Graph' block n a x -> Graph' block n e x
     sp Empty g = g
@@ -102,6 +111,12 @@ spliceAppend' bcat = sp
     sp (Many e bs (JustO x)) (Single b) = Many e bs (JustO (x `bcat` b))
     sp (Many e bs (JustO x)) (Many (JustO e') bs' x') = Many e ((addBlock (x `bcat` e') bs) `bodyUnion` bs') x'
     sp (Many e b NothingO) (Many NothingO b' x) = Many e (b `bodyUnion` b') x
+
+empty :: Graph' block n O O
+empty = Empty
+
+emptyClosed :: Graph' block n C C
+emptyClosed = Many NothingO emptyBody NothingO
 
 last :: n O C -> Graph n O C
 last n = entry $ Block.OC Block.Empty n
@@ -118,16 +133,19 @@ exit block = Many NothingO emptyBody (JustO block)
 middle :: (NonLocal (block n)) => block n C C -> Graph' block n C C
 middle b = Many NothingO (addBlock b emptyBody) NothingO
 
+single :: block n 'O 'O -> Graph' block n 'O 'O
+single = Single
+
 -- | append two graphs, control flow flows from left to right
 append :: NonLocal n => Graph n e O -> Graph n O x -> Graph n e x
-append = spliceAppend
+append = splice
 
 -- | splice two graphs, nothing is known about control flow
-splice :: NonLocal n => Graph n e C -> Graph n C x -> Graph n e x
-splice = spliceAppend
+spliceClosed :: NonLocal n => Graph n e C -> Graph n C x -> Graph n e x
+spliceClosed = splice
 
-spliceAppend :: NonLocal n => Graph n e a -> Graph n a x -> Graph n e x
-spliceAppend = spliceAppend' Block.append
+splice :: NonLocal n => Graph n e a -> Graph n a x -> Graph n e x
+splice = splice' Block.append
 
 dfs :: NonLocal (block n) => Graph' block n O x -> [Tree Label]
 dfs Empty = []
@@ -146,7 +164,7 @@ generates entries body = (`generate` body) <$> entries
 generate :: NonLocal (block n) => Label -> Body' block n -> Tree Label
 generate entry body = Tree.Node entry ((`generate` body) <$> (successorLabels entryBlock))
   where
-    entryBlock = (body ^. at entry % unwrap (error $ "The entry " ++ show entry ++ " does not exist in the graph body"))
+    entryBlock = (body ^. at entry % unwrap (error $ "The entry " ++ show entry ++ " does not exist in the graph body: "))
 
 prune :: [Tree Label] -> [Tree Label]
 prune forest = evalState (prune' forest) mempty

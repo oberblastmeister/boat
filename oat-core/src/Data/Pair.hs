@@ -6,7 +6,7 @@ module Data.Pair (Pair (..), toTuple) where
 import Control.DeepSeq (NFData)
 import Data.Data (Data)
 
-data Pair a b = P a b
+data Pair a b = P !a !b
   deriving (Show, Eq, Data, Typeable, Generic)
 
 instance (NFData a, NFData b) => NFData (Pair a b)

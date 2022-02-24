@@ -1,10 +1,10 @@
-module Oat.Optimize.GraphExtra where
+module Oat.Dataflow.GraphExtra where
 
-import Oat.Optimize.Block qualified as Block
-import Oat.Optimize.Block (Shape (..))
-import Oat.Optimize.Graph qualified as Graph
-import Oat.Optimize.LabelSet (LabelSet)
-import Oat.Optimize.Graph (NonLocal(..))
+import Oat.Dataflow.Block qualified as Block
+import Oat.Dataflow.Block (Shape (..))
+import Oat.Dataflow.Graph qualified as Graph
+import Oat.Dataflow.LabelSet (LabelSet)
+import Oat.Dataflow.Graph (NonLocal(..))
 
 type Graph n e x = Graph.Graph' Block.Block n e x
 

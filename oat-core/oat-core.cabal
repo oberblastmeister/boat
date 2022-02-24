@@ -136,6 +136,7 @@ library
     Control.Fuel
     Control.OnLeft
     Data.Pair
+    Data.Some
     Data.Pos
     Data.IdSet
     Data.IdMap
@@ -144,10 +145,15 @@ library
     Data.Range
     Data.Infinite
     Oat
-    Oat.Optimize.Block
-    Oat.Optimize.LabelMap
-    Oat.Optimize.Graph
-    Oat.Optimize.Dataflow
+    Oat.Dataflow
+    Oat.Dataflow.Block
+    Oat.Dataflow.LabelMap
+    Oat.Dataflow.LabelSet
+    Oat.Dataflow.Label
+    Oat.Dataflow.Graph
+    Oat.Dataflow.Run
+    Oat.Dataflow.DGraph
+    Oat.Dataflow.TreeUtils
     Oat.Utils.Misc
     Oat.Utils.IO
     Oat.Utils.Impossible
@@ -170,6 +176,9 @@ library
     -- Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
     Oat.LL
+    Oat.LL.Ir
+    Oat.LL.ToIr
+    Oat.LL.Live
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer

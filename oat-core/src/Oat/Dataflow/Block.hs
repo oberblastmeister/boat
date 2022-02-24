@@ -1,7 +1,11 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE LiberalTypeSynonyms #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
-module Oat.Optimize.Block
+module Oat.Dataflow.Block
   ( Node,
     Shape (..),
     Shape' (..),
@@ -10,18 +14,23 @@ module Oat.Optimize.Block
     MaybeC (..),
     Block (..),
     BlockK,
+    Some1 (..),
     null,
     empty,
     cons,
     snoc,
     append,
-    joinHead,
-    joinTail,
     join,
+    toList,
   )
 where
 
-import Prelude hiding (Empty, cons, empty, join, null, snoc)
+import Data.DList (DList)
+import Data.DList qualified as DL
+import Data.Some (Some1 (..), withSome1)
+import GHC.Show qualified as Show
+import Text.Show qualified as Show
+import Prelude hiding (Cons, Empty, Snoc, cons, empty, join, null, snoc, toList)
 
 type Node = Shape -> Shape -> Type
 
@@ -88,9 +97,30 @@ data Block :: BlockK where
   Snoc :: !(Block n O O) -> !(n O O) -> Block n O O
   Cons :: !(n O O) -> !(Block n O O) -> Block n O O
 
-deriving instance (forall e x. Show (n e x)) => (Show (Block n e x))
+instance (forall e x. (Show (n e x))) => (Show (Block n e x)) where
+  showsPrec d block =
+    showParen (d > Show.appPrec) $
+      ( \l ->
+          (Show.showString "Block")
+            . Show.showListWith (withSome1 shows) l
+      )
+        $ toList block
 
 deriving instance (forall e x. Eq (n e x)) => (Eq (Block n e x))
+
+toList :: forall n e x. Block n e x -> [Some1 n]
+toList = DL.toList . go
+  where
+    go :: forall n e x. Block n e x -> DList (Some1 n)
+    go = \case
+      CO n b -> Some1 n `DL.cons` go b
+      CC n b n' -> Some1 n `DL.cons` (go b `DL.snoc` Some1 n')
+      OC b n -> go b `DL.snoc` Some1 n
+      Empty -> DL.empty
+      Middle n -> DL.singleton $ Some1 n
+      Append b b' -> go b `DL.append` go b'
+      Snoc b n -> go b `DL.snoc` Some1 n
+      Cons n b -> Some1 n `DL.cons` go b
 
 null :: Block n e x -> Bool
 null Empty = True
@@ -100,31 +130,37 @@ null _ = False
 empty :: Block n O O
 empty = Empty
 
-cons :: n O O -> Block n O x -> Block n O x
-cons n b = case b of
-  OC b l -> OC (cons n b) l
-  Empty -> Middle n
-  Middle {} -> n `Cons` b
-  Append {} -> n `Cons` b
-  Snoc {} -> n `Cons` b
-  Cons {} -> n `Cons` b
+class Cons e where
+  cons :: forall n x. n e O -> Block n O x -> Block n e x
 
-snoc :: Block n e O -> n O O -> Block n e O
-snoc b n = case b of
-  CO f b -> CO f (b `snoc` n)
-  Empty -> Middle n
-  Middle {} -> b `Snoc` n
-  Append {} -> b `Snoc` n
-  Snoc {} -> b `Snoc` n
-  Cons {} -> b `Snoc` n
+instance Cons O where
+  cons n b = case b of
+    OC b l -> OC (cons n b) l
+    Empty -> Middle n
+    Middle {} -> n `Cons` b
+    Append {} -> n `Cons` b
+    Snoc {} -> n `Cons` b
+    Cons {} -> n `Cons` b
 
-joinHead :: n C O -> Block n O x -> Block n C x
-joinHead f (OC b l) = CC f b l
-joinHead f b = CO f Empty `append` b
+instance Cons C where
+  cons f (OC b l) = CC f b l
+  cons f b = CO f Empty `append` b
 
-joinTail :: Block n e O -> n O C -> Block n e C
-joinTail (CO f b) t = CC f b t
-joinTail b t = b `append` OC Empty t
+class Snoc x where
+  snoc :: forall n e. Block n e O -> n O x -> Block n e x
+
+instance Snoc O where
+  snoc b n = case b of
+    CO f b -> CO f (b `snoc` n)
+    Empty -> Middle n
+    Middle {} -> b `Snoc` n
+    Append {} -> b `Snoc` n
+    Snoc {} -> b `Snoc` n
+    Cons {} -> b `Snoc` n
+
+instance Snoc C where
+  snoc (CO f b) t = CC f b t
+  snoc b t = b `append` OC Empty t
 
 join :: n C O -> Block n O O -> n O C -> Block n C C
 join f b t = CC f b t

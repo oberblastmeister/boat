@@ -1,0 +1,462 @@
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
+
+module Oat.Dataflow.Run where
+
+import Data.Sequence qualified as Seq
+import Oat.Dataflow.Block (Block, MaybeC (..), MaybeO (..), Shape (..))
+import Oat.Dataflow.Block qualified as Block
+import Oat.Dataflow.DGraph (DBlock (DBlock), DBody, DGraph)
+import Oat.Dataflow.DGraph qualified as DGraph
+import Oat.Dataflow.Graph (Body, Graph, NonLocal (..))
+import Oat.Dataflow.Graph qualified as Graph
+import Oat.Dataflow.LabelMap (Label, LabelMap)
+import Oat.Dataflow.LabelMap qualified as LabelMap
+import Oat.Dataflow.TreeUtils qualified as TreeUtils
+import Oat.Utils.Misc (show')
+import Oat.Utils.Optics (unwrap)
+import Optics.Operators.Unsafe ((^?!))
+
+data ChangeFlag = NoChange | SomeChange
+  deriving (Show, Eq, Ord)
+
+type Join f = Label -> FactPair f -> (ChangeFlag, f)
+
+data ForwardTransfer n f
+  = ForwardTransfer3
+      (n C O -> f -> f)
+      (n O O -> f -> f)
+      (n O C -> f -> FactBase f)
+
+data ForwardRewrite m n f
+  = ForwardRewrite3
+      (n C O -> f -> m (Maybe (Graph n C O, ForwardRewrite m n f)))
+      (n O O -> f -> m (Maybe (Graph n O O, ForwardRewrite m n f)))
+      (n O C -> f -> m (Maybe (Graph n O C, ForwardRewrite m n f)))
+
+data ForwardPass m n f = ForwardPass
+  { lattice :: !(Lattice f),
+    transfer :: ForwardTransfer n f,
+    rewrite :: ForwardRewrite m n f
+  }
+
+data BackwardTransfer n f
+  = BackwardTransfer3
+      (n C O -> f -> f)
+      (n O O -> f -> f)
+      (n O C -> FactBase f -> f)
+
+data BackwardRewrite m n f
+  = BackwardRewrite3
+      (n C O -> f -> m (Maybe (Graph n C O, BackwardRewrite m n f)))
+      (n O O -> f -> m (Maybe (Graph n O O, BackwardRewrite m n f)))
+      (n O C -> FactBase f -> m (Maybe (Graph n O C, BackwardRewrite m n f)))
+
+data BackwardPass m n f = BackwardPass
+  { lattice :: !(Lattice f),
+    transfer :: BackwardTransfer n f,
+    rewrite :: BackwardRewrite m n f
+  }
+
+data Direction = Forward | Backward
+  deriving (Show, Eq)
+
+type Fact :: Shape -> Type -> Type
+type family Fact x f where
+  Fact C f = FactBase f
+  Fact O f = f
+
+data Lattice f = Lattice
+  { name :: !Text,
+    bot :: !f,
+    join :: Join f
+  }
+
+type FactBase fact = LabelMap fact
+
+data FactPair f = FactPair
+  { old :: !f,
+    new :: !f
+  }
+
+changeIf :: Bool -> ChangeFlag
+changeIf changed = if changed then SomeChange else NoChange
+
+runForward ::
+  forall m n f e x.
+  (forall e x. (Show (n e x)), Show f) =>
+  (NonLocal n, Monad m) =>
+  ForwardPass m n f ->
+  MaybeC e [Label] ->
+  Graph n e x ->
+  Fact e f ->
+  m (DGraph f n e x, Fact x f)
+runForward pass entries = graph
+  where
+    graph :: Graph n e x -> Fact e f -> m (DGraph f n e x, Fact x f)
+    graph Graph.Empty = \f -> pure (Graph.Empty, f)
+    graph (Graph.Single b) = block b
+    graph (Graph.Many e bdy x) = (e `entryBodyCompose` bdy) `compose` exit x
+      where
+        entryBodyCompose ::
+          (MaybeO e (Block n O C)) ->
+          Body n ->
+          Fact e f ->
+          m (DGraph f n e C, Fact C f)
+        entryBodyCompose entry bdy = c entries entry
+          where
+            c :: MaybeC e [Label] -> MaybeO e (Block n O C) -> Fact e f -> m (DGraph f n e C, Fact C f)
+            c NothingC (JustO entry) = block entry `compose` body (successorLabels entry) bdy
+            c (JustC entries) NothingO = body entries bdy
+
+        exit :: MaybeO x (Block n C O) -> FactBase f -> m (DGraph f n C x, Fact x f)
+        exit (JustO blk) = \factBase ->
+          block
+            blk
+            ((joinInFacts pass.lattice factBase) ^?! ix (entryLabel blk))
+        exit NothingO = \fb -> pure (Graph.emptyClosed, fb)
+
+    block :: forall e x. Block n e x -> f -> m (DGraph f n e x, Fact x f)
+    block Block.Empty = \f -> pure (Graph.Empty, f)
+    block (Block.CO l b) = node l `compose` block b
+    block (Block.CC l b n) = node l `compose` block b `compose` node n
+    block (Block.OC b n) = block b `compose` node n
+    block (Block.Middle n) = node n
+    block (Block.Append b1 b2) = block b1 `compose` block b2
+    block (Block.Snoc h n) = block h `compose` node n
+    block (Block.Cons n t) = node n `compose` block t
+
+    node :: forall e x. (ShapeLifter e x) => n e x -> f -> m (DGraph f n e x, Fact x f)
+    node n = \f -> do
+      rewrittenGraph <- forwardRewrite pass.rewrite n f
+      case rewrittenGraph of
+        Nothing -> pure (singletonDGraph f n, forwardTransfer pass.transfer n f)
+        Just (g, rewrite) -> do
+          let pass' = (pass {rewrite} :: ForwardPass m n f)
+              f' = forwardEntryFact n f
+          runForward pass' (forwardEntryLabel n) g f'
+
+    compose ::
+      forall e a x f1 f2 f3.
+      (f1 -> m (DGraph f n e a, f2)) ->
+      (f2 -> m (DGraph f n a x, f3)) ->
+      (f1 -> m (DGraph f n e x, f3))
+    compose trans trans' = \f -> do
+      (g1, f1) <- trans f
+      (g2, f2) <- trans' f1
+      pure (g1 `DGraph.spliceAppend` g2, f2)
+    {-# INLINE compose #-}
+
+    body :: [Label] -> Body n -> FactBase f -> m (DGraph f n C C, FactBase f)
+    body entries body initFactBase =
+      fixpoint
+        Forward
+        pass.lattice
+        doBlock
+        entries
+        body
+        initFactBase
+      where
+        doBlock :: forall x. Block n C x -> FactBase f -> m (DGraph f n C x, Fact x f)
+        doBlock b fb = block b $ getFact pass.lattice (entryLabel b) fb
+
+runBackward ::
+  forall m n f e x.
+  (forall e x. Show (n e x), Show f) =>
+  (NonLocal n, Monad m) =>
+  BackwardPass m n f ->
+  MaybeC e [Label] ->
+  Graph n e x ->
+  Fact x f ->
+  m (DGraph f n e x, Fact e f)
+runBackward pass entries = graph
+  where
+    graph :: Graph n e x -> Fact x f -> m (DGraph f n e x, Fact e f)
+    graph Graph.Empty = \f -> pure (Graph.empty, f)
+    graph (Graph.Single blk) = block blk
+    graph (Graph.Many e bdy x) = (e `entryBlockCompose` bdy) `compose` exit x
+      where
+        exit :: MaybeO x (Block n C O) -> Fact x f -> m (DGraph f n C x, Fact C f)
+        exit (JustO blk) = \f -> do
+          (rg, f) <- block blk f
+          let fb =
+                joinInFacts pass.lattice $
+                  LabelMap.singleton (entryLabel blk) f
+          pure (rg, fb)
+        exit NothingO = \fb -> pure (Graph.emptyClosed, fb)
+
+        entryBlockCompose :: MaybeO e (Block n O C) -> Body n -> Fact C f -> m (DGraph f n e C, Fact e f)
+        entryBlockCompose entry bdy = c entries entry
+          where
+            c ::
+              MaybeC e [Label] ->
+              MaybeO e (Block n O C) ->
+              Fact C f ->
+              m (DGraph f n e C, Fact e f)
+            c NothingC (JustO entry) = block entry `compose` body (successorLabels entry) bdy
+            c (JustC entries) NothingO = body entries bdy
+
+    -- Lift from nodes to blocks
+    block :: forall e x. Block n e x -> Fact x f -> m (DGraph f n e x, f)
+    block Block.Empty = \f -> pure (Graph.Empty, f)
+    block (Block.CO l b) = node l `compose` block b
+    block (Block.CC l b n) = node l `compose` block b `compose` node n
+    block (Block.OC b n) = block b `compose` node n
+    block (Block.Middle n) = node n
+    block (Block.Append b1 b2) = block b1 `compose` block b2
+    block (Block.Snoc h n) = block h `compose` node n
+    block (Block.Cons n t) = node n `compose` block t
+
+    node ::
+      forall e x.
+      Show (Fact x f) =>
+      (ShapeLifter e x) =>
+      n e x ->
+      Fact x f ->
+      m (DGraph f n e x, f)
+    node n f = do
+      let !_ = dbg "f"
+      let !_ = dbg f
+      let !_ = dbg "about to rewrite"
+      let !_ = dbg n
+      rewritten <- backwardRewrite pass.rewrite n f
+      let !_ = dbg' $ "rewritten: " ++ show' (fst <$> rewritten)
+      case rewritten of
+        Nothing -> do
+          let !_ = dbg "entryF"
+          let !_ = dbg entryF
+          pure (singletonDGraph entryF n, entryF)
+          where
+            entryF = backwardTransfer pass.transfer n f
+        Just (g, rewrite) -> do
+          let pass' = (pass {rewrite} :: BackwardPass m n f)
+          (g, f) <- runBackward pass' (forwardEntryLabel n) g f
+          pure (g, backwardEntryFact pass.lattice n f)
+
+    -- Compose fact transformers and concomposeenate the resulting
+    -- rewritten graphs.
+    compose ::
+      forall e a x info info' info''.
+      (info' -> m (DGraph f n e a, info'')) ->
+      (info -> m (DGraph f n a x, info')) ->
+      (info -> m (DGraph f n e x, info''))
+    compose ft1 ft2 f = do
+      (g2, f2) <- ft2 f
+      (g1, f1) <- ft1 f2
+      pure (g1 `DGraph.spliceAppend` g2, f1)
+    {-# INLINE compose #-}
+
+    -- joinInFacts adds debugging information
+
+    -- Outgoing factbase is restricted to Labels *not* in
+    -- in the Body; the facts for Labels *in*
+    -- the Body are in the 'DGraph f n C C'
+    body :: [Label] -> Body n -> Fact C f -> m (DGraph f n C C, Fact C f)
+    body entries bdy init_fbase = do
+      fixpoint
+        Backward
+        pass.lattice
+        doBlock
+        ordered
+        bdy
+        init_fbase
+      where
+        ordered = TreeUtils.postOrderF $ Graph.dfs' entries bdy
+
+        doBlock :: forall x. Block n C x -> Fact x f -> m (DGraph f n C x, FactBase f)
+        doBlock b f = do
+          (g, f) <- block b f
+          pure (g, LabelMap.singleton (entryLabel b) f)
+
+-- Join all the incoming facts with bottom.
+-- We know the results _shouldn't change_, but the transfer
+-- functions might, for example, generate some debugging traces.
+joinInFacts :: Lattice f -> FactBase f -> FactBase f
+joinInFacts lattice factBase =
+  makeFactBase lattice $ map botJoin $ toList factBase
+  where
+    botJoin (l, f) = (l, snd $ lattice.join l FactPair {old = lattice.bot, new = f})
+
+makeFactBase :: Lattice f -> [(Label, f)] -> FactBase f
+makeFactBase lattice = foldl' add mempty
+  where
+    add map (l, f) = map & at l ?~ newFact
+      where
+        newFact = case map ^. at l of
+          Nothing -> f
+          Just f' -> snd $ lattice.join l FactPair {old = f', new = f}
+
+fixpoint ::
+  forall m n fact.
+  (forall e x. Show (n e x), Show fact) =>
+  (NonLocal n, Monad m) =>
+  Direction ->
+  Lattice fact ->
+  (Block n C C -> Fact C fact -> m (DGraph fact n C C, Fact C fact)) ->
+  [Label] ->
+  Body n ->
+  Fact C fact ->
+  m (DGraph fact n C C, FactBase fact)
+fixpoint direction lattice doBlock entries body factBase = do
+  let !_ = dbg ("fixpoint: " ++ show direction)
+  let !_ = dbg "body"
+  let !_ = dbg body
+  let !_ = dbg "entries"
+  let !_ = dbg entries
+  let !_ = dbg "factBase"
+  let !_ = dbg factBase
+  (factBase', newBlocks) <- loop factBase (fromList entries) (mempty @(LabelMap _))
+  let !_ = dbg ("fixpoint DONE: ")
+  let !_ = dbg "factBase'"
+  let !_ = dbg factBase'
+  let !_ = dbg "newBlocks"
+  let !_ = dbg newBlocks
+  pure (Graph.Many NothingO newBlocks NothingO, factBase')
+  where
+    -- mapping from L -> Ls.  If the fact for L changes, re-analyse Ls.
+    -- if the direction if forward, we just wrap the label in a list
+    -- this is okay because the changed labels returned after doBlock *are* the successors
+    -- so we don't have to do any extra work
+    -- if we are backward, doBlock only will return one changed label, which is the current label
+    -- we need to do some work to get the predecessors
+    -- we get the predecessors finding the successors of every block
+    blockDeps = case direction of
+      Forward -> Just . pure @[]
+      Backward -> \label -> backwardDeps ^. at label
+      where
+        backwardDeps =
+          LabelMap.fromListWith
+            (++)
+            [ (l, [entryLabel b])
+              | b <- snd <$> toList body,
+                l <- successorLabels b
+            ]
+
+    loop ::
+      -- current factbase (increases monotonically)
+      FactBase fact ->
+      -- the worklist of blocks that we still need to analyze
+      Seq Label ->
+      -- the rewritten graph which gets more and more precise after each iteration
+      DBody fact n ->
+      m (FactBase fact, LabelMap (DBlock fact n C C))
+    loop factBase Seq.Empty newBlocks = pure (factBase, newBlocks)
+    loop factBase (lab Seq.:<| labTodo) newBlocks = do
+      -- we use the original body here, not the rewritten one
+      -- if we do an incorrect rewrite, we can still be okay with the original one
+      case body ^. at lab of
+        Nothing -> loop factBase labTodo newBlocks
+        Just block -> do
+          (resultDGraph, outFacts) <- doBlock block factBase
+          let (changed, factBase') =
+                LabelMap.foldrWithKey'
+                  (updateFact lattice newBlocks)
+                  ([], factBase)
+                  outFacts
+          let toAnalyze = concatMap (fromMaybe [] . blockDeps) changed
+          let newBlocks' = case resultDGraph of
+                -- this is biased to the left
+                -- this is important because we may have more precise rewrites
+                -- we want them to overwrite them ones on the right
+                Graph.Many _ blocks _ -> LabelMap.union blocks newBlocks
+          loop factBase' (labTodo <> fromList toAnalyze) newBlocks'
+
+updateFact ::
+  Lattice fact ->
+  LabelMap (DBlock fact n C C) ->
+  Label ->
+  fact ->
+  ([Label], FactBase fact) ->
+  ([Label], FactBase fact)
+updateFact lattice newBlocks lab newFact (changed, !factBase)
+  -- make sure that we do not skip blocks that have not been seen yet
+  -- forward running is driven by bfs, so we need to make sure that we add the block
+  | NoChange <- changeFlag, has (ix lab) newBlocks = (changed, factBase)
+  | otherwise = (lab : changed, factBase & at lab ?~ resultFact)
+  where
+    (changeFlag, resultFact) = case factBase ^. at lab of
+      Nothing -> (SomeChange, newFactDebug)
+      Just oldFact -> join oldFact
+    join oldFact = lattice.join lab FactPair {new = newFact, old = oldFact}
+    (_, newFactDebug) = join lattice.bot
+
+-- Lifting based on shape:
+--  - from nodes to blocks
+--  - from facts to fact-like things
+-- Lowering back:
+--  - from fact-like things to facts
+-- Note that the latter two functions depend only on the entry shape.
+class ShapeLifter e x where
+  singletonDGraph :: f -> n e x -> DGraph f n e x
+  forwardEntryFact :: NonLocal n => n e x -> f -> Fact e f
+  forwardEntryLabel :: NonLocal n => n e x -> MaybeC e [Label]
+  forwardTransfer :: ForwardTransfer n f -> n e x -> f -> Fact x f
+  forwardRewrite :: ForwardRewrite m n f -> n e x -> f -> m (Maybe (Graph n e x, ForwardRewrite m n f))
+  backwardEntryFact :: NonLocal n => Lattice f -> n e x -> Fact e f -> f
+  backwardTransfer :: BackwardTransfer n f -> n e x -> Fact x f -> f
+  backwardRewrite :: BackwardRewrite m n f -> n e x -> Fact x f -> m (Maybe (Graph n e x, BackwardRewrite m n f))
+
+instance ShapeLifter C O where
+  singletonDGraph fact node = Graph.exit (DBlock fact (Block.CO node Block.Empty))
+  forwardEntryFact node fact = LabelMap.singleton (entryLabel node) fact
+  forwardEntryLabel node = JustC [entryLabel node]
+  forwardTransfer (ForwardTransfer3 transfer _ _) = transfer
+  forwardRewrite (ForwardRewrite3 rewrite _ _) = rewrite
+  backwardEntryFact lattice node factBase = getFact lattice (entryLabel node) factBase
+  backwardTransfer (BackwardTransfer3 transfer _ _) = transfer
+  backwardRewrite (BackwardRewrite3 rewrite _ _) = rewrite
+
+instance ShapeLifter O O where
+  singletonDGraph fact = Graph.single . DBlock fact . Block.Middle
+  forwardEntryFact _ f = f
+  forwardEntryLabel _ = NothingC
+  forwardTransfer (ForwardTransfer3 _ transfer _) = transfer
+  forwardRewrite (ForwardRewrite3 _ rewrite _) = rewrite
+  backwardEntryFact _ _ fact = fact
+  backwardTransfer (BackwardTransfer3 _ transfer _) = transfer
+  backwardRewrite (BackwardRewrite3 _ rewrite _) = rewrite
+
+instance ShapeLifter O C where
+  singletonDGraph fact node = Graph.entry (DBlock fact (Block.OC Block.Empty node))
+  forwardEntryFact _ fact = fact
+  forwardEntryLabel _ = NothingC
+  forwardTransfer (ForwardTransfer3 _ _ transfer) = transfer
+  forwardRewrite (ForwardRewrite3 _ _ rewrite) = rewrite
+  backwardEntryFact _ _ fact = fact
+  backwardTransfer (BackwardTransfer3 _ _ transfer) = transfer
+  backwardRewrite (BackwardRewrite3 _ _ rewrite) = rewrite
+
+getFact :: Lattice f -> Label -> FactBase f -> f
+getFact lattice label factBase = factBase ^. at label % unwrap lattice.bot
+
+backwardTransfer1 :: (forall e x. n e x -> Fact x f -> f) -> BackwardTransfer n f
+backwardTransfer1 f = BackwardTransfer3 f f f
+
+backwardRewrite3 ::
+  forall m n f.
+  Monad m =>
+  (n C O -> f -> m (Maybe (Graph n C O))) ->
+  (n O O -> f -> m (Maybe (Graph n O O))) ->
+  (n O C -> FactBase f -> m (Maybe (Graph n O C))) ->
+  BackwardRewrite m n f
+backwardRewrite3 f m l = BackwardRewrite3 (lift f) (lift m) (lift l)
+  where
+    lift :: forall t t1 a. (t -> t1 -> m (Maybe a)) -> t -> t1 -> m (Maybe (a, BackwardRewrite m n f))
+    lift rw node fact = liftM (liftM asRew) (rw node fact)
+
+    asRew :: t -> (t, BackwardRewrite m n f)
+    asRew g = (g, noBackwardRewrite)
+
+noBackwardRewrite :: Monad m => BackwardRewrite m n f
+noBackwardRewrite = BackwardRewrite3 noRewrite noRewrite noRewrite
+
+backwardRewrite1 ::
+  Monad m =>
+  (forall e x. n e x -> Fact x f -> m (Maybe (Graph n e x))) ->
+  BackwardRewrite m n f
+backwardRewrite1 f = backwardRewrite3 f f f
+
+noRewrite :: Monad m => a -> b -> m (Maybe c)
+noRewrite _ _ = pure Nothing

@@ -1,0 +1,114 @@
+( Many
+    ( JustO
+        ( DBlock
+            ( fromList
+                [ "1"
+                , "x"
+                ]
+            )
+            ( Block
+                [ Term ( Br L0 ) ]
+            )
+        )
+    )
+    ( LabelMap
+        { unLabelMap = fromList
+            [
+                ( 0
+                , DBlock
+                    ( fromList
+                        [ "1"
+                        , "x"
+                        ]
+                    )
+                    ( Block
+                        [ Label L0
+                        , Inst
+                            ( BinOp
+                                ( BinOpInst
+                                    { name = "1"
+                                    , op = Add
+                                    , ty = I64
+                                    , arg1 = Temp "x"
+                                    , arg2 = Const 12
+                                    }
+                                )
+                            )
+                        , Term ( Br L1 )
+                        ]
+                    )
+                )
+            ,
+                ( 1
+                , DBlock
+                    ( fromList
+                        [ "1"
+                        , "x"
+                        ]
+                    )
+                    ( Block
+                        [ Label L1
+                        , Inst
+                            ( BinOp
+                                ( BinOpInst
+                                    { name = "1"
+                                    , op = Add
+                                    , ty = I64
+                                    , arg1 = Const 1
+                                    , arg2 = Const 1
+                                    }
+                                )
+                            )
+                        , Term ( Br L2 )
+                        ]
+                    )
+                )
+            ,
+                ( 2
+                , DBlock
+                    ( fromList
+                        [ "1"
+                        , "x"
+                        ]
+                    )
+                    ( Block
+                        [ Label L2
+                        , Term
+                            ( Cbr
+                                ( CbrTerm
+                                    { ty = I1
+                                    , arg = Const 1
+                                    , lab1 = L0
+                                    , lab2 = L3
+                                    }
+                                )
+                            )
+                        ]
+                    )
+                )
+            ,
+                ( 3
+                , DBlock
+                    ( fromList [ "1" ] )
+                    ( Block
+                        [ Label L3
+                        , Term
+                            ( Ret
+                                ( RetTerm
+                                    { ty = I64
+                                    , arg = Just
+                                        ( Temp "1" )
+                                    }
+                                )
+                            )
+                        ]
+                    )
+                )
+            ]
+        }
+    ) NothingO
+, fromList
+    [ "1"
+    , "x"
+    ]
+)

@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Oat.Optimize.LabelMap
+module Oat.Dataflow.LabelMap
   ( LabelMap,
     Label,
     unionWithKey,
@@ -17,7 +17,7 @@ import Control.DeepSeq (NFData)
 import Data.IntMap.Strict qualified as IntMap
 import GHC.Exts (IsList (Item))
 import GHC.Exts qualified
-import Oat.Optimize.Label
+import Oat.Dataflow.Label
 import Oat.TH (addUnderscoreLenses)
 import Prelude hiding (toList)
 

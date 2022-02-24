@@ -1,12 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Oat.Optimize.LabelSet where
+module Oat.Dataflow.LabelSet where
 
 import Control.DeepSeq (NFData)
 import Data.IntSet qualified as IntSet
 import GHC.Exts (IsList (Item))
 import GHC.Exts qualified
-import Oat.Optimize.Label (Label (..))
+import Oat.Dataflow.Label (Label (..))
 import Oat.TH (addUnderscoreLenses)
 
 newtype LabelSet = LabelMap {unLabelSet :: IntSet}

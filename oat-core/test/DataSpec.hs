@@ -18,17 +18,24 @@ import Effectful.Error.Static qualified as Error
 import Effectful.FileSystem (FileSystem)
 import Effectful.FileSystem qualified as FileSystem
 import Effectful.Process qualified as Process
+import Effectful.State.Static.Local (evalState)
 import Effectful.Temporary (Temporary)
 import Effectful.Temporary qualified as Temporary
+import Oat.Cli qualified as Cli
 import Oat.Driver qualified as Driver
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
 import Oat.LL.Lexer qualified as LL.Lexer
+import Oat.LL.Live qualified as LL.Live
+import Oat.LL.ToIr qualified as LL.ToIr
 import Oat.Main qualified as Main
-import Oat.Cli qualified as Cli
+import Oat.Dataflow qualified as Optimize
+import Oat.Dataflow.Label qualified as Optimize.Label
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.IO (hPutLnUtf8, listDirectory', readFileUtf8, runErrorIO, writeFileLnUtf8)
+import Oat.Utils.Impossible (impossible)
 import Oat.Utils.Misc (timSort)
+import Oat.Utils.Optics (unwrap)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
 import System.Process.Typed (proc, readProcessStdout)
@@ -81,9 +88,10 @@ run config = Spec.hspecWith Spec.defaultConfig $ specWith config
 
 specWith :: Config -> Spec
 specWith config = do
-  llLexerSpec config
-  llParserSpec config
-  llCompileSpec config
+  -- llLexerSpec config
+  -- llParserSpec config
+  -- llCompileSpec config
+  llLiveSpec config
 
 llLexerSpec :: Config -> Spec
 llLexerSpec config = do
@@ -130,6 +138,35 @@ llCompileSpec config = do
           pure $ Text.Encoding.decodeUtf8 $ LByteString.toStrict stdout
     )
     "ll_compile/ok"
+
+llLiveSpec :: Config -> Spec
+llLiveSpec config = do
+  makeSnapshotSpec
+    config {parallel = False}
+    ( \text -> do
+        (decls, errors) <-
+          runErrorIO @CompileFail $
+            Reporter.runReporterList
+              @LL.ParseError
+              $ LL.parse text LL.prog
+        case errors of
+          _ : _ -> Exception.throwString $ LText.unpack $ pShowNoColor errors
+          _ -> pure ()
+        let declMap = LL.declsToMap decls
+            prog = LL.Prog {decls, declMap}
+            fun :: LL.FunDecl = declMap ^. #funDecls % #map % at "test" % unwrap impossible
+            irFun =
+              runPureEff $
+                Optimize.Label.runLabelSource $
+                  evalState
+                    @(HashMap LL.Name Optimize.Label)
+                    mempty
+                    $ LL.ToIr.funBodyToIr fun.body
+            !_ = dbg irFun
+            res = runIdentity $ LL.Live.run @Identity irFun
+        pure $ LText.toStrict $ pShowNoColor res
+    )
+    "ll_live"
 
 -- | cleans .expect files that do not have a matching file
 clean :: IO ()
@@ -217,8 +254,7 @@ defConfig =
   Config
     { update = False,
       firstTimeUpdate = True,
-      -- filter = predNot $ matchTail "gep1.ll",
-      filter = const True,
+      filter = predNot (matchHead "ll_compile/ok"),
       parallel = False
     }
 
@@ -229,7 +265,7 @@ makeSnapshotSpec config convert dirPath = do
       . FileSystem.runFileSystem
       . listDirectory'
       $ "test_data" </> dirPath
-  let pred = "test_data" <//> (notExpectPath <&&> config ^. #filter)
+  let pred = "test_data/" <//> (notExpectPath <&&> config ^. #filter)
   (if config ^. #parallel then parallel else id) $
     describe dirPath $
       traverse_

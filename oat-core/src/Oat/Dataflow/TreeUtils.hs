@@ -1,4 +1,4 @@
-module Oat.Optimize.TreeUtils
+module Oat.Dataflow.TreeUtils
   ( preOrder,
     postOrderF,
     preOrderF,

@@ -67,6 +67,7 @@ module OatPrelude.Debug
     Undefined (..),
     undefined,
     dbg,
+    dbg',
   )
 where
 
@@ -83,7 +84,7 @@ import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
 import System.IO.Unsafe qualified
 import Text.Pretty.Simple (pPrint)
-import Prelude (Applicative, Bounded, Enum, Eq, Ord, Read, Show, String, ($))
+import Prelude (Applicative , Bounded, Enum, Eq, Ord, Read, Show, String, ($))
 import Prelude qualified
 
 -- $setup
@@ -97,6 +98,10 @@ import Prelude qualified
 dbg :: Show a => a -> a
 dbg a = let !_ = System.IO.Unsafe.unsafePerformIO $ pPrint a in a
 {-# WARNING dbg "'dbg' remains in code" #-}
+
+dbg' :: String -> ()
+dbg' s = Debug.trace s ()
+{-# WARNING dbg' "'dbg'' remains in code" #-}
 
 -- | Prints the given 'String' message and returns the passed value of
 -- type @a@.
@@ -223,7 +228,6 @@ traceShowM = Debug.traceShowM
 traceId :: String -> String
 traceId = Debug.traceId
 {-# WARNING traceId "'traceId' remains in code" #-}
-
 
 ----------------------------------------------------------------------------
 -- Undefined and undefined

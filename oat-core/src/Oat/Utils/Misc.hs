@@ -13,7 +13,7 @@ module Oat.Utils.Misc
     timSort,
     isPowerOf2,
     alignForward,
-  )
+  show')
 where
 
 import Control.Monad.Primitive (PrimMonad, PrimState)
@@ -22,12 +22,14 @@ import Data.Int (Int64)
 import Data.IntMap qualified as IntMap
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Range (Range (RangeP))
+import Data.Text.Lazy qualified as LText
 import Data.Vector qualified as VB
 import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
 import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Mutable qualified as VBM
 import Data.Word (Word64)
 import System.FilePath qualified as FilePath
+import Text.Pretty.Simple (pShowNoColor)
 import Prelude hiding (Map, imap)
 
 inBetween :: Range -> IntMap a -> IntMap a
@@ -98,3 +100,6 @@ alignForward addr align
   | align <= 1 = error "mult cannot be less than 1"
   | not $ isPowerOf2 align = error "align must be a power of 2"
   | otherwise = undefined
+
+show' :: Show a => a -> String
+show' = LText.unpack . pShowNoColor
