@@ -13,7 +13,10 @@ module Oat.Utils.Misc
     timSort,
     isPowerOf2,
     alignForward,
-  show')
+    show',
+    (!>>),
+    (<<!),
+  )
 where
 
 import Control.Monad.Primitive (PrimMonad, PrimState)
@@ -104,8 +107,12 @@ alignForward addr align
 show' :: Show a => a -> String
 show' = LText.unpack . pShowNoColor
 
--- unsnoc :: [a] -> Maybe ([a], a)
--- unsnoc [] = Nothing
--- unsnoc [x] = Just ([], x)
--- unsnoc (x:xs) = Just (x:a, b)
---     where Just (a,b) = unsnoc xs
+(!>>) :: (a -> b) -> (b -> c) -> a -> c
+(!>>) f g = \a -> g $! f a
+
+infixr 1 !>>
+
+(<<!) :: (b -> c) -> (a -> b) -> a -> c
+(<<!) f g = \a -> f $! g a
+
+infixr 1 <<!

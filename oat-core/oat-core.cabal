@@ -69,6 +69,7 @@ common common-options
     ImportQualifiedPost,
     ImpredicativeTypes,
     LexicalNegation,
+    NoStarIsType,
   ghc-options:
     -Wall
     -Wredundant-constraints
@@ -79,6 +80,11 @@ common common-options
     -Werror=incomplete-uni-patterns
     -Werror=missing-methods
     -Werror=incomplete-record-updates
+    -Wcpp-undef
+    -- Prevents useless numerical conversions like e.g. `fromIntegral :: Int -> Int`
+    -Widentities
+    -- -Wmissing-deriving-strategies
+    -Wmissing-export-lists
   build-depends:
     base >= 4.12 && <5,
     oat-prelude,

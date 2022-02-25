@@ -16,10 +16,13 @@ module Oat.Dataflow.Block
     append,
     join,
     toList,
+    ForwardFold3,
     ForwardFold,
-    BackwardFold,
+    BackwardFold3,
     foldForward3,
     foldForward,
+    foldBackward3,
+    foldBackward,
   )
 where
 
@@ -28,6 +31,7 @@ import Data.DList qualified as DList
 import Data.Some (Some1 (..), withSome1)
 import GHC.Show qualified as Show
 import Oat.Dataflow.Shape (IndexedCO, Shape (..))
+import Oat.Utils.Misc ((!>>), (<<!))
 import Text.Show qualified as Show
 import Prelude hiding (Cons, Empty, Snoc, cons, empty, join, null, snoc, toList)
 
@@ -157,7 +161,7 @@ append x y = case x of
     Snoc {} -> x `Append` y
     Cons {} -> x `Append` y
 
-type ForwardFold n a b c =
+type ForwardFold3 n a b c =
   ( n C O -> a -> b,
     n O O -> b -> b,
     n O C -> b -> c
@@ -166,7 +170,7 @@ type ForwardFold n a b c =
 foldForward3 ::
   forall n a b c e x.
   -- 3 folding functions
-  ForwardFold n a b c ->
+  ForwardFold3 n a b c ->
   -- the block to fold on
   Block n e x ->
   -- initial accumulator
@@ -177,25 +181,59 @@ foldForward3 (foldFirst, foldMiddle, foldLast) = go
   where
     go :: forall e x. Block n e x -> IndexedCO e a b -> IndexedCO x c b
     go = \case
-      CO n b -> foldFirst n >>> go b
-      CC n b n' -> foldFirst n >>> go b >>> foldLast n'
-      OC b n -> go b >>> foldLast n
+      CO n b -> foldFirst n !>> go b
+      CC n b n' -> foldFirst n !>> go b !>> foldLast n'
+      OC b n -> go b !>> foldLast n
       Empty -> id
       Middle n -> foldMiddle n
-      Append b b' -> go b >>> go b'
-      Snoc b n -> go b >>> foldMiddle n
-      Cons n b -> foldMiddle n >>> go b
+      Append b b' -> go b !>> go b'
+      Snoc b n -> go b !>> foldMiddle n
+      Cons n b -> foldMiddle n !>> go b
 
-foldForward ::
-  forall n a e x.
-  (forall e x. n e x -> a -> a) ->
-  Block n e x ->
-  IndexedCO e a a ->
-  IndexedCO x a a
+type ForwardFold n a = forall e x. n e x -> a -> a
+
+foldForward :: forall n a e x. ForwardFold n a -> Block n e x -> IndexedCO e a a -> IndexedCO x a a
 foldForward f = foldForward3 (f, f, f)
 
-type BackwardFold n a b c =
+type BackwardFold3 n a b c =
   ( n C O -> b -> c,
     n O O -> b -> b,
     n O C -> a -> b
   )
+
+foldBackward3 ::
+  forall n a b c e x.
+  BackwardFold3 n a b c ->
+  Block n e x ->
+  IndexedCO x a b ->
+  IndexedCO e c b
+foldBackward3 (foldFirst, foldMiddle, foldLast) = go
+  where
+    go :: forall e x. Block n e x -> IndexedCO x a b -> IndexedCO e c b
+    go = \case
+      CO n b -> foldFirst n <<! go b
+      CC n b n' -> foldFirst n <<! go b <<! foldLast n'
+      OC b n -> go b <<! foldLast n
+      Empty -> id
+      Middle n -> foldMiddle n
+      Append b b' -> go b <<! go b'
+      Snoc b n -> go b <<! foldMiddle n
+      Cons n b -> foldMiddle n <<! go b
+
+type BackwardFold n a = forall e x. n e x -> a -> a
+
+foldBackward :: forall n a e x. BackwardFold n a -> Block n e x -> IndexedCO x a a -> IndexedCO e a a
+foldBackward f = foldBackward3 (f, f, f)
+
+type Map3 n n' e x =
+  ( n O C -> n' O C,
+    n O O -> n' O O,
+    n O C -> n' O C
+  )
+
+map3 :: forall n n' e x. Map3 n n' e x -> Block n e x -> Block n' e x
+map3 (mapFirst, mapMiddle, mapLast) = go
+  where
+    go :: forall e x. Block n e x -> Block n' e x
+    go = \case
+      OC b n -> OC (go b) mapLast n

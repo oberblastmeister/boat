@@ -4,16 +4,19 @@
 module Oat.Dataflow.Run where
 
 import Data.Sequence qualified as Seq
+import Effectful.Reader.Static (Reader)
 import Oat.Dataflow.Block (Block)
 import Oat.Dataflow.Block qualified as Block
 import Oat.Dataflow.FactGraph (FactBlock (FactBlock), FactBody, FactGraph)
 import Oat.Dataflow.FactGraph qualified as FactGraph
+import Oat.Dataflow.Fuel (Fuel)
 import Oat.Dataflow.Graph (Body, Graph, NonLocal (..))
 import Oat.Dataflow.Graph qualified as Graph
 import Oat.Dataflow.LabelMap (Label, LabelMap)
 import Oat.Dataflow.LabelMap qualified as LabelMap
 import Oat.Dataflow.Shape (MaybeC (..), MaybeO (..), Shape (..))
 import Oat.Dataflow.TreeUtils qualified as TreeUtils
+import Oat.Utils.Families (Subset)
 import Oat.Utils.Misc (show')
 import Oat.Utils.Optics (unwrap)
 import Optics.Operators.Unsafe ((^?!))
@@ -383,12 +386,12 @@ fixpoint direction lattice doBlock entries body factBase = do
           loop factBase' (labTodo <> fromList toAnalyze) newBlocks'
 
 updateFact ::
-  Lattice fact ->
-  LabelMap (FactBlock fact n C C) ->
+  Lattice f ->
+  LabelMap (FactBlock f n C C) ->
   Label ->
-  fact ->
-  ([Label], FactBase fact) ->
-  ([Label], FactBase fact)
+  f ->
+  ([Label], FactBase f) ->
+  ([Label], FactBase f)
 updateFact lattice newBlocks lab newFact (changed, !factBase)
   -- make sure that we do not skip blocks that have not been seen yet
   -- forward running is driven by bfs, so we need to make sure that we add the block
@@ -462,11 +465,13 @@ backwardRewrite3 ::
   BackwardRewrite m n f
 backwardRewrite3 f m l = BackwardRewrite3 (lift f) (lift m) (lift l)
   where
-    lift :: forall t t1 a. (t -> t1 -> m (Maybe a)) -> t -> t1 -> m (Maybe (a, BackwardRewrite m n f))
-    lift rw node fact = liftM (liftM asRew) (rw node fact)
-
-    asRew :: t -> (t, BackwardRewrite m n f)
-    asRew g = (g, noBackwardRewrite)
+    lift ::
+      forall n e x.
+      (n e x -> Fact x f -> m (Maybe (Graph n e x))) ->
+      n e x ->
+      Fact x f ->
+      m (Maybe (Graph n e x, BackwardRewrite m n f))
+    lift rewrite node fact = (fmap . fmap) (,noBackwardRewrite) (rewrite node fact)
 
 noBackwardRewrite :: Monad m => BackwardRewrite m n f
 noBackwardRewrite = BackwardRewrite3 noRewrite noRewrite noRewrite
