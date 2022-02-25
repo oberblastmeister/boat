@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Oat.Backend.Frame
   ( Frame (..),
@@ -10,10 +10,7 @@ where
 data Frame :: Type -> Effect where
   AllocLocalWith :: Int -> Frame a m a
 
-type instance DispatchOf (Frame a) = 'Dynamic
-
-allocLocalWith :: forall a es. Frame a :> es => Int -> Eff es a
-allocLocalWith i = send $ AllocLocalWith @a i
+$(makeEffect ''Frame)
 
 allocLocal :: forall a es. Frame a :> es => Eff es a
 allocLocal = allocLocalWith @a 8

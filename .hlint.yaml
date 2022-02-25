@@ -54,6 +54,8 @@
 # - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
 - ignore: { name: Use newtype instead of data }
 - ignore: { name: Use section }
+
+- warn: { lhs: return x, rhs: pure x }
 # Define some custom infix operators
 # - fixity: infixr 3 ~^#^~
 

@@ -68,6 +68,7 @@ common common-options
     OverloadedLabels,
     ImportQualifiedPost,
     ImpredicativeTypes,
+    LexicalNegation,
   ghc-options:
     -Wall
     -Wredundant-constraints
@@ -87,7 +88,9 @@ common common-options
     mtl >=2.2.2 && <2.3,
     effectful,
     effectful-core,
+    effectful-th,
     effectful-optics,
+    effectful-typed-process,
     containers >=0.5.10.2 && <0.7,
     unordered-containers >=0.2.6 && <0.3,
     deepseq >=1.2 && <1.5,
@@ -132,9 +135,6 @@ library
   import: common-options
   hs-source-dirs: src
   exposed-modules:
-    Control.Source
-    Control.Fuel
-    Control.OnLeft
     Data.Pair
     Data.Some
     Data.Pos
@@ -146,14 +146,19 @@ library
     Data.Infinite
     Oat
     Oat.Dataflow
+    Oat.Dataflow.Shape
+    Oat.Dataflow.Pointed
     Oat.Dataflow.Block
     Oat.Dataflow.LabelMap
     Oat.Dataflow.LabelSet
     Oat.Dataflow.Label
     Oat.Dataflow.Graph
     Oat.Dataflow.Run
-    Oat.Dataflow.DGraph
+    Oat.Dataflow.FactGraph
     Oat.Dataflow.TreeUtils
+    Oat.Dataflow.Utils
+    Oat.Utils.OnLeft
+    Oat.Utils.Source
     Oat.Utils.Misc
     Oat.Utils.IO
     Oat.Utils.Impossible
@@ -177,13 +182,13 @@ library
     Oat.Wrappers.Lexer
     Oat.LL
     Oat.LL.Ir
-    Oat.LL.ToIr
+    Oat.LL.AstToIr
     Oat.LL.Live
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer
     Oat.LL.Parser
-    Oat.LL.AST
+    Oat.LL.Ast
     Oat.LL.LowerGep
     Oat.LL.Combine
     Oat.LL.LexerWrapper

@@ -1,6 +1,6 @@
 ( Many
     ( JustO
-        ( DBlock
+        ( FactBlock
             ( fromList
                 [ "1"
                 , "x"
@@ -15,7 +15,7 @@
         { unLabelMap = fromList
             [
                 ( 0
-                , DBlock
+                , FactBlock
                     ( fromList
                         [ "1"
                         , "x"
@@ -40,7 +40,7 @@
                 )
             ,
                 ( 1
-                , DBlock
+                , FactBlock
                     ( fromList
                         [ "1"
                         , "x"
@@ -65,7 +65,7 @@
                 )
             ,
                 ( 2
-                , DBlock
+                , FactBlock
                     ( fromList
                         [ "1"
                         , "x"
@@ -88,7 +88,7 @@
                 )
             ,
                 ( 3
-                , DBlock
+                , FactBlock
                     ( fromList [ "1" ] )
                     ( Block
                         [ Label L3

@@ -1,8 +1,7 @@
 {-# LANGUAGE QualifiedDo #-}
 
-module Control.OnLeft
-  (
-    OnLeft(..),
+module Oat.Utils.OnLeft
+  ( OnLeft (..),
     (>>=),
     return,
     toEither,

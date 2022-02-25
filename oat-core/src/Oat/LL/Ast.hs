@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Oat.LL.AST
+module Oat.LL.Ast
   ( Prog (..),
     Ty (..),
     FunTy (..),

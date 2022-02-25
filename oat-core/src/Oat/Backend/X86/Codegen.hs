@@ -3,7 +3,7 @@ module Oat.Backend.X86.Codegen
   )
 where
 
-import Control.Source (Source)
+import Oat.Utils.Source (Source)
 import Data.Int (Int64)
 import Data.Sequence qualified as Seq
 import Effectful.Reader.Static

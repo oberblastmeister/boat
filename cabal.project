@@ -7,8 +7,13 @@ source-repository-package
 source-repository-package
     type: git
     location: https://github.com/arybczak/effectful.git
-    tag: cc25dc9ef4d06c8df391ede07642d3bbfbab6aca
-    subdir: effectful effectful-core
+    tag: f7f82c149e7b4e67c3638e854a84d1c9695c0baa
+    subdir: effectful effectful-core effectful-th
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell-effectful/effectful-typed-process.git
+    tag: bc5b9aecf07a0a7ab290185808e745ffff03c4d8
 
 packages:
     oat-core/

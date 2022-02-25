@@ -7,7 +7,7 @@ module Oat.LL.Cfg where
 import Data.Graph.Inductive qualified as Graph
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Oat.LL (Name)
-import Oat.LL.AST as LL
+import Oat.LL.Ast as LL
 import Effectful.State.Static.Local
 
 data Cfg = Cfg

@@ -7,14 +7,8 @@
 
 module Oat.Dataflow.Block
   ( Node,
-    Shape (..),
-    Shape' (..),
-    IndexedCO,
-    MaybeO (..),
-    MaybeC (..),
     Block (..),
     BlockK,
-    Some1 (..),
     null,
     empty,
     cons,
@@ -22,63 +16,22 @@ module Oat.Dataflow.Block
     append,
     join,
     toList,
+    ForwardFold,
+    BackwardFold,
+    foldForward3,
+    foldForward,
   )
 where
 
 import Data.DList (DList)
-import Data.DList qualified as DL
+import Data.DList qualified as DList
 import Data.Some (Some1 (..), withSome1)
 import GHC.Show qualified as Show
+import Oat.Dataflow.Shape (IndexedCO, Shape (..))
 import Text.Show qualified as Show
 import Prelude hiding (Cons, Empty, Snoc, cons, empty, join, null, snoc, toList)
 
 type Node = Shape -> Shape -> Type
-
--- | Shapes: Open and Closed
-data Shape
-  = -- | Used at the type level to indicate an "open" structure with
-    -- a unique, unnamed control-flow edge flowing in or out.
-    -- "Fallthrough" and concatenation are permitted at an open point.
-    O
-  | -- | Used at the type level to indicate a "closed" structure which
-    -- supports control transfer only through the use of named
-    -- labels---no "fallthrough" is permitted.  The number of control-flow
-    -- edges is unconstrained.
-    C
-
--- | Shape singleton. Get evidence of the shape by pattern matching.
-data Shape' :: Shape -> Type where
-  O' :: Shape' O
-  C' :: Shape' C
-
-type IndexedCO :: Shape -> a -> a -> a
-type family IndexedCO ex a b
-
-type instance IndexedCO C a _b = a
-
-type instance IndexedCO O _a b = b
-
--- | Maybe type indexed by open/closed
-data MaybeO :: Shape -> Type -> Type where
-  JustO :: !t -> MaybeO O t
-  NothingO :: MaybeO C t
-
-deriving instance (Show a) => Show (MaybeO ex a)
-
-deriving instance (Eq a) => Eq (MaybeO ex a)
-
-deriving instance Functor (MaybeO ex)
-
--- | Maybe type indexed by closed/open
-data MaybeC :: Shape -> Type -> Type where
-  JustC :: !t -> MaybeC C t
-  NothingC :: MaybeC O t
-
-deriving instance (Show a) => Show (MaybeC ex a)
-
-deriving instance (Eq a) => Eq (MaybeC ex a)
-
-deriving instance Functor (MaybeC ex)
 
 type BlockK = Node -> Shape -> Shape -> Type
 
@@ -109,18 +62,18 @@ instance (forall e x. (Show (n e x))) => (Show (Block n e x)) where
 deriving instance (forall e x. Eq (n e x)) => (Eq (Block n e x))
 
 toList :: forall n e x. Block n e x -> [Some1 n]
-toList = DL.toList . go
+toList = DList.toList . go
   where
     go :: forall n e x. Block n e x -> DList (Some1 n)
     go = \case
-      CO n b -> Some1 n `DL.cons` go b
-      CC n b n' -> Some1 n `DL.cons` (go b `DL.snoc` Some1 n')
-      OC b n -> go b `DL.snoc` Some1 n
-      Empty -> DL.empty
-      Middle n -> DL.singleton $ Some1 n
-      Append b b' -> go b `DL.append` go b'
-      Snoc b n -> go b `DL.snoc` Some1 n
-      Cons n b -> Some1 n `DL.cons` go b
+      CO n b -> Some1 n `DList.cons` go b
+      CC n b n' -> Some1 n `DList.cons` (go b `DList.snoc` Some1 n')
+      OC b n -> go b `DList.snoc` Some1 n
+      Empty -> DList.empty
+      Middle n -> DList.singleton $ Some1 n
+      Append b b' -> go b `DList.append` go b'
+      Snoc b n -> go b `DList.snoc` Some1 n
+      Cons n b -> Some1 n `DList.cons` go b
 
 null :: Block n e x -> Bool
 null Empty = True
@@ -203,3 +156,46 @@ append x y = case x of
     Append {} -> x `Append` y
     Snoc {} -> x `Append` y
     Cons {} -> x `Append` y
+
+type ForwardFold n a b c =
+  ( n C O -> a -> b,
+    n O O -> b -> b,
+    n O C -> b -> c
+  )
+
+foldForward3 ::
+  forall n a b c e x.
+  -- 3 folding functions
+  ForwardFold n a b c ->
+  -- the block to fold on
+  Block n e x ->
+  -- initial accumulator
+  IndexedCO e a b ->
+  -- final accumulator
+  IndexedCO x c b
+foldForward3 (foldFirst, foldMiddle, foldLast) = go
+  where
+    go :: forall e x. Block n e x -> IndexedCO e a b -> IndexedCO x c b
+    go = \case
+      CO n b -> foldFirst n >>> go b
+      CC n b n' -> foldFirst n >>> go b >>> foldLast n'
+      OC b n -> go b >>> foldLast n
+      Empty -> id
+      Middle n -> foldMiddle n
+      Append b b' -> go b >>> go b'
+      Snoc b n -> go b >>> foldMiddle n
+      Cons n b -> foldMiddle n >>> go b
+
+foldForward ::
+  forall n a e x.
+  (forall e x. n e x -> a -> a) ->
+  Block n e x ->
+  IndexedCO e a a ->
+  IndexedCO x a a
+foldForward f = foldForward3 (f, f, f)
+
+type BackwardFold n a b c =
+  ( n C O -> b -> c,
+    n O O -> b -> b,
+    n O C -> a -> b
+  )

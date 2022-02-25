@@ -103,3 +103,9 @@ alignForward addr align
 
 show' :: Show a => a -> String
 show' = LText.unpack . pShowNoColor
+
+-- unsnoc :: [a] -> Maybe ([a], a)
+-- unsnoc [] = Nothing
+-- unsnoc [x] = Just ([], x)
+-- unsnoc (x:xs) = Just (x:a, b)
+--     where Just (a,b) = unsnoc xs

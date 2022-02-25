@@ -7,8 +7,8 @@ module Oat.LL.Name
   )
 where
 
-import Control.Source (Source)
-import Control.Source qualified as Source
+import Oat.Utils.Source (Source)
+import Oat.Utils.Source qualified as Source
 import Data.Infinite qualified as Infinite
 
 type Name = ByteString

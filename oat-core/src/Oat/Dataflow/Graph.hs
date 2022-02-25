@@ -25,17 +25,19 @@ module Oat.Dataflow.Graph
     single,
     emptyClosed,
     empty,
+    block,
   )
 where
 
 import Control.Monad.State.Strict (State, evalState, get)
 import Data.Tree (Tree)
 import Data.Tree qualified as Tree
-import Oat.Dataflow.Block (Block, BlockK, MaybeO (..), Node, Shape (..))
+import Oat.Dataflow.Block (Block, BlockK, Node)
 import Oat.Dataflow.Block qualified as Block
 import Oat.Dataflow.LabelMap (Label, LabelMap)
 import Oat.Dataflow.LabelMap qualified as LabelMap
 import Oat.Dataflow.LabelSet (LabelSet)
+import Oat.Dataflow.Shape (MaybeO (..), Shape (..))
 import Oat.Utils.Optics (unwrap)
 import Optics.State.Operators ((?=))
 import Prelude hiding (Empty, empty, first, last)
@@ -54,8 +56,8 @@ emptyBody = mempty
 bodyUnion :: Body' block n -> Body' block n -> Body' block n
 bodyUnion = LabelMap.unionWithKey (\l _ _ -> error $ "duplicate blocks with label " ++ show l)
 
-addBlock :: NonLocal thing => thing C C -> LabelMap (thing C C) -> LabelMap (thing C C)
-addBlock b body
+adFactBlock :: NonLocal thing => thing C C -> LabelMap (thing C C) -> LabelMap (thing C C)
+adFactBlock b body
   | has (ix l) body = error $ "duplicate label " ++ show l ++ " in graph"
   | otherwise = body & at l ?~ b
   where
@@ -88,7 +90,7 @@ instance NonLocal n => NonLocal (Block n) where
   successorLabels (Block.OC _ n) = successorLabels n
   successorLabels (Block.CC _ _ n) = successorLabels n
 
-fromBody :: Body n -> Graph n C C
+fromBody :: Body' block n -> Graph' block n C C
 fromBody b = Many NothingO b NothingO
 
 type BlockCatFun block n = forall e x. block n e O -> block n O x -> block n e x
@@ -109,7 +111,7 @@ splice' bcat = sp
     sp (Single b) (Single b') = Single $ b `bcat` b'
     sp (Single b) (Many (JustO e) bs x) = Many (JustO (b `bcat` e)) bs x
     sp (Many e bs (JustO x)) (Single b) = Many e bs (JustO (x `bcat` b))
-    sp (Many e bs (JustO x)) (Many (JustO e') bs' x') = Many e ((addBlock (x `bcat` e') bs) `bodyUnion` bs') x'
+    sp (Many e bs (JustO x)) (Many (JustO e') bs' x') = Many e ((adFactBlock (x `bcat` e') bs) `bodyUnion` bs') x'
     sp (Many e b NothingO) (Many NothingO b' x) = Many e (b `bodyUnion` b') x
 
 empty :: Graph' block n O O
@@ -124,6 +126,21 @@ last n = entry $ Block.OC Block.Empty n
 first :: n C O -> Graph n C O
 first n = exit $ Block.CO n Block.Empty
 
+class FromBlock e x block n where
+  block :: block n e x -> Graph' block n e x
+
+instance FromBlock O C block n where
+  block b = Many (JustO b) emptyBody NothingO
+
+instance FromBlock C O block n where
+  block b = Many NothingO emptyBody (JustO b)
+
+instance NonLocal (block n) => FromBlock C C block n where
+  block b = Many NothingO (adFactBlock b emptyBody) NothingO
+
+instance FromBlock O O block n where
+  block = Single
+
 entry :: block n O C -> Graph' block n O C
 entry block = Many (JustO block) emptyBody NothingO
 
@@ -131,7 +148,7 @@ exit :: block n C O -> Graph' block n C O
 exit block = Many NothingO emptyBody (JustO block)
 
 middle :: (NonLocal (block n)) => block n C C -> Graph' block n C C
-middle b = Many NothingO (addBlock b emptyBody) NothingO
+middle b = Many NothingO (adFactBlock b emptyBody) NothingO
 
 single :: block n 'O 'O -> Graph' block n 'O 'O
 single = Single
@@ -180,6 +197,3 @@ prune' (Tree.Node label blocks : blockForest) = do
       block' <- prune' blocks
       blockForest' <- prune' blockForest
       pure $ Tree.Node label block' : blockForest'
-
--- toExtra :: Graph n e x -> GraphExtra n e x
--- toExtra graph =

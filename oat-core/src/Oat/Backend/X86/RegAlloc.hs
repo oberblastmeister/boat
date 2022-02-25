@@ -7,7 +7,6 @@ module Oat.Backend.X86.RegAlloc
   )
 where
 
-import Control.Source qualified as Source
 import Data.HashMap.Strict qualified as HashMap
 import Data.List qualified as List
 import Effectful.Reader.Static
@@ -18,6 +17,7 @@ import Oat.Backend.X86.Munch qualified as Munch
 import Oat.Backend.X86.X86 (Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.LL.Name qualified as LL
+import Oat.Utils.Source qualified as Source
 
 type RegAllocMethod =
   forall es.

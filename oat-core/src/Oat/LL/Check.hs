@@ -18,7 +18,7 @@ import Effectful.State.Static.Local (State)
 import Effectful.State.Static.Local qualified as State
 import Effectful.State.Static.Local.Optics (assign, use)
 import Oat.Error (CompileFail)
-import Oat.LL.AST qualified as LL
+import Oat.LL.Ast qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter (Reporter, report)
 import Oat.Reporter qualified as Reporter

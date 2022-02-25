@@ -22,11 +22,11 @@ import Effectful.Temporary qualified as Temporary
 import Oat.Backend.X86.Codegen qualified as Backend.X86.Codegen
 import Oat.Backend.X86.Pretty qualified as Backend.X86.Pretty
 import Oat.Backend.X86.X86 qualified as Backend.X86
+import Oat.Cli (Args)
 import Oat.Command (Command)
 import Oat.Command qualified as Command
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
-import Oat.Cli (Args)
 import Oat.Reporter
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.Families (type (++))

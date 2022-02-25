@@ -16,7 +16,7 @@ data Block n e x = Block
     succs :: !LabelSet
   }
 
--- addBlock :: NonLocal n => Block.Block n C C -> Body n -> Body n
--- addBlock block body = undefined
+-- adFactBlock :: NonLocal n => Block.Block n C C -> Body n -> Body n
+-- adFactBlock block body = undefined
 --   where
 --     succs = successorLabels block

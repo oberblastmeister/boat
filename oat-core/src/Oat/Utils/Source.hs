@@ -1,4 +1,4 @@
-module Control.Source
+module Oat.Utils.Source
   ( Source,
     IdSource,
     fresh,
@@ -13,7 +13,7 @@ import Data.Infinite qualified as Infinite
 
 data Source :: Type -> Effect
 
-type instance DispatchOf (Source a) = 'Static
+type instance DispatchOf (Source a) = 'Static 'NoSideEffects
 
 newtype instance StaticRep (Source a) = Source (Infinite a)
 

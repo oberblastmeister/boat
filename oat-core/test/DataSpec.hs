@@ -22,15 +22,15 @@ import Effectful.State.Static.Local (evalState)
 import Effectful.Temporary (Temporary)
 import Effectful.Temporary qualified as Temporary
 import Oat.Cli qualified as Cli
+import Oat.Dataflow qualified as Dataflow
+import Oat.Dataflow.Label qualified as Dataflow.Label
 import Oat.Driver qualified as Driver
 import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
+import Oat.LL.AstToIr qualified as LL.AstToIr
 import Oat.LL.Lexer qualified as LL.Lexer
 import Oat.LL.Live qualified as LL.Live
-import Oat.LL.ToIr qualified as LL.ToIr
 import Oat.Main qualified as Main
-import Oat.Dataflow qualified as Optimize
-import Oat.Dataflow.Label qualified as Optimize.Label
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.IO (hPutLnUtf8, listDirectory', readFileUtf8, runErrorIO, writeFileLnUtf8)
 import Oat.Utils.Impossible (impossible)
@@ -38,6 +38,7 @@ import Oat.Utils.Misc (timSort)
 import Oat.Utils.Optics (unwrap)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
+import Oat.Dataflow qualified as Dataflow
 import System.Process.Typed (proc, readProcessStdout)
 import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
@@ -157,11 +158,13 @@ llLiveSpec config = do
             fun :: LL.FunDecl = declMap ^. #funDecls % #map % at "test" % unwrap impossible
             irFun =
               runPureEff $
-                Optimize.Label.runLabelSource $
-                  evalState
-                    @(HashMap LL.Name Optimize.Label)
+                Dataflow.Label.runLabelSource $
+                  evalState @(Dataflow.LabelMap LL.Name)
                     mempty
-                    $ LL.ToIr.funBodyToIr fun.body
+                    $ evalState
+                      @(HashMap LL.Name Dataflow.Label)
+                      mempty
+                      $ LL.AstToIr.funBodyToIr fun.body
             !_ = dbg irFun
             res = runIdentity $ LL.Live.run @Identity irFun
         pure $ LText.toStrict $ pShowNoColor res

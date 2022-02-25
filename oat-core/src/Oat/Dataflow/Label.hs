@@ -1,8 +1,8 @@
 module Oat.Dataflow.Label where
 
-import Control.Source (Source)
-import Control.Source qualified as Source
 import Data.Infinite qualified as Infinite
+import Oat.Utils.Source (Source)
+import Oat.Utils.Source qualified as Source
 
 newtype Label = Label {unLabel :: Int}
   deriving (Eq, Ord)
@@ -14,6 +14,3 @@ type LabelSource = Source Label
 
 runLabelSource :: Eff (LabelSource ': es) a -> Eff es a
 runLabelSource = Source.evalSource $ Label <$> Infinite.from 0
-
--- fresh :: LabelSource :> es -> Eff es Label
--- fresh = Source.fresh

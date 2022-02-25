@@ -11,8 +11,8 @@ module Oat.Backend.X86.Munch
   )
 where
 
-import Control.Source (Source)
-import Control.Source qualified as Source
+import Oat.Utils.Source (Source)
+import Oat.Utils.Source qualified as Source
 import Data.Int (Int64)
 import Data.Sequence qualified as Seq
 import Effectful.Reader.Static

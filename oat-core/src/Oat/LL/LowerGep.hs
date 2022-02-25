@@ -6,7 +6,7 @@ module Oat.LL.LowerGep
 where
 
 import Effectful.Reader.Static (Reader)
-import Oat.LL.AST qualified as LL
+import Oat.LL.Ast qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Utils.Impossible (impossible)
 

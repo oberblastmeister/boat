@@ -20,7 +20,8 @@ import Effectful.Dispatch.Dynamic as X
     send,
   )
 import Effectful.Dispatch.Static as X
-  ( StaticRep,
+  ( SideEffects (..),
+    StaticRep,
     evalStaticRep,
     execStaticRep,
     getStaticRep,
@@ -30,3 +31,4 @@ import Effectful.Dispatch.Static as X
     stateStaticRep,
     stateStaticRepM,
   )
+import Effectful.TH as X (makeEffect, makeEffect_)
