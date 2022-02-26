@@ -4,6 +4,8 @@ import Effectful.Reader.Static (Reader, asks)
 import Effectful.Reader.Static.Optics (rview)
 import Oat.Dataflow (Shape (..))
 import Oat.Dataflow qualified as Dataflow
+import Oat.Dataflow.Graph qualified as Graph
+import Oat.LL.Ast qualified as Ast
 import Oat.LL.Ast qualified as LL
 import Oat.LL.Ir qualified as Ir
 import Oat.LL.Name qualified as LL
@@ -13,11 +15,15 @@ type Effs =
   '[ Reader (Dataflow.LabelMap LL.Name)
    ]
 
--- funBodyToAst :: Effs :>> es => Ir.FunBody -> Eff es LL.FunBody
--- funBodyToAst body = case body.graph of
---   Graph.Empty -> undefined
+funBodyToAst :: Effs :>> es => Ir.FunBody -> Eff es LL.FunBody
+funBodyToAst body = case body.graph of
+  Graph.Empty -> error "cannot have empty graph"
 
--- blockToAst :: Effs :>> es => Ir.Block
+-- Graph.Single block ->
+
+-- blockToAst :: forall e x es. (Effs :>> es, Dataflow.GetShape e) => Ir.Block e x -> Eff es (Dataflow.IndexedCO e Ast.Block Ast.LabBlock)
+-- blockToAst = case Dataflow.shape @e of 
+--   Dataflow.O' -> 
 
 -- instToAst :: Effs :>> es => Ir.Inst e O -> Eff es LL.Inst
 -- instToAst (Ir.Label label) = asks @(Dataflow.LabelMap LL.Name) (^?! ix label)

@@ -32,18 +32,18 @@ funBodyToIr body = do
         irLabBlocks <-
           foldM
             ( \(!graph) labBlock -> do
-                converted <- labeleFactBlockToIr labBlock
+                converted <- labeledBlockToIr labBlock
                 pure $ graph `Graph.splice` (Graph.block $! converted ^?! _Right)
             )
             (Graph.emptyClosed)
             labeled
-        !lastIrLabBlock <- labeleFactBlockToIr lastLabeled <&> (^?! _Left) <&> Graph.block
+        !lastIrLabBlock <- labeledBlockToIr lastLabeled <&> (^?! _Left) <&> Graph.block
         let graph = Graph.block entry `Graph.splice` irLabBlocks `Graph.splice` lastIrLabBlock
         pure graph
   pure Ir.FunBody {graph}
 
-labeleFactBlockToIr :: Effs :>> es => LL.LabBlock -> Eff es (Either (Ir.Block C O) (Ir.Block C C))
-labeleFactBlockToIr labBlock = do
+labeledBlockToIr :: Effs :>> es => LL.LabBlock -> Eff es (Either (Ir.Block C O) (Ir.Block C C))
+labeledBlockToIr labBlock = do
   label <- getLabel labBlock.lab
   irBlock <- blockToIr labBlock.block
   pure $

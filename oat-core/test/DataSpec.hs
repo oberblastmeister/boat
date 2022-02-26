@@ -38,7 +38,6 @@ import Oat.Utils.Misc (timSort)
 import Oat.Utils.Optics (unwrap)
 import System.FilePath ((-<.>), (</>))
 import System.FilePath qualified as FilePath
-import Oat.Dataflow qualified as Dataflow
 import System.Process.Typed (proc, readProcessStdout)
 import Test.Hspec
 import Test.Hspec.Core.Runner qualified as Spec
@@ -166,7 +165,7 @@ llLiveSpec config = do
                       mempty
                       $ LL.AstToIr.funBodyToIr fun.body
             !_ = dbg irFun
-            res = runIdentity $ LL.Live.run @Identity irFun
+            res = runPureEff $ LL.Live.run irFun
         pure $ LText.toStrict $ pShowNoColor res
     )
     "ll_live"
@@ -257,7 +256,7 @@ defConfig =
   Config
     { update = False,
       firstTimeUpdate = True,
-      filter = predNot (matchHead "ll_compile/ok"),
+      filter = matchTail "first.ll" <&&> predNot (matchHead "ll_compile/ok"),
       parallel = False
     }
 

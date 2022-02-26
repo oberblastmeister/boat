@@ -9,7 +9,7 @@ module Oat.Dataflow.LabelMap
     union,
     keys,
     singleton,
-  )
+  mapWithKey)
 where
 
 import Control.Arrow ((^>>))
@@ -69,3 +69,6 @@ keys = coerce . IntMap.keys . (.unLabelMap)
 
 singleton :: Label -> v -> LabelMap v
 singleton l = coerce . IntMap.singleton (coerce l)
+
+mapWithKey :: (Label -> v -> v) -> LabelMap v -> LabelMap v
+mapWithKey f = coerce . IntMap.mapWithKey (coerce ^>> f) . coerce

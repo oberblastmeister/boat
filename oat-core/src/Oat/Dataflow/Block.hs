@@ -14,6 +14,7 @@ module Oat.Dataflow.Block
     cons,
     snoc,
     append,
+    (><),
     join,
     toList,
     ForwardFold3,
@@ -23,6 +24,7 @@ module Oat.Dataflow.Block
     foldForward,
     foldBackward3,
     foldBackward,
+    map3,
   )
 where
 
@@ -49,10 +51,8 @@ data Block :: BlockK where
   CC :: !(n C O) -> !(Block n O O) -> !(n O C) -> Block n C C
   OC :: !(Block n O O) -> !(n O C) -> Block n O C
   Empty :: Block n O O
-  Middle :: !(n O O) -> Block n O O
+  Single :: !(n O O) -> Block n O O
   Append :: !(Block n O O) -> !(Block n O O) -> Block n O O
-  Snoc :: !(Block n O O) -> !(n O O) -> Block n O O
-  Cons :: !(n O O) -> !(Block n O O) -> Block n O O
 
 instance (forall e x. (Show (n e x))) => (Show (Block n e x)) where
   showsPrec d block =
@@ -74,10 +74,8 @@ toList = DList.toList . go
       CC n b n' -> Some1 n `DList.cons` (go b `DList.snoc` Some1 n')
       OC b n -> go b `DList.snoc` Some1 n
       Empty -> DList.empty
-      Middle n -> DList.singleton $ Some1 n
-      Append b b' -> go b `DList.append` go b'
-      Snoc b n -> go b `DList.snoc` Some1 n
-      Cons n b -> Some1 n `DList.cons` go b
+      Single n -> DList.singleton $ Some1 n
+      Append b b' -> go b <> go b'
 
 null :: Block n e x -> Bool
 null Empty = True
@@ -91,13 +89,7 @@ class Cons e where
   cons :: forall n x. n e O -> Block n O x -> Block n e x
 
 instance Cons O where
-  cons n b = case b of
-    OC b l -> OC (cons n b) l
-    Empty -> Middle n
-    Middle {} -> n `Cons` b
-    Append {} -> n `Cons` b
-    Snoc {} -> n `Cons` b
-    Cons {} -> n `Cons` b
+  cons n b = Single n `append` b
 
 instance Cons C where
   cons f (OC b l) = CC f b l
@@ -107,13 +99,7 @@ class Snoc x where
   snoc :: forall n e. Block n e O -> n O x -> Block n e x
 
 instance Snoc O where
-  snoc b n = case b of
-    CO f b -> CO f (b `snoc` n)
-    Empty -> Middle n
-    Middle {} -> b `Snoc` n
-    Append {} -> b `Snoc` n
-    Snoc {} -> b `Snoc` n
-    Cons {} -> b `Snoc` n
+  snoc b n = b `append` Single n
 
 instance Snoc C where
   snoc (CO f b) t = CC f b t
@@ -128,38 +114,23 @@ append x y = case x of
   CO l b -> case y of
     OC b' n -> CC l (b `append` b') n
     Empty -> x
-    Middle {} -> CO l (b `append` y)
+    Single {} -> CO l (b `append` y)
     Append {} -> CO l (b `append` y)
-    Snoc {} -> CO l (b `append` y)
-    Cons {} -> CO l (b `append` y)
-  Middle n -> case y of
+  Single {} -> case y of
     OC b n' -> OC (x `append` b) n'
     Empty -> x
-    Middle {} -> n `Cons` y
-    Append {} -> n `Cons` y
-    Snoc {} -> n `Cons` y
-    Cons {} -> n `Cons` y
+    Single {} -> x `Append` y
+    Append {} -> x `Append` y
   Append {} -> case y of
     OC b n -> OC (x `append` b) n
     Empty -> x
-    Middle n -> x `Snoc` n
+    Single {} -> x `Append` y
     Append {} -> x `Append` y
-    Snoc {} -> x `Append` y
-    Cons {} -> x `Append` y
-  Snoc {} -> case y of
-    OC b n -> OC (x `append` b) n
-    Empty -> x
-    Middle n -> x `Snoc` n
-    Append {} -> x `Append` y
-    Snoc {} -> x `Append` y
-    Cons {} -> x `Append` y
-  Cons {} -> case y of
-    OC b n -> OC (x `append` b) n
-    Empty -> x
-    Middle n -> x `Snoc` n
-    Append {} -> x `Append` y
-    Snoc {} -> x `Append` y
-    Cons {} -> x `Append` y
+
+(><) :: Block n e 'O -> Block n 'O x -> Block n e x
+(><) = append
+
+infixl 5 ><
 
 type ForwardFold3 n a b c =
   ( n C O -> a -> b,
@@ -185,10 +156,8 @@ foldForward3 (foldFirst, foldMiddle, foldLast) = go
       CC n b n' -> foldFirst n !>> go b !>> foldLast n'
       OC b n -> go b !>> foldLast n
       Empty -> id
-      Middle n -> foldMiddle n
+      Single n -> foldMiddle n
       Append b b' -> go b !>> go b'
-      Snoc b n -> go b !>> foldMiddle n
-      Cons n b -> foldMiddle n !>> go b
 
 type ForwardFold n a = forall e x. n e x -> a -> a
 
@@ -215,10 +184,8 @@ foldBackward3 (foldFirst, foldMiddle, foldLast) = go
       CC n b n' -> foldFirst n <<! go b <<! foldLast n'
       OC b n -> go b <<! foldLast n
       Empty -> id
-      Middle n -> foldMiddle n
+      Single n -> foldMiddle n
       Append b b' -> go b <<! go b'
-      Snoc b n -> go b <<! foldMiddle n
-      Cons n b -> foldMiddle n <<! go b
 
 type BackwardFold n a = forall e x. n e x -> a -> a
 
@@ -226,7 +193,7 @@ foldBackward :: forall n a e x. BackwardFold n a -> Block n e x -> IndexedCO x a
 foldBackward f = foldBackward3 (f, f, f)
 
 type Map3 n n' e x =
-  ( n O C -> n' O C,
+  ( n C O -> n' C O,
     n O O -> n' O O,
     n O C -> n' O C
   )
@@ -236,4 +203,9 @@ map3 (mapFirst, mapMiddle, mapLast) = go
   where
     go :: forall e x. Block n e x -> Block n' e x
     go = \case
-      OC b n -> OC (go b) mapLast n
+      CO n b -> CO (mapFirst n) (go b)
+      CC n b n' -> CC (mapFirst n) (go b) (mapLast n')
+      OC b n -> OC (go b) (mapLast n)
+      Empty -> Empty
+      Single n -> Single (mapMiddle n)
+      Append b b' -> Append (go b) (go b')

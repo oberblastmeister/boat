@@ -6,6 +6,8 @@ module Oat.Dataflow.Shape
     IndexedCO,
     MaybeO (..),
     MaybeC (..),
+    GetShape(..),
+    convertMaybeO,
   )
 where
 
@@ -25,6 +27,15 @@ data Shape
 data Shape' :: Shape -> Type where
   O' :: Shape' O
   C' :: Shape' C
+  
+class GetShape s where
+  shape :: Shape' s
+
+instance GetShape O where
+  shape = O'
+
+instance GetShape C where
+  shape = C'
 
 type IndexedCO :: Shape -> a -> a -> a
 type family IndexedCO ex a b
@@ -62,3 +73,7 @@ deriving instance Functor (MaybeC ex)
 deriving instance Foldable (MaybeC ex)
 
 deriving instance Traversable (MaybeC ex)
+
+convertMaybeO :: MaybeO ex a -> Maybe a
+convertMaybeO NothingO = Nothing
+convertMaybeO (JustO a) = Just a

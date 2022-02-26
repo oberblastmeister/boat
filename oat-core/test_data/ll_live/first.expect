@@ -36,43 +36,39 @@
         )
     )
     ( LabelMap
-        { unLabelMap = fromList
-            [
-                ( 0
-                , FactBlock
-                    ( fromList
-                        [ "2"
-                        , "4"
-                        ]
+        { unLabelMap = fromList [] }
+    )
+    ( JustO
+        ( FactBlock
+            ( fromList
+                [ "2"
+                , "4"
+                ]
+            )
+            ( Block
+                [ Label L0
+                , Inst
+                    ( BinOp
+                        ( BinOpInst
+                            { name = "4"
+                            , op = Add
+                            , ty = I64
+                            , arg1 = Temp "2"
+                            , arg2 = Const 4
+                            }
+                        )
                     )
-                    ( Block
-                        [ Label L0
-                        , Inst
-                            ( BinOp
-                                ( BinOpInst
-                                    { name = "4"
-                                    , op = Add
-                                    , ty = I64
-                                    , arg1 = Temp "2"
-                                    , arg2 = Const 4
-                                    }
-                                )
-                            )
-                        , Term
-                            ( Ret
-                                ( RetTerm
-                                    { ty = I64
-                                    , arg = Just
-                                        ( Temp "4" )
-                                    }
-                                )
-                            )
-                        ]
+                , Ret
+                    ( RetTerm
+                        { ty = I64
+                        , arg = Just
+                            ( Temp "4" )
+                        }
                     )
-                )
-            ]
-        }
-    ) NothingO
+                ]
+            )
+        )
+    )
 , fromList
     [ "1"
     , "2"

@@ -4,7 +4,8 @@ module Oat.Dataflow.FactGraph
   ( FactGraph,
     FactBlock (FactBlock),
     FactBody,
-    spliceAppend,
+    splice,
+    (><),
   )
 where
 
@@ -31,7 +32,13 @@ instance NonLocal n => NonLocal (FactBlock f n) where
   entryLabel (FactBlock _ b) = entryLabel b
   successorLabels (FactBlock _ b) = successorLabels b
 
-spliceAppend :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
-spliceAppend = Graph.splice' appenFactBlock
+-- this prefers facts from the left
+splice :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
+splice = Graph.splice' appenFactBlock
   where
     appenFactBlock (FactBlock f b) (FactBlock _ b') = FactBlock f (b `Block.append` b')
+
+(><) :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
+(><) = splice
+
+infixl 5 ><

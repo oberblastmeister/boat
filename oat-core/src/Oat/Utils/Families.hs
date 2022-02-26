@@ -5,7 +5,8 @@ module Oat.Utils.Families
   ( type (++),
     Tail,
     Drop,
-    Subset,
+    Constraints,
+    Map,
   )
 where
 
@@ -32,8 +33,7 @@ type family Map f xs where
   Map f '[] = '[]
   Map f (x ': xs) = f x ': Map f xs
 
-class Subset es es'
-
-instance Subset '[] es
-
-instance (Subset es es', e :> es') => Subset (e : es) es'
+type Constraints :: [Constraint] -> Constraint
+type family Constraints xs where
+  Constraints (x ': xs) = (x, Constraints xs)
+  Constraints '[] = ()

@@ -23,9 +23,8 @@ lattice =
       join
     }
   where
-    join label Dataflow.FactPair {old, new} = (changeFlag, res)
+    join _label Dataflow.FactPair {old, new} = (changeFlag, res)
       where
-        !_ = dbg $ "join: " ++ show label
         changeFlag = Dataflow.changeIf $ Set.size res > Set.size old
         res = new `Set.union` old
 
@@ -44,7 +43,7 @@ transfer = Dataflow.backwardTransfer1 $ \inst f -> case inst of
     fact :: Dataflow.FactBase Live -> Dataflow.Label -> Live
     fact f l = f ^. at l % unwrap Set.empty
 
-rewrite :: forall m. Monad m => Dataflow.BackwardRewrite m Ir.Inst Live
+rewrite :: Dataflow.BackwardRewrite es Ir.Inst Live
 rewrite = Dataflow.backwardRewrite1 $ \inst live -> case inst of
   (Ir.Inst inst) -> case inst ^? LL.instName of
     Just name
@@ -53,8 +52,8 @@ rewrite = Dataflow.backwardRewrite1 $ \inst live -> case inst of
     Nothing -> pure Nothing
   _ -> pure Nothing
 
-pass :: Monad m => Dataflow.BackwardPass m Ir.Inst Live
+pass :: Dataflow.BackwardPass es Ir.Inst Live
 pass = Dataflow.BackwardPass {lattice, transfer, rewrite}
 
-run :: forall m. (Monad m) => Ir.FunBody -> m (Dataflow.FactGraph Live Ir.Inst O O, Live)
+run :: Ir.FunBody -> Eff es (Dataflow.FactGraph Live Ir.Inst O O, Live)
 run funBody = Dataflow.runBackward pass Dataflow.NothingC funBody.graph mempty

@@ -26,6 +26,7 @@ module Oat.Dataflow.Graph
     emptyClosed,
     empty,
     block,
+    (><),
   )
 where
 
@@ -164,6 +165,11 @@ spliceClosed = splice
 splice :: NonLocal n => Graph n e a -> Graph n a x -> Graph n e x
 splice = splice' Block.append
 
+(><) :: NonLocal n => Graph n e a -> Graph n a x -> Graph n e x
+(><) = splice
+
+infixl 5 ><
+
 dfs :: NonLocal (block n) => Graph' block n O x -> [Tree Label]
 dfs Empty = []
 dfs Single {} = []
@@ -181,7 +187,14 @@ generates entries body = (`generate` body) <$> entries
 generate :: NonLocal (block n) => Label -> Body' block n -> Tree Label
 generate entry body = Tree.Node entry ((`generate` body) <$> (successorLabels entryBlock))
   where
-    entryBlock = (body ^. at entry % unwrap (error $ "The entry " ++ show entry ++ " does not exist in the graph body: "))
+    entryBlock =
+      body ^. at entry
+        % unwrap
+          ( error $
+              "The label "
+                ++ show entry
+                ++ " was not found in the body"
+          )
 
 prune :: [Tree Label] -> [Tree Label]
 prune forest = evalState (prune' forest) mempty
