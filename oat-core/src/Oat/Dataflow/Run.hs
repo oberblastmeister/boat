@@ -128,7 +128,7 @@ runForward pass start = graph
 
         exit :: MaybeO x (Block n C O) -> FactBase f -> Eff es (FactGraph f n C x, Fact x f)
         exit (JustO blk) = \factBase ->
-          block blk (factBase ^?! ix (entryLabel blk))
+          block blk (getFact pass.lattice (entryLabel blk) factBase)
         exit NothingO = \fb -> pure (Graph.emptyClosed, fb)
 
         entryBodyCompose ::
@@ -138,20 +138,20 @@ runForward pass start = graph
           Eff es (FactGraph f n e C, Fact C f)
         entryBodyCompose entry bdy = case (start, entry) of
           (NothingC, JustO entry) ->
-            block entry
-              `compose` body
-                ( filter ((/= maybeExitLabel) . Just) $
-                    successorLabels entry
-                )
-                bdy
+            block entry `compose` body (successorLabels entry) bdy
           (JustC start, NothingO) -> body [start] bdy
           where
             body :: [Label] -> Body n -> FactBase f -> Eff es (FactGraph f n C C, FactBase f)
             body start body initFactBase =
+              -- we always return the graph with our facts for the block,
+              -- and outgoing facts that include facts for successors
               fixpoint Forward pass.lattice doBlock (start, maybeExitLabel) body initFactBase
               where
                 doBlock :: Block n C C -> FactBase f -> Eff es (FactGraph f n C C, FactBase f)
-                doBlock b fb = block b $ getFact pass.lattice (entryLabel b) fb
+                doBlock b fb =
+                  -- get our fact that predecessors have given us
+                  -- or bottom if they haven't given us anything
+                  block b $ getFact pass.lattice (entryLabel b) fb
 
     block :: forall e x. Block n e x -> f -> Eff es (FactGraph f n e x, Fact x f)
     block Block.Empty = \f -> pure (Graph.Empty, f)
@@ -216,15 +216,13 @@ runBackward pass start = graph
 
         entryBodyCompose :: MaybeO e (Block n O C) -> Body n -> Fact C f -> Eff es (FactGraph f n e C, Fact e f)
         entryBodyCompose entry bdy = case (start, entry) of
-          (NothingC, JustO entry) -> block entry `compose` body (filter ((/=) maybeExitLabel . Just) $ successorLabels entry) bdy
+          (NothingC, JustO entry) -> block entry `compose` body (successorLabels entry) bdy
           (JustC start, NothingO) -> body [start] bdy
           where
             body :: [Label] -> Body n -> Fact C f -> Eff es (FactGraph f n C C, Fact C f)
             body starts bdy initFactBase = do
-              fixpoint Backward pass.lattice doBlock (ordered, maybeExitLabel) bdy initFactBase
+              fixpoint Backward pass.lattice doBlock (starts, maybeExitLabel) bdy initFactBase
               where
-                ordered = filter ((/= maybeExitLabel) . Just) $ TreeUtils.postOrderF $ Graph.dfs' starts bdy
-
                 doBlock :: Block n C C -> FactBase f -> Eff es (FactGraph f n C C, FactBase f)
                 doBlock b f = do
                   -- the out facts are the same as the facts in the graph
@@ -323,7 +321,7 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
   let !_ = dbg entries
   let !_ = dbg "factBase"
   let !_ = dbg factBase
-  (factBase', newBlocks) <- loop factBase (fromList entries) (mempty @(LabelMap _))
+  (factBase', newBlocks) <- loop factBase (fromList ordered) (mempty @(LabelMap _))
   let !_ = dbg ("fixpoint DONE: ")
   let !_ = dbg "factBase'"
   let !_ = dbg factBase'
@@ -331,6 +329,16 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
   let !_ = dbg newBlocks
   pure (Graph.fromBody newBlocks, factBase')
   where
+    ordered = case direction of
+      -- forwards fixpoint is driven by the successors that have changed
+      Forward -> filterExitLabel entries
+      -- backwards fixpoint is driven by dfs
+      Backward -> TreeUtils.postOrderF $ Graph.dfs' (filterExitLabel entries) body
+
+    -- we need to make sure that we don't access the exit label
+    -- which is not in the label map body
+    filterExitLabel = filter ((/=) maybeExitLabel . Just)
+
     -- mapping from L -> Ls.  If the fact for L changes, re-analyse Ls.
     -- if the direction if forward, we just wrap the label in a list
     -- this is okay because the changed labels returned after doBlock *are* the successors
@@ -374,8 +382,7 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
           let toAnalyze =
                 concatMap
                   (\l -> (^. unwrap (error $ "The label " ++ show l ++ " was said to be changed but could not be found")) $ blockDeps l)
-                  $ filter (((/=) maybeExitLabel) . Just) $
-                    changed
+                  $ filterExitLabel changed
           let newBlocks' = case resultFactGraph of
                 -- this union is biased to the left
                 -- this is important because we may have more precise rewrites
