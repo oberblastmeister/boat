@@ -18,13 +18,20 @@ module Oat.Dataflow.Block
     join,
     toList,
     ForwardFold3,
+    ForwardFold3M,
     ForwardFold,
     BackwardFold3,
+    BackwardFold3M,
     foldForward3,
     foldForward,
     foldBackward3,
     foldBackward,
     map3,
+    foldBackward3M,
+    foldForward3M,
+    Map3M,
+    map3M,
+    map,
   )
 where
 
@@ -32,10 +39,16 @@ import Data.DList (DList)
 import Data.DList qualified as DList
 import Data.Some (Some1 (..), withSome1)
 import GHC.Show qualified as Show
-import Oat.Dataflow.Shape (IndexedCO, Shape (..))
+import Oat.Dataflow.Shape
+  ( IndexedCO,
+    KnownShape (shape),
+    Shape (..),
+    Shape' (..),
+    mapIndexedCO,
+  )
 import Oat.Utils.Misc ((!>>), (<<!))
 import Text.Show qualified as Show
-import Prelude hiding (Cons, Empty, Snoc, cons, empty, join, null, snoc, toList)
+import Prelude hiding (Cons, Empty, Snoc, cons, empty, join, map, null, snoc, toList)
 
 type Node = Shape -> Shape -> Type
 
@@ -148,16 +161,66 @@ foldForward3 ::
   IndexedCO e a b ->
   -- final accumulator
   IndexedCO x c b
-foldForward3 (foldFirst, foldMiddle, foldLast) = go
+foldForward3 (foldFirst, foldMiddle, foldLast) = \case
+  CO n b -> foldFirst n >>> go b
+  CC n b n' -> foldFirst n >>> go b !>> foldLast n'
+  OC b n -> go b !>> foldLast n
+  Empty -> id
+  Single n -> foldMiddle n
+  b@Append {} -> go b
   where
-    go :: forall e x. Block n e x -> IndexedCO e a b -> IndexedCO x c b
-    go = \case
-      CO n b -> foldFirst n !>> go b
-      CC n b n' -> foldFirst n !>> go b !>> foldLast n'
-      OC b n -> go b !>> foldLast n
-      Empty -> id
-      Single n -> foldMiddle n
-      Append b b' -> go b !>> go b'
+    -- rebalance to the right while folding from the left
+    -- this ensures that we get tail calls
+    go :: Block n O O -> b -> b
+    go =
+      id !>> \case
+        Empty -> id
+        Single n -> foldMiddle n
+        Append b b' -> goAppend b b'
+      where
+        goAppend :: Block n O O -> Block n O O -> b -> b
+        goAppend a b = case a of
+          Empty -> go b
+          Single n -> foldMiddle n >>> go b
+          Append c d -> goAppend c (Append d b)
+
+type ForwardFold3M n a b c es =
+  ( n C O -> a -> Eff es b,
+    n O O -> b -> Eff es b,
+    n O C -> b -> Eff es c
+  )
+
+foldForward3M ::
+  forall n a b c e x es.
+  (KnownShape e, KnownShape x) =>
+  ForwardFold3M n a b c es ->
+  Block n e x ->
+  IndexedCO e a b ->
+  Eff es (IndexedCO x c b)
+foldForward3M (foldFirst, foldMiddle, foldLast) block indexed =
+  case shape @x of
+    O' -> res
+    C' -> res
+  where
+    res = foldForward3 (foldFirst', foldMiddle', foldLast') block indexed'
+
+    indexed' :: IndexedCO e (Eff es a) (Eff es b)
+    indexed' =
+      ( mapIndexedCO
+          (Proxy @e)
+          (pure @(Eff es) @a)
+          (pure @(Eff es) @b)
+          indexed
+      )
+
+    foldFirst' :: n C O -> Eff es a -> Eff es b
+    foldFirst' n a = a >>= (foldFirst n $!)
+
+    foldMiddle' :: n O O -> Eff es b -> Eff es b
+    foldMiddle' n b = b >>= (foldMiddle n $!)
+
+    foldLast' :: n O C -> Eff es b -> Eff es c
+    foldLast' n b = b >>= (foldLast n $!)
 
 type ForwardFold n a = forall e x. n e x -> a -> a
 
@@ -176,21 +239,71 @@ foldBackward3 ::
   Block n e x ->
   IndexedCO x a b ->
   IndexedCO e c b
-foldBackward3 (foldFirst, foldMiddle, foldLast) = go
+foldBackward3 (foldFirst, foldMiddle, foldLast) = \case
+  CO n b -> foldFirst n <<! go b
+  CC n b n' -> foldFirst n <<! go b <<< foldLast n'
+  OC b n -> go b <<< foldLast n
+  Empty -> id
+  Single n -> foldMiddle n
+  b@Append {} -> go b
   where
-    go :: forall e x. Block n e x -> IndexedCO x a b -> IndexedCO e c b
-    go = \case
-      CO n b -> foldFirst n <<! go b
-      CC n b n' -> foldFirst n <<! go b <<! foldLast n'
-      OC b n -> go b <<! foldLast n
-      Empty -> id
-      Single n -> foldMiddle n
-      Append b b' -> go b <<! go b'
+    -- rebalance to the left while folding from the right
+    -- this ensures that we get tail calls
+    go :: Block n O O -> b -> b
+    go =
+      id !>> \case
+        Empty -> id
+        Single n -> foldMiddle n
+        Append b b' -> goAppend b b'
+      where
+        goAppend :: Block n O O -> Block n O O -> b -> b
+        goAppend a b = case b of
+          Empty -> go a
+          Single n -> go a <<< foldMiddle n
+          Append c d -> goAppend (Append a c) d
 
 type BackwardFold n a = forall e x. n e x -> a -> a
 
 foldBackward :: forall n a e x. BackwardFold n a -> Block n e x -> IndexedCO x a a -> IndexedCO e a a
 foldBackward f = foldBackward3 (f, f, f)
+
+type BackwardFold3M n a b c es =
+  ( n C O -> b -> Eff es c,
+    n O O -> b -> Eff es b,
+    n O C -> a -> Eff es b
+  )
+
+foldBackward3M ::
+  forall n a b c e x es.
+  (KnownShape e, KnownShape x) =>
+  BackwardFold3M n a b c es ->
+  Block n e x ->
+  IndexedCO x a b ->
+  Eff es (IndexedCO e c b)
+foldBackward3M (foldFirst, foldMiddle, foldLast) block indexed =
+  case shape @e of
+    O' -> res
+    C' -> res
+  where
+    res = foldBackward3 (foldFirst', foldMiddle', foldLast') block indexed'
+
+    indexed' :: IndexedCO x (Eff es a) (Eff es b)
+    indexed' =
+      ( mapIndexedCO
+          (Proxy @x)
+          (pure @(Eff es) @a)
+          (pure @(Eff es) @b)
+          indexed
+      )
+
+    foldFirst' :: n C O -> Eff es b -> Eff es c
+    foldFirst' n a = a >>= (foldFirst n $!)
+
+    foldMiddle' :: n O O -> Eff es b -> Eff es b
+    foldMiddle' n b = b >>= (foldMiddle n $!)
+
+    foldLast' :: n O C -> Eff es a -> Eff es b
+    foldLast' n b = b >>= (foldLast n $!)
 
 type Map3 n n' e x =
   ( n C O -> n' C O,
@@ -209,3 +322,28 @@ map3 (mapFirst, mapMiddle, mapLast) = go
       Empty -> Empty
       Single n -> Single (mapMiddle n)
       Append b b' -> Append (go b) (go b')
+
+map ::
+  forall n n' e x.
+  (forall e x. n e x -> n' e x) ->
+  Block n e x ->
+  Block n' e x
+map f = map3 (f, f, f)
+
+type Map3M n n' e x es =
+  ( n C O -> Eff es (n' C O),
+    n O O -> Eff es (n' O O),
+    n O C -> Eff es (n' O C)
+  )
+
+map3M :: forall n n' e x es. Map3M n n' e x es -> Block n e x -> Eff es (Block n' e x)
+map3M (mapFirst, mapMiddle, mapLast) = go
+  where
+    go :: forall e x. Block n e x -> Eff es (Block n' e x)
+    go = \case
+      CO n b -> CO <$> mapFirst n <*> go b
+      CC n b n' -> CC <$> mapFirst n <*> go b <*> mapLast n'
+      OC b n -> OC <$> go b <*> mapLast n
+      Empty -> pure Empty
+      Single n -> Single <$> mapMiddle n
+      Append b b' -> Append <$> go b <*> (go b')

@@ -109,10 +109,12 @@ show' = LText.unpack . pShowNoColor
 
 (!>>) :: (a -> b) -> (b -> c) -> a -> c
 (!>>) f g = \a -> g $! f a
+{-# INLINE (!>>) #-}
 
 infixr 1 !>>
 
 (<<!) :: (b -> c) -> (a -> b) -> a -> c
 (<<!) f g = \a -> f $! g a
+{-# INLINE (<<!) #-}
 
 infixr 1 <<!

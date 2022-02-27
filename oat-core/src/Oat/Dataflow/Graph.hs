@@ -27,6 +27,9 @@ module Oat.Dataflow.Graph
     empty,
     block,
     (><),
+    mapBlocks3,
+    MapBlocks3,
+    mapBlocks,
   )
 where
 
@@ -197,16 +200,40 @@ generate entry body = Tree.Node entry ((`generate` body) <$> (successorLabels en
           )
 
 prune :: [Tree Label] -> [Tree Label]
-prune forest = evalState (prune' forest) mempty
+prune forest = evalState (chop forest) mempty
 
-prune' :: [Tree Label] -> State LabelSet [Tree Label]
-prune' [] = pure []
-prune' (Tree.Node label blocks : blockForest) = do
+chop :: [Tree Label] -> State LabelSet [Tree Label]
+chop [] = pure []
+chop (Tree.Node label blocks : blockForest) = do
   seen <- get
   if has (ix label) seen
-    then prune' blockForest
+    then chop blockForest
     else do
       at label ?= ()
-      block' <- prune' blocks
-      blockForest' <- prune' blockForest
+      block' <- chop blocks
+      blockForest' <- chop blockForest
       pure $ Tree.Node label block' : blockForest'
+
+type MapBlocks3 block block' n =
+  ( block n O C -> block' n O C,
+    block n O O -> block' n O O,
+    block n C C -> block' n C C,
+    block n C O -> block' n C O
+  )
+
+mapBlocks3 ::
+  forall block block' n e x.
+  MapBlocks3 block block' n ->
+  Graph' block n e x ->
+  Graph' block' n e x
+mapBlocks3 (mapEntry, mapSingle, mapMiddle, mapExit) = \case
+  Empty -> Empty
+  Single b -> Single (mapSingle b)
+  Many entry body exit -> Many (mapEntry <$> entry) (mapMiddle <$> body) (mapExit <$> exit)
+
+mapBlocks ::
+  forall block block' n e x.
+  (forall e x. block n e x -> block' n e x) ->
+  Graph' block n e x ->
+  Graph' block' n e x
+mapBlocks f = mapBlocks3 (f, f, f, f)

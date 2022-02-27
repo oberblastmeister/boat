@@ -6,9 +6,9 @@ module Oat.Dataflow.Shape
     IndexedCO,
     MaybeO (..),
     MaybeC (..),
-    GetShape(..),
+    KnownShape (..),
     convertMaybeO,
-  )
+  mapIndexedCO)
 where
 
 -- | Shapes: Open and Closed
@@ -27,14 +27,14 @@ data Shape
 data Shape' :: Shape -> Type where
   O' :: Shape' O
   C' :: Shape' C
-  
-class GetShape s where
+
+class KnownShape s where
   shape :: Shape' s
 
-instance GetShape O where
+instance KnownShape O where
   shape = O'
 
-instance GetShape C where
+instance KnownShape C where
   shape = C'
 
 type IndexedCO :: Shape -> a -> a -> a
@@ -77,3 +77,16 @@ deriving instance Traversable (MaybeC ex)
 convertMaybeO :: MaybeO ex a -> Maybe a
 convertMaybeO NothingO = Nothing
 convertMaybeO (JustO a) = Just a
+
+mapIndexedCO ::
+  forall ex a b a' b'.
+  (KnownShape ex) =>
+  Proxy ex ->
+  (a -> a') ->
+  (b -> b') ->
+  IndexedCO ex a b ->
+  IndexedCO ex a' b'
+mapIndexedCO _p f f' indexed =
+  case shape @ex of
+    O' -> f' indexed
+    C' -> f indexed

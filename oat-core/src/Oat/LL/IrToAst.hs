@@ -21,7 +21,7 @@ funBodyToAst body = case body.graph of
 
 -- Graph.Single block ->
 
--- blockToAst :: forall e x es. (Effs :>> es, Dataflow.GetShape e) => Ir.Block e x -> Eff es (Dataflow.IndexedCO e Ast.Block Ast.LabBlock)
+-- blockToAst :: forall e x es. (Effs :>> es, Dataflow.KnownShape e) => Ir.Block e x -> Eff es (Dataflow.IndexedCO e Ast.Block Ast.LabBlock)
 -- blockToAst = case Dataflow.shape @e of 
 --   Dataflow.O' -> 
 
