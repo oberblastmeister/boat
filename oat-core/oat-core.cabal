@@ -47,6 +47,7 @@ common common-options
     -Wall
     -Wredundant-constraints
     -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
     -- until OverloadedRecordUpdate stabilizes
     -Wno-ambiguous-fields
     -Werror=incomplete-patterns

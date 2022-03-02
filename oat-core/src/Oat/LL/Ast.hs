@@ -261,6 +261,16 @@ data SextInst = SextInst
   }
   deriving (Show, Eq)
 
+data Named a
+  = Named !Name a
+  | Do a
+  deriving (Show, Eq)
+
+pattern (:=) :: Name -> a -> Named a
+pattern name := a = Named name a
+
+{-# COMPLETE Do, (:=) #-}
+
 $(makeFieldLabelsNoPrefix ''Module)
 $(makeFieldLabelsNoPrefix ''LoadInst)
 $(makeFieldLabelsNoPrefix ''AllocaInst)
@@ -285,6 +295,7 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''BinOp)
 $(makePrismLabels ''Inst)
+$(makePrismLabels ''Named)
 
 declsToMap :: Vec Decl -> DeclMap
 declsToMap =

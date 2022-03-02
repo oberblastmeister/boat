@@ -13,7 +13,6 @@ where
 
 import Acc (Acc)
 import Data.Int (Int64)
-import Data.Sequence qualified as Seq
 import Data.Vector qualified as V
 import Effectful.Reader.Static
 import Effectful.State.Static.Local

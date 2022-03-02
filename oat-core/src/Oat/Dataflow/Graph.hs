@@ -15,7 +15,6 @@ module Oat.Dataflow.Graph
     spliceClosed,
     dfs,
     dfsBody,
-    dfsFrom,
     append,
     entry,
     exit,
@@ -45,7 +44,9 @@ import Oat.Dataflow.Block qualified as Block
 import Oat.Dataflow.LabelMap (Label, LabelMap)
 import Oat.Dataflow.LabelMap qualified as LabelMap
 import Oat.Dataflow.LabelSet (LabelSet)
-import Oat.Dataflow.Shape (MaybeO (..), Shape (..))
+import Oat.Dataflow.LabelSet qualified as LabelSet
+import Oat.Dataflow.Shape (MaybeC (..), MaybeO (..), Shape (..), convertMaybeO)
+import Oat.Utils.Misc ((<<$>>))
 import Oat.Utils.Optics (unwrap)
 import Optics.State.Operators ((?=))
 import Prelude hiding (Empty, empty, first, last)
@@ -78,9 +79,10 @@ data Graph' :: BlockK -> Node -> Shape -> Shape -> Type where
   Empty :: Graph' block n O O
   Single :: !(block n O O) -> Graph' block n O O
   Many ::
-    !(MaybeO e (block n O C)) ->
-    !(Body' block n) ->
-    !(MaybeO x (block n C O)) ->
+    { entry :: !(MaybeO e (block n O C)),
+      body :: !(Body' block n),
+      exit :: !(MaybeO x (block n C O))
+    } ->
     Graph' block n e x
 
 deriving instance (forall e x. Show (block n e x)) => (Show (Graph' block n e x))
@@ -177,16 +179,22 @@ splice = splice' Block.append
 
 infixl 5 ><
 
-dfs :: NonLocal (block n) => Graph' block n O x -> [Tree Label]
-dfs Empty = []
-dfs Single {} = []
-dfs (Many (JustO entry) body _) = dfsBody (successorLabels entry) body
+dfs :: NonLocal (block n) => MaybeC e [Label] -> Graph' block n e x -> [Tree (block n C C)]
+dfs NothingC Empty = []
+dfs NothingC Single {} = []
+dfs mEntries (Many entry body exit) = (\l -> body ^. at l % unwrap (error "label was not found in graph")) <<$>> labels
+  where
+    labels = dfsBody seen entries body
 
-dfsFrom :: NonLocal (block n) => [Label] -> Graph' block n C x -> [Tree Label]
-dfsFrom entries (Many NothingO body _) = dfsBody entries body
+    entries :: [Label]
+    entries = case (mEntries, entry) of
+      (NothingC, JustO entry) -> successorLabels entry
+      (JustC entries, NothingO) -> entries
 
-dfsBody :: NonLocal (block n) => [Label] -> Body' block n -> [Tree Label]
-dfsBody entries = prune . generates entries
+    seen = foldMap LabelSet.singleton $ entryLabel <$> convertMaybeO exit
+
+dfsBody :: NonLocal (block n) => LabelSet -> [Label] -> Body' block n -> [Tree Label]
+dfsBody seen entries = pruneWith seen . generates entries
 
 generates :: NonLocal (block n) => [Label] -> Body' block n -> [Tree Label]
 generates entries body = (`generate` body) <$> entries

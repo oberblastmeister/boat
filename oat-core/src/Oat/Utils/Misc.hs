@@ -20,9 +20,13 @@ module Oat.Utils.Misc
     (<=<!),
     (#.),
     (.#),
+    accToVec,
+    (<<$>>),
   )
 where
 
+import Acc (Acc)
+import Acc qualified
 import Control.Monad.Primitive (PrimMonad, PrimState)
 import Data.Bits ((.&.))
 import Data.Int (Int64)
@@ -32,6 +36,10 @@ import Data.Range (Range (RangeP))
 import Data.Text.Lazy qualified as LText
 import Data.Vector qualified as VB
 import Data.Vector.Algorithms.Tim qualified as Vector.Algorithms.Tim
+import Data.Vector.Fusion.Bundle.Monadic qualified as Bundle
+import Data.Vector.Fusion.Bundle.Size (Size (Unknown))
+import Data.Vector.Fusion.Stream.Monadic (Step (..), Stream (..))
+import Data.Vector.Generic qualified as V
 import Data.Vector.Generic.Mutable qualified as VM
 import Data.Vector.Mutable qualified as VBM
 import Data.Word (Word64)
@@ -146,3 +154,23 @@ infixr 9 #.
 (.#) f _ = coerce f
 
 infixl 8 .#
+
+{-# INLINE accToVec #-}
+accToVec :: V.Vector v a => Acc a -> v a
+accToVec = V.unstream . accToBundle
+
+{-# INLINE accToBundle #-}
+accToBundle :: Monad m => Acc a -> Bundle.Bundle m v a
+accToBundle acc = Bundle.fromStream (accToStream acc) Unknown
+
+{-# INLINE accToStream #-}
+accToStream :: Monad m => Acc a -> Stream m a
+accToStream acc = Stream step acc
+  where
+    step acc = case Acc.uncons acc of
+      Just (x, acc') -> pure $ Yield x acc'
+      Nothing -> pure Done
+
+{-# INLINE (<<$>>) #-}
+(<<$>>) :: (Functor f, Functor g) => (a -> b) -> (f (g a)) -> (f (g b))
+(<<$>>) = fmap . fmap

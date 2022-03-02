@@ -8,46 +8,48 @@ module Oat.Utils.Optics
     fromOf,
     unwrap,
     leafChildrenOf,
+    (%??),
   )
 where
 
 import Control.Parallel.Strategies qualified as Parallel
 import Data.List.NonEmpty qualified as NonEmpty
 
+{-# INLINE swap #-}
 swap :: (Is k An_AffineFold, Is k' A_Review) => Optic' k is t a -> Optic' k' is' t b -> Setter t t a b
 swap o o' = sets $ \f x -> case x ^? o of
   Nothing -> x
   Just y -> o' # f y
-{-# INLINE swap #-}
 
+{-# INLINE parOver #-}
 parOver :: Is k A_Traversal => Parallel.Strategy b -> Optic k is s t a b -> (a -> b) -> s -> t
 parOver strat o f = Parallel.runEval . traverseOf o (Parallel.rparWith strat . f)
-{-# INLINE parOver #-}
 
+{-# INLINE evalOf #-}
 evalOf :: Is k A_Traversal => Optic' k is s a -> Parallel.Strategy a -> Parallel.Strategy s
 evalOf = traverseOf
-{-# INLINE evalOf #-}
 
+{-# INLINE parOf #-}
 parOf :: Is k A_Traversal => Optic' k is s a -> Parallel.Strategy a -> Parallel.Strategy s
 parOf o strat = traverseOf o $ Parallel.rparWith strat
-{-# INLINE parOf #-}
 
+{-# INLINE _neHead #-}
 _neHead :: Lens' (NonEmpty a) a
 _neHead = lens NonEmpty.head (\(_ :| as) a -> a :| as)
-{-# INLINE _neHead #-}
 
+{-# INLINE onOf #-}
 onOf :: Is k A_Getter => (a -> a -> c) -> Optic' k is s a -> (s -> s -> c)
 onOf f o = f `on` (^. o)
-{-# INLINE onOf #-}
 
 infixl 0 `onOf`
 
+{-# INLINE fromOf #-}
 fromOf :: Is k An_AffineFold => Optic' k is s a -> a -> Getter s a
 fromOf o def = to $ \s -> case s ^? o of
   Just a -> a
   Nothing -> def
-{-# INLINE fromOf #-}
 
+{-# INLINE unwrap #-}
 unwrap :: a -> Lens' (Maybe a) a
 unwrap def =
   lens
@@ -56,11 +58,18 @@ unwrap def =
         Just _ -> Just b
         Nothing -> Just def
     )
-{-# INLINE unwrap #-}
 
 -- | get all the leaf children
+{-# INLINE leafChildrenOf #-}
 leafChildrenOf :: Is k A_Fold => Optic' k is a a -> a -> [a]
 leafChildrenOf o = go
   where
     go a = foldMapOf o go a
-{-# INLINE leafChildrenOf #-}
+
+{-# INLINE (%??) #-}
+(%??) ::
+  (Is k An_AffineFold, Is l A_Getter) =>
+  Optic' k is s a ->
+  Optic' l js (Maybe a) a' ->
+  Getter s a'
+(%??) o o' = to (\s -> s ^? o ^. o')

@@ -4,13 +4,16 @@ module Oat.Dataflow.Shape
   ( Shape (..),
     Shape' (..),
     IndexedCO,
+    IndexedCO2,
     MaybeO (..),
     MaybeC (..),
     EitherCO (..),
     KnownShape (..),
     convertMaybeO,
     mapIndexedCO,
-  getRightO, getLeftC)
+    getRightO,
+    getLeftC,
+  )
 where
 
 -- | Shapes: Open and Closed
@@ -44,11 +47,16 @@ instance KnownShape C where
   shape = C'
 
 type IndexedCO :: Shape -> a -> a -> a
-type family IndexedCO ex a b
+type family IndexedCO ex a b where
+  IndexedCO C a b = a
+  IndexedCO O a b = b
 
-type instance IndexedCO C a _ = a
-
-type instance IndexedCO O _ b = b
+type IndexedCO2 :: Shape -> Shape -> a -> a -> a -> a -> a
+type family IndexedCO2 e x a b c d where
+  IndexedCO2 C C a b c d = a
+  IndexedCO2 C O a b c d = b
+  IndexedCO2 O C a b c d = c
+  IndexedCO2 O O a b c d = d
 
 -- | Maybe type indexed by open/closed
 data MaybeO :: Shape -> Type -> Type where

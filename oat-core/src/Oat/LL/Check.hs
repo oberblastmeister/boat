@@ -241,6 +241,7 @@ inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
 inferSelect LL.SelectInst {condTy, ty2} = do
   tyAssert (Just "select") Nothing [LL.I1] condTy
   pure ty2
+  pure ty2
 
 inferZext = undefined
 

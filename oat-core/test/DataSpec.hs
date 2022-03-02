@@ -257,7 +257,8 @@ defConfig =
     { update = False,
       firstTimeUpdate = True,
       -- filter = matchTail "first.ll" <&&> predNot (matchHead "ll_compile/ok"),
-      filter = matchTail "retry.ll" <&&> predNot (matchHead "ll_compile/ok"),
+      -- filter = matchTail "retry.ll" <&&> predNot (matchHead "ll_compile/ok"),
+      filter = predNot (matchTail "gep1.ll"),
       parallel = False
     }
 

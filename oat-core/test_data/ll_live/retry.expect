@@ -1,5 +1,5 @@
 ( Many
-    ( JustO
+    { entry = JustO
         ( FactBlock
             { fact = fromList
                 [ "1"
@@ -9,8 +9,7 @@
                 [ Term ( Br L0 ) ]
             }
         )
-    )
-    ( LabelMap
+    , body = LabelMap
         { unLabelMap = fromList
             [
                 ( 0
@@ -84,8 +83,7 @@
                 )
             ]
         }
-    )
-    ( JustO
+    , exit = JustO
         ( FactBlock
             { fact = fromList [ "1" ]
             , block = Block
@@ -100,7 +98,7 @@
                 ]
             }
         )
-    )
+    }
 , fromList
     [ "1"
     , "x"

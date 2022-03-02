@@ -1,45 +1,99 @@
-module Oat.LL.IrToAst where
+module Oat.LL.IrToAst
+  ( funBodyToAst,
+  )
+where
 
+import Data.Vector qualified as VB
 import Effectful.Reader.Static (Reader, asks)
-import Effectful.Reader.Static.Optics (rview)
 import Oat.Dataflow (Shape (..))
 import Oat.Dataflow qualified as Dataflow
+import Oat.Dataflow.Block qualified as Block
+import Oat.Dataflow.Graph qualified as Dataflow.Graph
 import Oat.Dataflow.Graph qualified as Graph
+import Oat.Dataflow.TreeUtils qualified as Dataflow.TreeUtils
 import Oat.LL.Ast qualified as Ast
-import Oat.LL.Ast qualified as LL
 import Oat.LL.Ir qualified as Ir
-import Oat.LL.Name qualified as LL
+import Oat.LL.Name qualified as Ast
+import Oat.Utils.Misc (accToVec)
+import Oat.Utils.Optics (unwrap, (%??))
 import Optics.Operators.Unsafe ((^?!))
 
 type Effs =
-  '[ Reader (Dataflow.LabelMap LL.Name)
+  '[ Reader (Dataflow.LabelMap Ast.Name)
    ]
 
-funBodyToAst :: Effs :>> es => Ir.FunBody -> Eff es LL.FunBody
+funBodyToAst :: Effs :>> es => Ir.FunBody -> Eff es Ast.FunBody
 funBodyToAst body = case body.graph of
   Graph.Empty -> error "cannot have empty graph"
+  Graph.Single {} -> error "cannot have single graph"
+  graph@Graph.Many {entry = Dataflow.JustO entry, exit = Dataflow.JustO exit} -> do
+    entry <- blockToAst entry
+    let bodyBlocks = VB.fromList $ Dataflow.TreeUtils.preOrderF $ Dataflow.Graph.dfs Dataflow.NothingC graph
+    labeled <- traverse blockToAst bodyBlocks
+    exit <- blockToAst exit
+    -- TODO: vector concatenation is propbably really slow
+    pure Ast.FunBody {entry, labeled = labeled :> exit}
 
--- Graph.Single block ->
+blockToAst ::
+  Effs :>> es =>
+  Ir.Block e x ->
+  Eff es (Dataflow.IndexedCO2 e x Ast.LabBlock Ast.LabBlock Ast.Block Ast.Block)
+blockToAst = \case
+  Block.CC first (Block.OO insts) last -> do
+    lab <- instToAst first
+    insts <- traverse normalOpenInstToAst $ accToVec @Vec insts
+    term <- instToAst last
+    pure
+      Ast.LabBlock
+        { lab,
+          block =
+            Ast.Block
+              { insts,
+                term
+              }
+        }
+  Block.CO first (Block.OO insts) -> do
+    lab <- instToAst first
+    insts <- traverse (instToAst @O @O) $ accToVec @Vec insts
+    let (insts', term) = unsnocRet insts
+    pure Ast.LabBlock {lab, block = Ast.Block {insts = insts', term}}
+  Block.OC (Block.OO insts) last -> do
+    insts <- traverse normalOpenInstToAst $ accToVec @Vec insts
+    term <- instToAst last
+    pure Ast.Block {insts, term}
+  Block.OO insts -> do
+    insts <- traverse instToAst $ accToVec @Vec insts
+    let (insts', term) = unsnocRet insts
+    pure Ast.Block {insts = insts', term}
 
--- blockToAst :: forall e x es. (Effs :>> es, Dataflow.KnownShape e) => Ir.Block e x -> Eff es (Dataflow.IndexedCO e Ast.Block Ast.LabBlock)
--- blockToAst = case Dataflow.shape @e of 
---   Dataflow.O' -> 
+normalOpenInstToAst :: Effs :>> es => Ir.Inst O O -> Eff es Ast.Inst
+normalOpenInstToAst inst = do
+  inst <- instToAst inst
+  pure $ unwrapNormalOpen inst
 
--- instToAst :: Effs :>> es => Ir.Inst e O -> Eff es LL.Inst
--- instToAst (Ir.Label label) = asks @(Dataflow.LabelMap LL.Name) (^?! ix label)
--- instToAst (Ir.Inst inst) = pure inst
+unwrapNormalOpen :: Either Ast.Term Ast.Inst -> Ast.Inst
+unwrapNormalOpen = (^. _Right %?? unwrap (error "cannot have a return in the middle of a block"))
 
--- instToAst (Ir.Term term) = LL.Term <$> termToAst term
+unsnocRet :: HasCallStack => Vec (Either Ast.Term Ast.Inst) -> (Vec Ast.Inst, Ast.Term)
+unsnocRet = \case
+  insts :> (Left ret@(Ast.Ret _)) -> (fmap unwrapNormalOpen insts, ret)
+  _ -> error "The last instruction of the exit block must have a ret terminator"
 
--- termToAst :: Effs :>> es => Ir.Term -> Eff es LL.Term
--- termToAst (Ir.Ret inst) = pure $ LL.Ret inst
--- termToAst (Ir.Br label) = LL.Br <$> getLabel label
--- termToAst (Ir.Cbr Ir.CbrTerm {ty, arg, lab1, lab2}) = do
---   lab1 <- getLabel lab1
---   lab2 <- getLabel lab2
---   pure $ LL.Cbr LL.CbrTerm {ty, arg, lab1, lab2}
+instToAst ::
+  forall e x es.
+  Effs :>> es =>
+  Ir.Inst e x ->
+  Eff es (Dataflow.IndexedCO2 e x Ast.Name Ast.Name Ast.Term (Either Ast.Term Ast.Inst))
+instToAst = \case
+  Ir.Label label -> getLabel label
+  Ir.Inst inst -> pure $ Right inst
+  Ir.Term term -> case term of
+    Ir.Br label -> Ast.Br <$> getLabel label
+    Ir.Cbr Ir.CbrTerm {ty, arg, lab1, lab2} -> do
+      lab1 <- getLabel lab1
+      lab2 <- getLabel lab2
+      pure $ Ast.Cbr Ast.CbrTerm {ty, arg, lab1, lab2}
+  Ir.Ret ret -> pure . Left . Ast.Ret $ ret
 
-getLabel :: Effs :>> es => Dataflow.Label -> Eff es LL.Name
-getLabel label = asks @(Dataflow.LabelMap LL.Name) (^?! ix label)
-
--- instToAst (Ir.Inst inst) = inst
+getLabel :: Effs :>> es => Dataflow.Label -> Eff es Ast.Name
+getLabel label = asks @(Dataflow.LabelMap Ast.Name) (^?! ix label)

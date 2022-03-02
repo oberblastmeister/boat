@@ -1,13 +1,12 @@
 ( Many
-    ( JustO
+    { entry = JustO
         ( FactBlock
-            ( fromList
+            { fact = fromList
                 [ "1"
                 , "2"
                 , "4"
                 ]
-            )
-            ( Block
+            , block = Block
                 [ Inst
                     ( BinOp
                         ( BinOpInst
@@ -32,20 +31,17 @@
                     )
                 , Term ( Br L0 )
                 ]
-            )
+            }
         )
-    )
-    ( LabelMap
+    , body = LabelMap
         { unLabelMap = fromList [] }
-    )
-    ( JustO
+    , exit = JustO
         ( FactBlock
-            ( fromList
+            { fact = fromList
                 [ "2"
                 , "4"
                 ]
-            )
-            ( Block
+            , block = Block
                 [ Label L0
                 , Inst
                     ( BinOp
@@ -66,9 +62,9 @@
                         }
                     )
                 ]
-            )
+            }
         )
-    )
+    }
 , fromList
     [ "1"
     , "2"
