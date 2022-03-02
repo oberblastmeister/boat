@@ -1,14 +1,13 @@
 ( Many
     ( JustO
         ( FactBlock
-            ( fromList
+            { fact = fromList
                 [ "1"
                 , "x"
                 ]
-            )
-            ( Block
+            , block = Block
                 [ Term ( Br L0 ) ]
-            )
+            }
         )
     )
     ( LabelMap
@@ -16,12 +15,11 @@
             [
                 ( 0
                 , FactBlock
-                    ( fromList
+                    { fact = fromList
                         [ "1"
                         , "x"
                         ]
-                    )
-                    ( Block
+                    , block = Block
                         [ Label L0
                         , Inst
                             ( BinOp
@@ -36,17 +34,16 @@
                             )
                         , Term ( Br L1 )
                         ]
-                    )
+                    }
                 )
             ,
                 ( 1
                 , FactBlock
-                    ( fromList
+                    { fact = fromList
                         [ "1"
                         , "x"
                         ]
-                    )
-                    ( Block
+                    , block = Block
                         [ Label L1
                         , Inst
                             ( BinOp
@@ -61,17 +58,16 @@
                             )
                         , Term ( Br L2 )
                         ]
-                    )
+                    }
                 )
             ,
                 ( 2
                 , FactBlock
-                    ( fromList
+                    { fact = fromList
                         [ "1"
                         , "x"
                         ]
-                    )
-                    ( Block
+                    , block = Block
                         [ Label L2
                         , Term
                             ( Cbr
@@ -84,29 +80,27 @@
                                 )
                             )
                         ]
-                    )
-                )
-            ,
-                ( 3
-                , FactBlock
-                    ( fromList [ "1" ] )
-                    ( Block
-                        [ Label L3
-                        , Term
-                            ( Ret
-                                ( RetTerm
-                                    { ty = I64
-                                    , arg = Just
-                                        ( Temp "1" )
-                                    }
-                                )
-                            )
-                        ]
-                    )
+                    }
                 )
             ]
         }
-    ) NothingO
+    )
+    ( JustO
+        ( FactBlock
+            { fact = fromList [ "1" ]
+            , block = Block
+                [ Label L3
+                , Ret
+                    ( RetTerm
+                        { ty = I64
+                        , arg = Just
+                            ( Temp "1" )
+                        }
+                    )
+                ]
+            }
+        )
+    )
 , fromList
     [ "1"
     , "x"

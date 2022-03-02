@@ -270,9 +270,9 @@ instLabToElems :: [InstLab] -> Prog
 instLabToElems instLabs =
   snd $
     foldr
-      ( \instLab (insts, prog) -> case instLab of
-          Left (lab, global) -> ([], Elem {lab, global, asm = Text insts} : prog)
-          Right inst -> (inst : insts, prog)
+      ( \instLab (insts, mod) -> case instLab of
+          Left (lab, global) -> ([], Elem {lab, global, asm = Text insts} : mod)
+          Right inst -> (inst : insts, mod)
       )
       ([], [])
       instLabs

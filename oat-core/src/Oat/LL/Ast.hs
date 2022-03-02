@@ -3,59 +3,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Oat.LL.Ast
-  ( Prog (..),
-    Ty (..),
-    FunTy (..),
-    lookupTy,
-    plateTy,
-    BinOp (..),
-    CmpOp (..),
-    Inst (..),
-    Term (..),
-    Operand (..),
-    BinOpInst (..),
-    AllocaInst (..),
-    LoadInst (..),
-    StoreInst (..),
-    IcmpInst (..),
-    CallInst (..),
-    BitcastInst (..),
-    SextInst (..),
-    ZextInst (..),
-    GepInst (..),
-    SelectInst (..),
-    RetTerm (..),
-    CbrTerm (..),
-    Block (..),
-    LabBlock (..),
-    FunBody (..),
-    FunDecl (..),
-    GlobalInit (..),
-    TyMap,
-    GlobalDecl (..),
-    Decl (..),
-    DeclMap (..),
-    declsToMap,
-    instName,
-    bodyBlocks,
-    bodyInsts,
-    instOperands,
-    termOperands,
-    operandName,
-    doesInsAssign,
-    tySize,
-    maxCallSize,
-    funDeclTyParams,
-    declMapTyAt,
-    isShiftOp,
-    isNumTy,
+  ( module Oat.LL.Ast,
   )
 where
 
 import Data.Int (Int64)
 import Data.MapList (MapList)
 import Data.MapList qualified as MapList
-import Data.Text qualified as T
+import Data.Vector qualified as V
 import Effectful.Reader.Static (Reader, ask)
 import Effectful.Reader.Static qualified as Reader
 import Effectful.Reader.Static.Optics (rview)
@@ -63,8 +18,8 @@ import Oat.LL.Name (Name)
 import Oat.Utils.Optics (unwrap)
 import Optics as O
 
-data Prog = Prog
-  { decls :: [Decl],
+data Module = Module
+  { decls :: Vec Decl,
     declMap :: DeclMap
   }
   deriving (Show, Eq)
@@ -89,15 +44,15 @@ data GlobalInit
   | GlobalGid !Name
   | GlobalInt !Int64
   | GlobalString !ByteString
-  | GlobalArray [GlobalDecl]
-  | GlobalStruct [GlobalDecl]
+  | GlobalArray (Vec GlobalDecl)
+  | GlobalStruct (Vec GlobalDecl)
   deriving (Show, Eq)
 
 data GlobalDecl = GlobalDecl {ty :: Ty, globalInit :: GlobalInit}
   deriving (Show, Eq)
 
 data Block = Block
-  { insts :: [Inst],
+  { insts :: Vec Inst,
     term :: Term
   }
   deriving (Show, Eq)
@@ -110,13 +65,13 @@ data LabBlock = LabBlock
 
 data FunBody = FunBody
   { entry :: Block,
-    labeled :: [LabBlock]
+    labeled :: Vec LabBlock
   }
   deriving (Show, Eq)
 
 data FunDecl = FunDecl
   { funTy :: FunTy,
-    params :: [Name],
+    params :: Vec Name,
     body :: FunBody
   }
   deriving (Show, Eq)
@@ -131,11 +86,11 @@ data Ty
   | TyFun FunTy
   | TyNamed !Name
   | TyArray !Int Ty
-  | TyStruct [Ty]
+  | TyStruct (Vec Ty)
   deriving (Show, Eq)
 
 data FunTy = FunTy
-  { args :: [Ty],
+  { args :: Vec Ty,
     ret :: Ty
   }
   deriving (Show, Eq)
@@ -244,7 +199,7 @@ data CallInst = CallInst
   { name :: Maybe Name,
     ty :: Ty,
     fn :: Operand,
-    args :: [(Ty, Operand)]
+    args :: Vec (Ty, Operand)
   }
   deriving (Show, Eq)
 
@@ -261,7 +216,7 @@ data GepInst = GepInst
     ty' :: Ty,
     ty :: Ty,
     arg :: Operand,
-    args :: NonEmpty (Ty, Operand)
+    args :: Vec (Ty, Operand)
   }
   deriving (Show, Eq)
 
@@ -306,7 +261,7 @@ data SextInst = SextInst
   }
   deriving (Show, Eq)
 
-$(makeFieldLabelsNoPrefix ''Prog)
+$(makeFieldLabelsNoPrefix ''Module)
 $(makeFieldLabelsNoPrefix ''LoadInst)
 $(makeFieldLabelsNoPrefix ''AllocaInst)
 $(makeFieldLabelsNoPrefix ''BinOpInst)
@@ -331,7 +286,7 @@ $(makePrismLabels ''Operand)
 $(makePrismLabels ''BinOp)
 $(makePrismLabels ''Inst)
 
-declsToMap :: [Decl] -> DeclMap
+declsToMap :: Vec Decl -> DeclMap
 declsToMap =
   foldl'
     ( \declMap -> \case
@@ -481,8 +436,8 @@ plateTy mp = traversalVL $ \f -> \case
   TyStruct tys -> TyStruct <$> traverse f tys
   other -> pure other
 
-funDeclTyParams :: FunDecl -> [(Name, Ty)]
-funDeclTyParams funDecl = zip (funDecl ^. #params) (funDecl ^. #funTy % #args)
+funDeclTyParams :: FunDecl -> Vec (Name, Ty)
+funDeclTyParams funDecl = V.zip (funDecl ^. #params) (funDecl ^. #funTy % #args)
 
 declMapTyAt :: Name -> Fold DeclMap Ty
 declMapTyAt name =

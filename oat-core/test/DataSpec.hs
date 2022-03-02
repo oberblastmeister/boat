@@ -88,9 +88,9 @@ run config = Spec.hspecWith Spec.defaultConfig $ specWith config
 
 specWith :: Config -> Spec
 specWith config = do
-  -- llLexerSpec config
-  -- llParserSpec config
-  -- llCompileSpec config
+  llLexerSpec config
+  llParserSpec config
+  llCompileSpec config
   llLiveSpec config
 
 llLexerSpec :: Config -> Spec
@@ -113,7 +113,7 @@ llParserSpec config = do
               runPureEff $
                 Reporter.runReporterList @LL.ParseError $
                   Error.runErrorNoCallStack @CompileFail $
-                    LL.parse text LL.prog
+                    LL.parse text LL.mod
         case res of
           Left _ -> Exception.throwString $ LText.unpack $ pShowNoColor parseErrors
           Right res -> pure $ LText.toStrict $ pShowNoColor res
@@ -148,12 +148,12 @@ llLiveSpec config = do
           runErrorIO @CompileFail $
             Reporter.runReporterList
               @LL.ParseError
-              $ LL.parse text LL.prog
+              $ LL.parse text LL.mod
         case errors of
           _ : _ -> Exception.throwString $ LText.unpack $ pShowNoColor errors
           _ -> pure ()
         let declMap = LL.declsToMap decls
-            prog = LL.Prog {decls, declMap}
+            mod = LL.Module {decls, declMap}
             fun :: LL.FunDecl = declMap ^. #funDecls % #map % at "test" % unwrap impossible
             irFun =
               runPureEff $
@@ -256,7 +256,8 @@ defConfig =
   Config
     { update = False,
       firstTimeUpdate = True,
-      filter = matchTail "first.ll" <&&> predNot (matchHead "ll_compile/ok"),
+      -- filter = matchTail "first.ll" <&&> predNot (matchHead "ll_compile/ok"),
+      filter = matchTail "retry.ll" <&&> predNot (matchHead "ll_compile/ok"),
       parallel = False
     }
 

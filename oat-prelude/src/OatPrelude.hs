@@ -36,5 +36,6 @@ import OatPrelude.Debug as X
 import OatPrelude.Effectful as X
 import OatPrelude.Maybe as X
 import OatPrelude.Monad as X
+import OatPrelude.Vector as X
 import Optics as X hiding (assign, assign', modifying, modifying', preuse, use)
 import Prelude as P hiding (undefined)

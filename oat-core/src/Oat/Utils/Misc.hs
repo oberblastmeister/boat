@@ -16,6 +16,10 @@ module Oat.Utils.Misc
     show',
     (!>>),
     (<<!),
+    (!>=>),
+    (<=<!),
+    (#.),
+    (.#),
   )
 where
 
@@ -107,14 +111,38 @@ alignForward addr align
 show' :: Show a => a -> String
 show' = LText.unpack . pShowNoColor
 
+{-# INLINE (!>>) #-}
 (!>>) :: (a -> b) -> (b -> c) -> a -> c
 (!>>) f g = \a -> g $! f a
-{-# INLINE (!>>) #-}
 
 infixr 1 !>>
 
+{-# INLINE (<<!) #-}
 (<<!) :: (b -> c) -> (a -> b) -> a -> c
 (<<!) f g = \a -> f $! g a
-{-# INLINE (<<!) #-}
 
 infixr 1 <<!
+
+{-# INLINE (!>=>) #-}
+(!>=>) :: Monad m => (t -> m a) -> (a -> m b) -> t -> m b
+f !>=> g = \x -> f x >>= (g $!)
+
+infixr 1 !>=>
+
+{-# INLINE (<=<!) #-}
+(<=<!) :: Monad m => (a -> m b) -> (t -> m a) -> t -> m b
+f <=<! g = \x -> g x >>= (f $!)
+
+infixr 1 <=<!
+
+{-# INLINE (#.) #-}
+(#.) :: Coercible c b => (b -> c) -> (a -> b) -> (a -> c)
+(#.) _ = coerce
+
+infixr 9 #.
+
+{-# INLINE (.#) #-}
+(.#) :: Coercible b a => (b -> c) -> (a -> b) -> (a -> c)
+(.#) f _ = coerce f
+
+infixl 8 .#

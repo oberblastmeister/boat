@@ -5,20 +5,22 @@ module Oat.LL.LowerGep
   )
 where
 
+import Data.Vector qualified as V
 import Effectful.Reader.Static (Reader)
 import Oat.LL.Ast qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Utils.Impossible (impossible)
+import Optics.Operators.Unsafe ((^?!))
 
 lowerFunDecl :: '[Reader LL.DeclMap, LL.NameSource] :>> es => LL.FunDecl -> Eff es LL.FunDecl
 lowerFunDecl = traverseOf (#body % LL.bodyBlocks % #insts) lowerAll
 
-lowerAll :: (Traversable t, Reader LL.DeclMap :> es, LL.NameSource :> es) => t LL.Inst -> Eff es [LL.Inst]
+lowerAll :: (Traversable t, Reader LL.DeclMap :> es, LL.NameSource :> es) => t LL.Inst -> Eff es (Vec LL.Inst)
 lowerAll insts = do
   insts <- for insts $ \case
     LL.Gep inst -> lower inst
     inst -> pure [inst]
-  pure $ concat insts
+  pure $ fromList $ concat insts
 
 lower :: '[Reader LL.DeclMap, LL.NameSource] :>> es => LL.GepInst -> Eff es [LL.Inst]
 lower LL.GepInst {name, ty = tyPtr, arg, args} = do
@@ -31,7 +33,7 @@ lower LL.GepInst {name, ty = tyPtr, arg, args} = do
       ( \(ty, insts, prevArg) (_argTy, arg) -> do
           case (ty, arg) of
             (LL.TyStruct tys, LL.Const i) -> do
-              offset <- take i tys & traverse LL.tySize <&> sum
+              offset <- V.take i tys & traverse LL.tySize <&> sum
               name <- LL.freshName
               let inst =
                     LL.BinOp
@@ -42,7 +44,7 @@ lower LL.GepInst {name, ty = tyPtr, arg, args} = do
                           arg1 = prevArg,
                           arg2 = LL.Const offset
                         }
-              pure (tys !! i, inst : insts, LL.Temp name)
+              pure (tys ^?! ix i, inst : insts, LL.Temp name)
             (LL.TyStruct _, _) -> impossible
             (LL.TyArray _arrSize ty', arg) -> do
               name1 <- LL.freshName

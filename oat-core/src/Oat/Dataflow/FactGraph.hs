@@ -4,8 +4,8 @@ module Oat.Dataflow.FactGraph
   ( FactGraph,
     FactBlock (FactBlock),
     FactBody,
-    splice,
-    (><),
+    spliceLeft,
+    spliceRight,
     removeFacts,
   )
 where
@@ -24,8 +24,6 @@ data FactBlock f n e x = FactBlock {fact :: !f, block :: !(Block n e x)}
 
 deriving instance (forall e x. Show (n e x), Show f) => Show (FactBlock f n e x)
 
-deriving instance (forall e x. Eq (n e x), Eq f) => Eq (FactBlock f n e x)
-
 type FactBody :: Type -> Node -> Type
 type FactBody f n = Body' (FactBlock f) n
 
@@ -34,15 +32,16 @@ instance NonLocal n => NonLocal (FactBlock f n) where
   successorLabels (FactBlock _ b) = successorLabels b
 
 -- this prefers facts from the left
-splice :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
-splice = Graph.splice' appenFactBlock
+spliceLeft :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
+spliceLeft = Graph.splice' appendFactBlock
   where
-    appenFactBlock (FactBlock f b) (FactBlock _ b') = FactBlock f (b `Block.append` b')
+    appendFactBlock (FactBlock f b) (FactBlock _ b') = FactBlock f (b `Block.append` b')
 
-(><) :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
-(><) = splice
+spliceRight :: NonLocal n => FactGraph f n e a -> FactGraph f n a x -> FactGraph f n e x
+spliceRight = Graph.splice' appendFactBlock
+  where
+    appendFactBlock (FactBlock _ b) (FactBlock f b') = FactBlock f (b `Block.append` b')
 
-infixl 5 ><
 
 removeFacts :: FactGraph f n e x -> Graph n e x
 removeFacts = Graph.mapBlocks (.block)

@@ -9,7 +9,8 @@ module Oat.Dataflow.LabelMap
     union,
     keys,
     singleton,
-  mapWithKey)
+    mapWithKey,
+  )
 where
 
 import Control.Arrow ((^>>))
@@ -22,17 +23,17 @@ import Oat.TH (addUnderscoreLenses)
 import Prelude hiding (toList)
 
 newtype LabelMap v = LabelMap {unLabelMap :: IntMap v}
+  deriving (Show)
   deriving
-    ( Show,
-      Eq,
+    ( Eq,
       Ord,
-      Functor,
-      Foldable,
-      Traversable,
       Semigroup,
       Monoid,
       NFData
     )
+    via IntMap v
+  deriving (Functor, Foldable) via IntMap
+  deriving (Traversable)
 
 $(makeLensesWith addUnderscoreLenses ''LabelMap)
 

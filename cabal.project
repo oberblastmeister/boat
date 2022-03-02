@@ -15,6 +15,11 @@ source-repository-package
     location: https://github.com/haskell-effectful/effectful-typed-process.git
     tag: bc5b9aecf07a0a7ab290185808e745ffff03c4d8
 
+source-repository-package
+    type: git
+    location: https://github.com/oberblastmeister/acc.git
+    tag: 8146be52837f4914b08765734b55bef24a13c9d7
+
 packages:
     oat-core/
     oat-prelude/

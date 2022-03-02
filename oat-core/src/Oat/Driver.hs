@@ -39,6 +39,7 @@ import System.FilePath qualified as FilePath
 import System.IO qualified
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
+import Acc (Acc)
 
 -- the effects that we have access to in the driver
 type DriverEffs :: [Effect]
@@ -91,16 +92,16 @@ parseLLText ::
    ]
     :>> es =>
   Text ->
-  Eff es LL.Prog
+  Eff es LL.Module
 parseLLText text = do
-  decls <- LL.parse text LL.prog
+  decls <- LL.parse text LL.mod
   let declMap = LL.declsToMap decls
-      prog = LL.Prog {decls, declMap}
+      mod = LL.Module {decls, declMap}
   whenM (rview @Args #checkLL) $ do
-    LL.checkProg prog
-  pure prog
+    LL.checkProg mod
+  pure mod
 
-parseLLFile :: DriverEffs :>> es => FilePath -> Eff es LL.Prog
+parseLLFile :: DriverEffs :>> es => FilePath -> Eff es LL.Module
 parseLLFile path = readFileUtf8 path >>= parseLLText
 
 compileLLFile :: DriverEffs :>> es => FilePath -> FilePath -> Eff es ()
@@ -130,8 +131,8 @@ compileLLText ::
   Eff es Text
 compileLLText text = do
   insts <- compileLLTextToInsts text
-  let prog = Backend.X86.instLabToElems $ toList insts
-  let asmDoc = Backend.X86.Pretty.prettyProg prog
+  let mod = Backend.X86.instLabToElems $ toList insts
+  let asmDoc = Backend.X86.Pretty.prettyProg mod
   let asmText = Prettyprinter.renderStrict $ Prettyprinter.layoutCompact asmDoc
   pure asmText
 
@@ -143,10 +144,10 @@ compileLLTextToInsts ::
    ]
     :>> es =>
   Text ->
-  Eff es (Seq Backend.X86.InstLab)
+  Eff es (Acc Backend.X86.InstLab)
 compileLLTextToInsts text = do
-  prog <- parseLLText text
-  LL.runNameSource $ Backend.X86.Codegen.compileProg prog
+  mod <- parseLLText text
+  LL.runNameSource $ Backend.X86.Codegen.compileModule mod
 
 -- compile and links all asm paths with the runtime
 compileAsmPaths :: DriverEffs :>> es => [FilePath] -> FilePath -> Eff es ()

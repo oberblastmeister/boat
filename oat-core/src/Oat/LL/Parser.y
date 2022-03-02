@@ -2,24 +2,27 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Oat.LL.Parser
-  ( prog,
+  ( mod,
   )
 where
 
-import OldPrelude as Prelude
+import OldPrelude qualified as Prelude
+import OldPrelude hiding (mod)
 import Oat.LL.Token
-import qualified Oat.LL.Token.Kind as Kind
+import Oat.LL.Token.Kind qualified as Kind
 import Oat.LL.ParserWrapper
 import Oat.LL.Ast
 import Oat.LL.Name
-import qualified Data.Sequence as Seq
+import Data.Sequence qualified as Seq
 import Optics
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty qualified as NE
 import Data.ByteString (ByteString)
+import Data.Vector qualified as VB
+import OatPrelude.Vector
 }
 
-%name prog
+%name mod Module
 
 %tokentype { Token }
 %monad { Parser } { (>>=) } { return }
@@ -88,8 +91,8 @@ import Data.ByteString (ByteString)
 
 %%
 
-Prog :: { [Decl] }
-  : List(Decl) { $1 }
+Module :: { Vec Decl }
+  : Vec(Decl) { $1 }
   
 Decl :: { Decl }
   : GlobalDecl { $1 }
@@ -98,18 +101,18 @@ Decl :: { Decl }
   | FunDecl { $1 }
   
 FunDecl :: { Decl }
-  : define Ty gid '(' ParamList ')' '{' EntryBlock List(LabBlock) '}'
+  : define Ty gid '(' ParamList ')' '{' EntryBlock Vec(LabBlock) '}'
     { DeclFun
         $3
         FunDecl
-          { funTy = FunTy {args = map fst $5, ret = $2},
-            params = map snd $5,
+          { funTy = FunTy {args = VB.map fst $5, ret = $2},
+            params = VB.map snd $5,
             body = FunBody {entry = $8, labeled = $9}
           }
     }
 
-ParamList :: { [(Ty, Name)] }
-  : ListSep(Param, ',') { $1 }
+ParamList :: { Vec (Ty, Name) }
+  : VecSep(Param, ',') { $1 }
 
 Param :: { (Ty, Name) }
   : Ty uid { ($1, $2) }
@@ -129,8 +132,8 @@ GlobalInit :: { GlobalInit }
   | '[' GlobalDeclList ']' { GlobalArray $2 }
   | '{' GlobalDeclList '}' { GlobalStruct $2 }
   
-GlobalDeclList :: { [GlobalDecl] }
-  : ListSep(InstideArrayGlobalDecl, ',') { $1 }
+GlobalDeclList :: { Vec GlobalDecl }
+  : VecSep(InstideArrayGlobalDecl, ',') { $1 }
 
 InstideArrayGlobalDecl :: { GlobalDecl }
   : Ty GlobalInit { GlobalDecl {ty = $1, globalInit = $2} }
@@ -152,8 +155,8 @@ NonPtrTy :: { Ty }
   | Ty '(' TyList ')' { TyFun FunTy {args = $3, ret = $1}}
   | uid { TyNamed $1 }
   
-TyList :: { [Ty] }
-  : ListSep(Ty, ',') { $1 }
+TyList :: { Vec Ty }
+  : VecSep(Ty, ',') { $1 }
   
 EntryBlock :: { Block }
   : entry ':' Block { $3 }
@@ -163,7 +166,7 @@ LabBlock :: { LabBlock }
   : lab ':' Block { LabBlock {lab = $1, block = $3} }
 
 Block :: { Block }
-  : List(Inst) Term { Block {insts = $1, term = $2} }
+  : Vec(Inst) Term { Block {insts = $1, term = $2} }
   
 Inst :: { Inst }
   : BinOpInst { BinOp $1 }
@@ -245,7 +248,7 @@ BitcastInst :: { BitcastInst }
     }
 
 GepInst :: { GepInst }
-  : uid '=' getelementptr Ty ',' Ty Operand ',' ListSep1(GepOperand, ',')
+  : uid '=' getelementptr Ty ',' Ty Operand ',' VecSep1(GepOperand, ',')
     {
       GepInst
         { name = $1,
@@ -299,8 +302,8 @@ SextInst :: { SextInst }
         }
     }
 
-ArgList :: { [(Ty, Operand)] }
-  : ListSep(Arg, ',') { $1 }
+ArgList :: { Vec (Ty, Operand) }
+  : VecSep(Arg, ',') { $1 }
   
 Arg :: { (Ty, Operand) }
   : Ty Operand { ($1, $2) }
@@ -347,6 +350,18 @@ Operand :: { Operand }
 Maybe(p) :: { Maybe p }
   : {- empty -} { Nothing }
   | p { Just $1 }
+  
+Vec(p) :: { Vec p }
+  : List(p) { VB.fromList $1 }
+  
+Vec1(p) :: { Vec p }
+  : List1(p) { VB.fromList $ NE.toList $1 }
+  
+VecSep(p, s) :: { Vec p }
+  : ListSep(p, s) { VB.fromList $1 }
+  
+VecSep1(p, s) :: { Vec p }
+  : ListSep1(p, s) { VB.fromList $ NE.toList $1 }
   
 List(p) :: { [p] }
   : {- empty -} { [] }

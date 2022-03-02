@@ -11,11 +11,13 @@ import Control.Parallel.Strategies qualified as Parallel
 import Data.HashMap.Optics qualified as HashMap
 import Data.IntMap.Strict qualified as IntMap
 import Data.Range (Range (RangeP))
+import Data.Vector qualified as V
+import Data.Vector.Generic.Optics (toVectorOf)
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
-import Oat.Utils.Misc (inBetween)
 import Oat.LL.Ast qualified as LL
 import Oat.LL.Name (Name)
+import Oat.Utils.Misc (inBetween)
 import Oat.Utils.Optics (parOver)
 import Optics.Operators.Unsafe ((^?!))
 
@@ -48,7 +50,11 @@ combineBody = parOver Parallel.rseq LL.bodyBlocks combineBlock
 combineBlock :: LL.Block -> LL.Block
 combineBlock block = block'
   where
-    block' = LL.Block {insts = combineState' ^.. #idToInst % each % #inst, term = combineState' ^. #term}
+    block' =
+      LL.Block
+        { insts = toVectorOf (#idToInst % each % #inst) combineState',
+          term = combineState' ^. #term
+        }
     ((), !combineState') = runPureEff $ runState combineState combineLoop
     combineState = stateFromBlock block
 
@@ -132,7 +138,7 @@ stateFromBlock block =
       prevId = 0
     }
   where
-    idToInst = IntMap.fromList instsWithId
+    idToInst = IntMap.fromList $ toList instsWithId
     nameToInst = HashMap.toMapOf (folded % _Just % ifolded) instWithName
     instWithName =
       fmap
@@ -151,7 +157,7 @@ stateFromBlock block =
               }
         )
         (block ^. #insts)
-    instsWithId = zip [1 :: Int ..] insts
+    instsWithId = V.zip (fromList [1 :: Int ..]) insts
     idToUses = foldl' go Empty instsWithId
       where
         go :: IntMap Int -> (Int, InstWithInfo) -> IntMap Int

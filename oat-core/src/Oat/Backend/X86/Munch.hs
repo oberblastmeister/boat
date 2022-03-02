@@ -11,10 +11,10 @@ module Oat.Backend.X86.Munch
   )
 where
 
-import Oat.Utils.Source (Source)
-import Oat.Utils.Source qualified as Source
+import Acc (Acc)
 import Data.Int (Int64)
 import Data.Sequence qualified as Seq
+import Data.Vector qualified as V
 import Effectful.Reader.Static
 import Effectful.State.Static.Local
 import Effectful.State.Static.Local.Optics
@@ -25,18 +25,20 @@ import Oat.Backend.X86.X86 (InstLab, Reg (..), pattern (:@))
 import Oat.Backend.X86.X86 qualified as X86
 import Oat.LL qualified as LL
 import Oat.Utils.Misc (concatToEither)
+import Oat.Utils.Source (Source)
+import Oat.Utils.Source qualified as Source
 import Optics.Operators.Unsafe ((^?!))
 import Prelude
 
 data BackendState = BackEndState
-  { insts :: !(Seq InstLab),
+  { insts :: !(Acc InstLab),
     allocaMems :: !(HashMap LL.Name X86.Mem)
   }
 
 makeFieldLabelsNoPrefix ''BackendState
 
 type BackendEffs =
-  '[ Writer (Seq InstLab),
+  '[ Writer (Acc InstLab),
      State BackendState,
      Reader LL.DeclMap,
      Source LL.Name,
@@ -60,21 +62,21 @@ compileOperand' (LL.Nested inst) = pure $ X86.OTemp $ inst ^?! LL.instName
 compileOperand :: BackendEffs :>> es => LL.Operand -> Eff es X86.Operand
 compileOperand arg = munchNested arg *> compileOperand' arg
 
-emit :: Writer (Seq InstLab) :> es => [InstLab] -> Eff es ()
-emit = tell . Seq.fromList
+emit :: Writer (Acc InstLab) :> es => [InstLab] -> Eff es ()
+emit = tell @(Acc _) . fromList
 
-emitLabel :: Writer (Seq InstLab) :> es => ByteString -> Eff es ()
+emitLabel :: Writer (Acc InstLab) :> es => ByteString -> Eff es ()
 emitLabel lab = emit [Left (lab, False)]
 
-emitInst :: Writer (Seq InstLab) :> es => X86.Inst -> Eff es ()
+emitInst :: Writer (Acc InstLab) :> es => X86.Inst -> Eff es ()
 emitInst inst = emit [Right inst]
 
-emitInsts :: Writer (Seq InstLab) :> es => [X86.Inst] -> Eff es ()
+emitInsts :: Writer (Acc InstLab) :> es => [X86.Inst] -> Eff es ()
 emitInsts insts = emit (Right <$> insts)
 
 -- | Performs some extra stuff to make sure the moves will be valid
 -- In particular turns moves that have two memory locations with an intermediate temp in between
-emitMov :: '[Writer (Seq InstLab), LL.NameSource] :>> es => X86.Operand -> X86.Operand -> Eff es ()
+emitMov :: '[Writer (Acc InstLab), LL.NameSource] :>> es => X86.Operand -> X86.Operand -> Eff es ()
 -- TODO: handle %rip relative global thingies
 emitMov arg1@(X86.OMem _) arg2@(X86.OMem _) = do
   temp <- Source.fresh
@@ -88,8 +90,8 @@ toMem :: X86.Operand -> X86.Operand
 toMem (X86.OLoc loc) = X86.OMem $ X86.MemLoc loc
 toMem other = other
 
-compileBody :: '[Reader LL.DeclMap, LL.NameSource, X86.Frame.Frame] :>> es => LL.FunBody -> Eff es (Seq InstLab)
-compileBody = execWriter @(Seq _) . runState defBackendState . munchBody
+compileBody :: '[Reader LL.DeclMap, LL.NameSource, X86.Frame.Frame] :>> es => LL.FunBody -> Eff es (Acc InstLab)
+compileBody = execWriter @(Acc _) . runState defBackendState . munchBody
 
 munchBody :: BackendEffs :>> es => LL.FunBody -> Eff es ()
 munchBody body = do
@@ -158,10 +160,10 @@ compileCall LL.CallInst {name, fn, args} = do
     Nothing -> pure ()
     Just name -> emitMov (X86.OReg Rax) (X86.OTemp name)
 
-viewShiftTo :: BackendEffs :>> es => [X86.Operand] -> Eff es ()
+viewShiftTo :: BackendEffs :>> es => Vec X86.Operand -> Eff es ()
 viewShiftTo args =
-  concatToEither X86.paramRegs [i * 8 | i <- [0 :: Int64 ..]]
-    & zip args
+  fromList (concatToEither X86.paramRegs [i * 8 | i <- [0 :: Int64 ..]])
+    & V.zip args
     & mapM_
       ( \case
           (arg, Left reg) ->

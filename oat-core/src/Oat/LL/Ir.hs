@@ -13,7 +13,7 @@ type Graph = Dataflow.Graph Inst
 data FunBody = FunBody
   { graph :: Graph O O
   }
-  deriving (Show, Eq)
+  deriving (Show)
 
 data Inst e x where
   Label :: Dataflow.Label -> Inst C O

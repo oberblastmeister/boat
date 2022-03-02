@@ -22,6 +22,8 @@ import Oat.LL.Ast qualified as LL
 import Oat.LL.Name qualified as LL
 import Oat.Reporter (Reporter, report)
 import Oat.Reporter qualified as Reporter
+import Oat.Utils.Impossible
+import Optics.Operators.Unsafe ((^?!))
 
 data CheckState = CheckState
   { tempToTy :: !LL.TyMap,
@@ -56,16 +58,16 @@ type CheckEffs =
      State LL.TyMap
    ]
 
-checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Prog -> Eff es ()
-checkProg prog = do
-  checkDeclMap $ prog ^. #declMap
+checkProg :: '[Reporter [CheckError], Error CompileFail] :>> es => LL.Module -> Eff es ()
+checkProg mod = do
+  checkDeclMap $ mod ^. #declMap
   State.evalState @LL.TyMap mempty
-    . Reader.runReader @LL.DeclMap (prog ^. #declMap)
+    . Reader.runReader @LL.DeclMap (mod ^. #declMap)
     . checkDecls
-    $ prog ^. #decls
+    $ mod ^. #decls
   Reporter.maybeFail @[CheckError]
 
-checkDecls :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => [LL.Decl] -> Eff es ()
+checkDecls :: '[Reporter [CheckError], Reader LL.DeclMap, State LL.TyMap] :>> es => Vec LL.Decl -> Eff es ()
 checkDecls = traverse_ checkDecl
 
 checkDeclMap :: Reporter [CheckError] :> es => LL.DeclMap -> Eff es ()
@@ -197,12 +199,13 @@ inferGep LL.GepInst {ty', ty = tyPtr, arg, args} = run $ do
   tyAssert (Just "gep") Nothing [tyPtr] (LL.TyPtr ty')
   checkOperand arg tyPtr
   (ty, args) <- case (tyPtr, args) of
-    (LL.TyPtr ty, (argTy, arg) :| args) -> do
+    (LL.TyPtr ty, (argTy, arg) :< args) -> do
       checkNumTy argTy
       case arg of
         LL.Const 0 -> pure ()
         _ -> report [MismatchedOperand (LL.Const 0) arg]
       pure (ty, args)
+    (LL.TyPtr _, Empty) -> impossible
     _ -> reportThrow [NotPointerTy tyPtr]
   tyAssert (Just "gep") Nothing [ty] ty'
   void $
@@ -218,7 +221,7 @@ inferGep LL.GepInst {ty', ty = tyPtr, arg, args} = run $ do
               reportThrow [GepThroughPointer ty]
             (LL.TyStruct tys, LL.Const i) -> do
               checkInBounds (length tys) i
-              pure $ tys !! i
+              pure $ tys ^?! ix i
             (LL.TyStruct _, _) ->
               reportThrow [OperandNotConst arg]
             (LL.TyArray size ty', LL.Const i) -> do

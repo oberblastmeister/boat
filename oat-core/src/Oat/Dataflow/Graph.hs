@@ -14,7 +14,7 @@ module Oat.Dataflow.Graph
     splice,
     spliceClosed,
     dfs,
-    dfs',
+    dfsBody,
     dfsFrom,
     append,
     entry,
@@ -26,6 +26,10 @@ module Oat.Dataflow.Graph
     emptyClosed,
     empty,
     block,
+    prune,
+    pruneWith,
+    generate,
+    generates,
     (><),
     mapBlocks3,
     MapBlocks3,
@@ -125,10 +129,10 @@ emptyClosed :: Graph' block n C C
 emptyClosed = Many NothingO emptyBody NothingO
 
 last :: n O C -> Graph n O C
-last n = entry $ Block.OC Block.Empty n
+last n = entry $ Block.OC Block.empty n
 
 first :: n C O -> Graph n C O
-first n = exit $ Block.CO n Block.Empty
+first n = exit $ Block.CO n Block.empty
 
 class FromBlock e x block n where
   block :: block n e x -> Graph' block n e x
@@ -176,13 +180,13 @@ infixl 5 ><
 dfs :: NonLocal (block n) => Graph' block n O x -> [Tree Label]
 dfs Empty = []
 dfs Single {} = []
-dfs (Many (JustO entry) body _) = dfs' (successorLabels entry) body
+dfs (Many (JustO entry) body _) = dfsBody (successorLabels entry) body
 
 dfsFrom :: NonLocal (block n) => [Label] -> Graph' block n C x -> [Tree Label]
-dfsFrom entries (Many NothingO body _) = dfs' entries body
+dfsFrom entries (Many NothingO body _) = dfsBody entries body
 
-dfs' :: NonLocal (block n) => [Label] -> Body' block n -> [Tree Label]
-dfs' entries = prune . generates entries
+dfsBody :: NonLocal (block n) => [Label] -> Body' block n -> [Tree Label]
+dfsBody entries = prune . generates entries
 
 generates :: NonLocal (block n) => [Label] -> Body' block n -> [Tree Label]
 generates entries body = (`generate` body) <$> entries
@@ -200,7 +204,10 @@ generate entry body = Tree.Node entry ((`generate` body) <$> (successorLabels en
           )
 
 prune :: [Tree Label] -> [Tree Label]
-prune forest = evalState (chop forest) mempty
+prune = pruneWith (mempty @LabelSet)
+
+pruneWith :: LabelSet -> [Tree Label] -> [Tree Label]
+pruneWith seen forest = evalState (chop forest) seen
 
 chop :: [Tree Label] -> State LabelSet [Tree Label]
 chop [] = pure []

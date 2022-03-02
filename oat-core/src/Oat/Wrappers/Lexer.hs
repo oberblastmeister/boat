@@ -43,8 +43,14 @@ makeLexer name defUserState = do
       }
       deriving (Show)
 
-    newtype Alex a = Alex {unAlex :: (StateT AlexState Identity) a}
-      deriving (Functor, Applicative, Monad, MonadState AlexState)
+    newtype Alex a = Alex {unAlex :: (State AlexState) a}
+      deriving
+        ( Functor,
+          Applicative,
+          Monad,
+          MonadState AlexState
+        )
+        via (State AlexState)
 
     data AlexEnv = AlexEnv
       { text :: !Text,

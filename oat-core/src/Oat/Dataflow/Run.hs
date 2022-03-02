@@ -1,10 +1,12 @@
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
 module Oat.Dataflow.Run
   ( ChangeFlag (..),
     Join,
-    ForwardTransfer (..),
+    ForwardTransfer,
     ForwardRewrite (..),
     ForwardPass (..),
     BackwardTransfer (..),
@@ -26,6 +28,7 @@ module Oat.Dataflow.Run
   )
 where
 
+import Acc qualified
 import Data.Sequence qualified as Seq
 import Oat.Dataflow.Block (Block)
 import Oat.Dataflow.Block qualified as Block
@@ -35,11 +38,11 @@ import Oat.Dataflow.Graph (Body, Graph, NonLocal (..))
 import Oat.Dataflow.Graph qualified as Graph
 import Oat.Dataflow.LabelMap (Label, LabelMap)
 import Oat.Dataflow.LabelMap qualified as LabelMap
-import Oat.Dataflow.Shape (MaybeC (..), MaybeO (..), Shape (..), convertMaybeO)
+import Oat.Dataflow.LabelSet qualified as LabelSet
+import Oat.Dataflow.Shape (IndexedCO, MaybeC (..), MaybeO (..), Shape (..), convertMaybeO)
 import Oat.Dataflow.TreeUtils qualified as TreeUtils
 import Oat.Utils.Misc (show')
 import Oat.Utils.Optics (unwrap)
-import Optics.Operators.Unsafe ((^?!))
 
 data ChangeFlag = NoChange | SomeChange
   deriving (Show, Eq, Ord)
@@ -48,11 +51,11 @@ type Join f = Label -> FactPair f -> (ChangeFlag, f)
 
 -- transfers must be monotonic
 -- given a fact in, we must give a more informative fact out
-data ForwardTransfer n f
-  = ForwardTransfer3
-      (n C O -> f -> f)
-      (n O O -> f -> f)
-      (n O C -> f -> FactBase f)
+type ForwardTransfer n f =
+  ( (n C O -> f -> f),
+    (n O O -> f -> f),
+    (n O C -> f -> FactBase f)
+  )
 
 data ForwardRewrite es n f
   = ForwardRewrite3
@@ -87,10 +90,7 @@ data BackwardPass es n f = BackwardPass
 data Direction = Forward | Backward
   deriving (Show, Eq)
 
-type Fact :: Shape -> Type -> Type
-type family Fact x f where
-  Fact C f = FactBase f
-  Fact O f = f
+type Fact ex f = IndexedCO ex (FactBase f) f
 
 data Lattice f = Lattice
   { name :: !Text,
@@ -154,14 +154,21 @@ runForward pass start = graph
                   block b $ getFact pass.lattice (entryLabel b) fb
 
     block :: forall e x. Block n e x -> f -> Eff es (FactGraph f n e x, Fact x f)
-    block Block.Empty = \f -> pure (Graph.Empty, f)
-    block (Block.Single n) = node n
     block (Block.CO n b) = node n `compose` block b
     block (Block.CC n b n') = node n `compose` block b `compose` node n'
     block (Block.OC b n) = block b `compose` node n
-    block (Block.Append b b') = block b `compose` block b'
+    block (Block.OO bs) = \f ->
+      Acc.foldlM
+        (\prev@(_, !f) n -> node n f <&> combine prev)
+        (Graph.Empty, f)
+        bs
 
-    node :: forall e x. (ShapeLifter e x) => n e x -> f -> Eff es (FactGraph f n e x, Fact x f)
+    node ::
+      forall e x.
+      (ShapeLifter e x) =>
+      n e x ->
+      f ->
+      Eff es (FactGraph f n e x, Fact x f)
     node n = \f -> do
       rewrittenGraph <- forwardRewrite pass.rewrite n f
       case rewrittenGraph of
@@ -171,15 +178,22 @@ runForward pass start = graph
               f' = forwardEntryFact n f
           runForward pass' (forwardEntryLabel n) g f'
 
+    combine ::
+      forall e a x f1 f2.
+      (FactGraph f n e a, f1) ->
+      (FactGraph f n a x, f2) ->
+      (FactGraph f n e x, f2)
+    combine (!g1, !_f1) (!g2, !f2) = (g1 `FactGraph.spliceRight` g2, f2)
+
     compose ::
       forall e a x f1 f2 f3.
       (f1 -> Eff es (FactGraph f n e a, f2)) ->
       (f2 -> Eff es (FactGraph f n a x, f3)) ->
       (f1 -> Eff es (FactGraph f n e x, f3))
     compose trans trans' = \f -> do
-      (g1, f1) <- trans f
-      (g2, f2) <- trans' f1
-      pure (g1 FactGraph.>< g2, f2)
+      res1@(_, f1) <- trans f
+      res2 <- trans' f1
+      pure $ combine res1 res2
     {-# INLINE compose #-}
 
 runBackward ::
@@ -232,12 +246,14 @@ runBackward pass start = graph
 
     -- Lift from nodes to blocks
     block :: forall e x. Block n e x -> Fact x f -> Eff es (FactGraph f n e x, f)
-    block Block.Empty = \f -> pure (Graph.Empty, f)
-    block (Block.Single n) = node n
     block (Block.CO n b) = node n `compose` block b
     block (Block.CC n b n') = node n `compose` block b `compose` node n'
     block (Block.OC b n) = block b `compose` node n
-    block (Block.Append b b') = block b `compose` block b'
+    block (Block.OO ns) = \f ->
+      Acc.foldrM
+        (\n prev@(_, f) -> node n f <&> combine prev)
+        (Graph.Empty, f)
+        ns
 
     node ::
       forall e x.
@@ -273,7 +289,9 @@ runBackward pass start = graph
               backwardEntryFact pass.lattice n f
             )
 
-    -- Compose fact transformers and concomposeenate the resulting
+    combine (!g2, !_f2) (!g1, !f1) = (g1 `FactGraph.spliceLeft` g2, f1)
+
+    -- Compose fact transformers and concatentate the resulting
     -- rewritten graphs.
     compose ::
       forall e a x info info' info''.
@@ -281,9 +299,9 @@ runBackward pass start = graph
       (info -> Eff es (FactGraph f n a x, info')) ->
       (info -> Eff es (FactGraph f n e x, info''))
     compose trans trans' f = do
-      (g2, f2) <- trans' f
-      (g1, f1) <- trans f2
-      pure (g1 FactGraph.>< g2, f1)
+      res2@(_, f2) <- trans' f
+      res1 <- trans f2
+      pure $ combine res2 res1
     {-# INLINE compose #-}
 
 makeFactBase :: Lattice f -> [(Label, f)] -> FactBase f
@@ -314,6 +332,7 @@ fixpoint ::
   FactBase f ->
   Eff es (FactGraph f n C C, FactBase f)
 fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
+  let !_ = dbg ("exit label " ++ show maybeExitLabel)
   let !_ = dbg ("fixpoint: " ++ show direction)
   let !_ = dbg "body"
   let !_ = dbg body
@@ -321,6 +340,8 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
   let !_ = dbg entries
   let !_ = dbg "factBase"
   let !_ = dbg factBase
+  let !_ = dbg "ordered"
+  let !_ = dbg ordered
   (factBase', newBlocks) <- loop factBase (fromList ordered) (mempty @(LabelMap _))
   let !_ = dbg ("fixpoint DONE: ")
   let !_ = dbg "factBase'"
@@ -331,9 +352,19 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
   where
     ordered = case direction of
       -- forwards fixpoint is driven by the successors that have changed
-      Forward -> filterExitLabel entries
+      Forward -> entries
       -- backwards fixpoint is driven by dfs
-      Backward -> TreeUtils.postOrderF $ Graph.dfs' (filterExitLabel entries) body
+      Backward -> do
+        let entries' = filterExitLabel entries
+        let pruned =
+              Graph.pruneWith (foldMap LabelSet.singleton maybeExitLabel)
+                . Graph.generates (filterExitLabel entries)
+                $ body
+        let !_ = dbg "entrie'"
+        let !_ = dbg entries'
+        let !_ = dbg "pruned"
+        let !_ = dbg pruned
+        TreeUtils.postOrderF pruned
 
     -- we need to make sure that we don't access the exit label
     -- which is not in the label map body
@@ -347,7 +378,7 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
     -- we need to do some work to get the predecessors
     -- we get the predecessors finding the successors of every block
     blockDeps = case direction of
-      Forward -> Just . pure @[]
+      Forward -> Just . filterExitLabel . pure @[]
       Backward -> \label -> backwardDeps ^. at label
       where
         backwardDeps =
@@ -381,8 +412,11 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
                   outFacts
           let toAnalyze =
                 concatMap
-                  (\l -> (^. unwrap (error $ "The label " ++ show l ++ " was said to be changed but could not be found")) $ blockDeps l)
-                  $ filterExitLabel changed
+                  ( \l ->
+                      (^. unwrap (error $ "The label " ++ show l ++ " was said to be changed but could not be found")) $
+                        blockDeps l
+                  )
+                  $ changed
           let newBlocks' = case resultFactGraph of
                 -- this union is biased to the left
                 -- this is important because we may have more precise rewrites
@@ -426,30 +460,30 @@ class ShapeLifter e x where
   backwardRewrite :: BackwardRewrite es n f -> n e x -> Fact x f -> Eff es (Maybe (Graph n e x, BackwardRewrite es n f))
 
 instance ShapeLifter C O where
-  singletonFactGraph fact node = Graph.exit (FactBlock fact (Block.CO node Block.Empty))
+  singletonFactGraph fact node = Graph.exit (FactBlock fact (Block.CO node Block.empty))
   forwardEntryFact node fact = LabelMap.singleton (entryLabel node) fact
   forwardEntryLabel node = JustC $ entryLabel node
-  forwardTransfer (ForwardTransfer3 transfer _ _) = transfer
+  forwardTransfer = (^. _1)
   forwardRewrite (ForwardRewrite3 rewrite _ _) = rewrite
   backwardEntryFact lattice node factBase = getFact lattice (entryLabel node) factBase
   backwardTransfer (BackwardTransfer3 transfer _ _) = transfer
   backwardRewrite (BackwardRewrite3 rewrite _ _) = rewrite
 
 instance ShapeLifter O O where
-  singletonFactGraph fact = Graph.single . FactBlock fact . Block.Single
+  singletonFactGraph fact = Graph.single . FactBlock fact . Block.singleton
   forwardEntryFact _ f = f
   forwardEntryLabel _ = NothingC
-  forwardTransfer (ForwardTransfer3 _ transfer _) = transfer
+  forwardTransfer = (^. _2)
   forwardRewrite (ForwardRewrite3 _ rewrite _) = rewrite
   backwardEntryFact _ _ fact = fact
   backwardTransfer (BackwardTransfer3 _ transfer _) = transfer
   backwardRewrite (BackwardRewrite3 _ rewrite _) = rewrite
 
 instance ShapeLifter O C where
-  singletonFactGraph fact node = Graph.entry (FactBlock fact (Block.OC Block.Empty node))
+  singletonFactGraph fact node = Graph.entry (FactBlock fact (Block.OC Block.empty node))
   forwardEntryFact _ fact = fact
   forwardEntryLabel _ = NothingC
-  forwardTransfer (ForwardTransfer3 _ _ transfer) = transfer
+  forwardTransfer = (^. _3)
   forwardRewrite (ForwardRewrite3 _ _ rewrite) = rewrite
   backwardEntryFact _ _ fact = fact
   backwardTransfer (BackwardTransfer3 _ _ transfer) = transfer

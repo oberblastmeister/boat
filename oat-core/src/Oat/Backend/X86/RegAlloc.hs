@@ -7,8 +7,9 @@ module Oat.Backend.X86.RegAlloc
   )
 where
 
+import Acc (Acc)
 import Data.HashMap.Strict qualified as HashMap
-import Data.List qualified as List
+import Data.Set.Optics qualified as Set
 import Effectful.Reader.Static
 import Effectful.Writer.Static.Local
 import Oat.Backend.Frame qualified as Frame
@@ -22,21 +23,21 @@ import Oat.Utils.Source qualified as Source
 type RegAllocMethod =
   forall es.
   '[X86.Frame, LL.NameSource] :>> es =>
-  Seq X86.InstLab ->
-  Eff es (Seq X86.InstLab)
+  Acc X86.InstLab ->
+  Eff es (Acc X86.InstLab)
 
 noReg :: RegAllocMethod
 noReg insts = do
   let spills =
-        -- TODO: List.nub is pretty bad I think, use some sort of ordered hashset, we are already converting to a hashmap anyway
-        List.nub $
-          insts
-            ^.. ( each % _Right
-                    % #args
-                    % traversed
-                    % X86.operandLocs
-                    % #_LTemp
-                )
+        toList $
+          Set.setOf
+            ( traversed % _Right
+                % #args
+                % traversed
+                % X86.operandLocs
+                % #_LTemp
+            )
+            insts
   spillsMem <- for spills $ \spill -> do
     mem <- Frame.allocLocal
     pure (spill, mem)
@@ -46,7 +47,7 @@ noReg insts = do
   -- therefore just set the extra temps to %r11
   let res =
         spilledInsts
-          & ( each
+          & ( traversed
                 % _Right
                 % #args
                 % traversed
@@ -57,21 +58,21 @@ noReg insts = do
   pure res
 
 type SpillEffs =
-  '[ Writer (Seq X86.InstLab),
+  '[ Writer (Acc X86.InstLab),
      Reader SpillMap,
      LL.NameSource
    ]
 
 type SpillMap = HashMap LL.Name X86.Mem
 
-spill :: '[LL.NameSource] :>> es => SpillMap -> Seq X86.InstLab -> Eff es (Seq X86.InstLab)
+spill :: '[LL.NameSource] :>> es => SpillMap -> Acc X86.InstLab -> Eff es (Acc X86.InstLab)
 spill spills insts =
   act
-    & execWriter @(Seq X86.InstLab)
+    & execWriter @(Acc _)
     & runReader spills
   where
     act = for_ insts $ \case
-      instLab@(Left _) -> tell $ fromList @(Seq _) [instLab]
+      instLab@(Left _) -> tell @(Acc _) $ fromList [instLab]
       Right inst -> spillInst inst
 
 spillInst :: SpillEffs :>> es => X86.Inst -> Eff es ()

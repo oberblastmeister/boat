@@ -41,7 +41,7 @@ data ParseState = ParseState
     alexState :: AlexState
   }
 
-newtype Parser a = Parser {unParser :: ExceptT ParseError (StateT ParseState Identity) a}
+newtype Parser a = Parser {unParser :: ExceptT ParseError (State ParseState) a}
   deriving
     ( Functor,
       Applicative,
@@ -49,6 +49,7 @@ newtype Parser a = Parser {unParser :: ExceptT ParseError (StateT ParseState Ide
       MonadState ParseState,
       MonadError ParseError
     )
+    via (ExceptT ParseError (State ParseState))
 
 $(makeFieldLabelsForOnly ["errors"] ''ParseState)
 

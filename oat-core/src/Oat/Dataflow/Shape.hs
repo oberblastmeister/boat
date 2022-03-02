@@ -6,9 +6,11 @@ module Oat.Dataflow.Shape
     IndexedCO,
     MaybeO (..),
     MaybeC (..),
+    EitherCO (..),
     KnownShape (..),
     convertMaybeO,
-  mapIndexedCO)
+    mapIndexedCO,
+  getRightO, getLeftC)
 where
 
 -- | Shapes: Open and Closed
@@ -27,6 +29,10 @@ data Shape
 data Shape' :: Shape -> Type where
   O' :: Shape' O
   C' :: Shape' C
+
+data EitherCO :: Shape -> Type -> Type -> Type where
+  LeftC :: a -> EitherCO C a b
+  RightO :: b -> EitherCO O a b
 
 class KnownShape s where
   shape :: Shape' s
@@ -73,6 +79,12 @@ deriving instance Functor (MaybeC ex)
 deriving instance Foldable (MaybeC ex)
 
 deriving instance Traversable (MaybeC ex)
+
+getLeftC :: EitherCO C a b -> a
+getLeftC (LeftC a) = a
+
+getRightO :: EitherCO O a b -> b
+getRightO (RightO b) = b
 
 convertMaybeO :: MaybeO ex a -> Maybe a
 convertMaybeO NothingO = Nothing

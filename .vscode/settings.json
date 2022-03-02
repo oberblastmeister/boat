@@ -3,5 +3,6 @@
         "*.x": "haskell",
         "*.y": "haskell",
         "*.project": "cabal",
+        ".ghci": "haskell",
     }
 }

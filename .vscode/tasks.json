@@ -12,6 +12,17 @@
             "group": "build"
         },
         {
+            "label": "data spec",
+            "type": "process",
+            "command": "cabal",
+            "args": [
+                "repl",
+                "oat-core-test",
+                "--repl-options",
+                "-ghci-script=./dataspec.ghci"
+            ]
+        },
+        {
             "label": "test",
             "type": "process",
             "command": "cabal",
