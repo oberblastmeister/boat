@@ -137,8 +137,7 @@ data Inst where
   Bitcast :: BitcastInst -> Inst
   Gep :: GepInst -> Inst
   Select :: SelectInst -> Inst
-  Zext :: ZextInst -> Inst
-  Sext :: SextInst -> Inst
+  Ext :: ExtInst -> Inst
   deriving (Show, Eq)
 
 data Term where
@@ -245,31 +244,19 @@ data SelectInst = SelectInst
   }
   deriving (Show, Eq)
 
-data ZextInst = ZextInst
+data ExtInst = ExtInst
   { name :: !Name,
+    op :: !ExtOp,
     ty1 :: Ty,
     arg :: Operand,
     ty2 :: Ty
   }
   deriving (Show, Eq)
-
-data SextInst = SextInst
-  { name :: !Name,
-    ty1 :: Ty,
-    arg :: Operand,
-    ty2 :: Ty
-  }
+  
+data ExtOp
+  = Zext
+  | Sext
   deriving (Show, Eq)
-
-data Named a
-  = Named !Name a
-  | Do a
-  deriving (Show, Eq)
-
-pattern (:=) :: Name -> a -> Named a
-pattern name := a = Named name a
-
-{-# COMPLETE Do, (:=) #-}
 
 $(makeFieldLabelsNoPrefix ''Module)
 $(makeFieldLabelsNoPrefix ''LoadInst)
@@ -281,8 +268,7 @@ $(makeFieldLabelsNoPrefix ''CallInst)
 $(makeFieldLabelsNoPrefix ''BitcastInst)
 $(makeFieldLabelsNoPrefix ''GepInst)
 $(makeFieldLabelsNoPrefix ''SelectInst)
-$(makeFieldLabelsNoPrefix ''ZextInst)
-$(makeFieldLabelsNoPrefix ''SextInst)
+$(makeFieldLabelsNoPrefix ''ExtInst)
 $(makeFieldLabelsNoPrefix ''FunTy)
 $(makeFieldLabelsNoPrefix ''Block)
 $(makeFieldLabelsNoPrefix ''FunBody)
@@ -295,7 +281,6 @@ $(makeFieldLabelsNoPrefix ''DeclMap)
 $(makePrismLabels ''Operand)
 $(makePrismLabels ''BinOp)
 $(makePrismLabels ''Inst)
-$(makePrismLabels ''Named)
 
 declsToMap :: Vec Decl -> DeclMap
 declsToMap =
@@ -313,17 +298,19 @@ instName = atraversalVL go
   where
     go :: AffineTraversalVL' Inst Name
     go point f = \case
-      BinOp inst -> BinOp <$> atraverseOf #name point f inst
-      Alloca inst -> Alloca <$> atraverseOf #name point f inst
-      Load inst -> Load <$> atraverseOf #name point f inst
+      BinOp inst -> BinOp <$> t inst
+      Alloca inst -> Alloca <$> t inst
+      Load inst -> Load <$> t inst
       inst@(Store _) -> point inst
       Icmp inst -> Icmp <$> atraverseOf #name point f inst
       Call inst -> Call <$> atraverseOf (#name % _Just) point f inst
       Bitcast inst -> Bitcast <$> atraverseOf #name point f inst
       Gep inst -> Gep <$> atraverseOf #name point f inst
       Select inst -> Select <$> atraverseOf #name point f inst
-      Zext inst -> Zext <$> atraverseOf #name point f inst
-      Sext inst -> Sext <$> atraverseOf #name point f inst
+      Ext inst -> Ext <$> atraverseOf #name point f inst
+      where
+        t :: _ => _
+        t = atraverseOf #name point f
 
 bodyBlocks :: Traversal' FunBody Block
 bodyBlocks = traversalVL $ \f body -> do
@@ -370,12 +357,9 @@ instOperands = traversalVL go
         arg1 <- f arg1
         arg2 <- f arg2
         pure $ Select inst {arg1, arg2}
-      Zext inst@ZextInst {arg} -> do
+      Ext inst@ExtInst {arg} -> do
         arg <- f arg
-        pure $ Zext inst {arg}
-      Sext inst@SextInst {arg} -> do
-        arg <- f arg
-        pure $ Sext inst {arg}
+        pure $ Ext inst {arg}
 
 termOperands :: Traversal' Term Operand
 termOperands = traversalVL go

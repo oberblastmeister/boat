@@ -178,8 +178,7 @@ Inst :: { Inst }
   | BitcastInst { Bitcast $1 }
   | GepInst { Gep $1 }
   | SelectInst { Select $1 }
-  | ZextInst { Zext $1 }
-  | SextInst { Sext $1 }
+  | ExtInst { Ext $1 }
 
 BinOpInst :: { BinOpInst }
   : uid '=' BinOp Ty Operand ',' Operand 
@@ -280,27 +279,21 @@ SelectInst :: { SelectInst }
         }
     }
     
-ZextInst :: { ZextInst }
-  : uid '=' zext Ty Operand to Ty
+ExtInst :: { ExtInst }
+  : uid '=' ExtOp Ty Operand to Ty
     {
-      ZextInst
+      ExtInst
         { name = $1,
+          op = $3,
           ty1 = $4,
           arg = $5,
           ty2 = $7
         }
     }
-
-SextInst :: { SextInst }
-  : uid '=' sext Ty Operand to Ty
-    {
-      SextInst
-        { name = $1,
-          ty1 = $4,
-          arg = $5,
-          ty2 = $7
-        }
-    }
+  
+ExtOp :: { ExtOp }
+  : sext { Sext }
+  | zext { Zext }
 
 ArgList :: { Vec (Ty, Operand) }
   : VecSep(Arg, ',') { $1 }

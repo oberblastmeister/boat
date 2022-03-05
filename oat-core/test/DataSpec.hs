@@ -47,6 +47,7 @@ import Text.Pretty.Simple (pShowNoColor)
 import UnliftIO.Directory qualified as Directory
 import UnliftIO.Exception qualified as Exception
 import UnliftIO.IO qualified as IO
+import qualified Oat.Dataflow.Fuel as Dataflow.Fuel
 
 data Config = Config
   { update :: !Bool,
@@ -165,7 +166,7 @@ llLiveSpec config = do
                       mempty
                       $ LL.AstToIr.funBodyToIr fun.body
             !_ = dbg irFun
-            res = runPureEff $ LL.Live.run irFun
+            res = runPureEff $ Dataflow.Fuel.runFuelInfinite $ LL.Live.run irFun
         pure $ LText.toStrict $ pShowNoColor res
     )
     "ll_live"

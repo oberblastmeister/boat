@@ -86,7 +86,7 @@ tuple = iso (\Range {start, end} -> (start, end)) (\(start, end) -> Range {start
 unsafeNew :: Int -> Int -> Range
 unsafeNew = Range
 
-validateRange :: String -> Range -> ()
+validateRange :: HasCallStack => String -> Range -> ()
 validateRange name Range {start, end}
   | start > end = error $ prefix ++ "start cannot be greater than end"
   | start < 0 = error $ prefix ++ "start cannot be negative"
@@ -95,7 +95,7 @@ validateRange name Range {start, end}
   where
     prefix = "Data.Range." <> name <> ": "
 
-new :: Int -> Int -> Range
+new :: HasCallStack => Int -> Int -> Range
 new start end = range
   where
     !_ = validateRange "new" range
@@ -114,19 +114,19 @@ isEmpty Range {start, end} = start == end
 empty :: Int -> Range
 empty i = Range i i
 
-withRange :: Range -> (Range -> Range) -> Range
+withRange :: HasCallStack => Range -> (Range -> Range) -> Range
 withRange range f = range'
   where
     !_ = validateRange "withRange" range
     range' = f range
 
-setStart :: Int -> Range -> Range
+setStart :: HasCallStack => Int -> Range -> Range
 setStart start' range = range'
   where
     !_ = validateRange "setStart" range'
     range' = range {start = start'}
 
-setEnd :: Int -> Range -> Range
+setEnd :: HasCallStack => Int -> Range -> Range
 setEnd end' range = range'
   where
     !_ = validateRange "setEnd" range'

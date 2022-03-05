@@ -110,7 +110,7 @@ timSortNEBy = vecSortNEBy Vector.Algorithms.Tim.sortBy
 isPowerOf2 :: Word64 -> Bool
 isPowerOf2 i = (i .&. (i - 1)) == 0
 
-alignForward :: Int64 -> Word64 -> Int
+alignForward :: HasCallStack => Int64 -> Word64 -> Int
 alignForward addr align
   | align <= 1 = error "mult cannot be less than 1"
   | not $ isPowerOf2 align = error "align must be a power of 2"

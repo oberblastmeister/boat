@@ -127,12 +127,12 @@ munchInst = \case
     emitMov arg (X86.OTemp name)
   LL.Gep _ -> error "gep should be lowered before this"
   LL.Select inst -> undefined
-  LL.Zext LL.ZextInst {name, arg} -> do
+  LL.Ext LL.ExtInst {op = LL.Zext, name, arg} -> do
     arg <- compileOperand arg
     -- everything is already represented using 64 bytes
     -- so zero extension just doesn't do anything
     emitMov arg (X86.OTemp name)
-  LL.Sext inst -> undefined
+  LL.Ext LL.ExtInst {} -> error "other ext instructions not support yet"
 
 munchTerm :: BackendEffs :>> es => LL.Term -> Eff es ()
 munchTerm = \case

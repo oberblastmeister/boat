@@ -139,6 +139,7 @@ library
     Oat.Dataflow.Run
     Oat.Dataflow.FactGraph
     Oat.Dataflow.TreeUtils
+    Oat.Dataflow.Fuel
     Oat.Dataflow.Utils
     Oat.Utils.OnLeft
     Oat.Utils.Source

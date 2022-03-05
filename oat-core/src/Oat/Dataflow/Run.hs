@@ -1,6 +1,4 @@
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
 module Oat.Dataflow.Run
@@ -20,11 +18,15 @@ module Oat.Dataflow.Run
     runForward,
     runBackward,
     makeFactBase,
-    backwardTransfer1,
-    backwardRewrite3,
+    mkBackwardTransfer,
+    mkBackwardRewrite3,
     noBackwardRewrite,
-    backwardRewrite1,
+    mkBackwardRewrite,
     noRewrite,
+    noForwardRewrite,
+    mkForwardRewrite3,
+    mkForwardRewrite,
+    mkForwardTransfer,
   )
 where
 
@@ -34,6 +36,7 @@ import Oat.Dataflow.Block (Block)
 import Oat.Dataflow.Block qualified as Block
 import Oat.Dataflow.FactGraph (FactBlock (FactBlock), FactBody, FactGraph)
 import Oat.Dataflow.FactGraph qualified as FactGraph
+import Oat.Dataflow.Fuel (Fuel, hasFuel, useFuel)
 import Oat.Dataflow.Graph (Body, Graph, NonLocal (..))
 import Oat.Dataflow.Graph qualified as Graph
 import Oat.Dataflow.LabelMap (Label, LabelMap)
@@ -51,11 +54,11 @@ type Join f = Label -> FactPair f -> (ChangeFlag, f)
 
 -- transfers must be monotonic
 -- given a fact in, we must give a more informative fact out
-type ForwardTransfer n f =
-  ( (n C O -> f -> f),
-    (n O O -> f -> f),
-    (n O C -> f -> FactBase f)
-  )
+data ForwardTransfer n f
+  = ForwardTransfer3
+      (n C O -> f -> f)
+      (n O O -> f -> f)
+      (n O C -> f -> FactBase f)
 
 data ForwardRewrite es n f
   = ForwardRewrite3
@@ -172,7 +175,7 @@ runForward pass start = graph
     node n = \f -> do
       rewrittenGraph <- forwardRewrite pass.rewrite n f
       case rewrittenGraph of
-        Nothing -> pure (singletonFactGraph f n, forwardTransfer pass.transfer n f)
+        Nothing -> pure (singletonFactGraph f n, getForwardTransfer pass.transfer n f)
         Just (g, rewrite) -> do
           let pass' = (pass {rewrite} :: ForwardPass es n f)
               f' = forwardEntryFact n f
@@ -267,7 +270,7 @@ runBackward pass start = graph
       let !_ = dbg f
       let !_ = dbg "about to rewrite"
       let !_ = dbg n
-      rewritten <- backwardRewrite pass.rewrite n f
+      rewritten <- getBackwardRewrite pass.rewrite n f
       let !_ = dbg $ "rewritten: " ++ show' (fst <$> rewritten)
       case rewritten of
         Nothing -> do
@@ -275,7 +278,7 @@ runBackward pass start = graph
           let !_ = dbg entryF
           pure (singletonFactGraph entryF n, entryF)
           where
-            entryF = backwardTransfer pass.transfer n f
+            entryF = getBackwardTransfer pass.transfer n f
         Just (g, rewrite) -> do
           let pass' = (pass {rewrite} :: BackwardPass es n f)
           -- recursively analyze and rewrite the rewritten graph
@@ -453,71 +456,102 @@ class ShapeLifter e x where
   singletonFactGraph :: f -> n e x -> FactGraph f n e x
   forwardEntryFact :: NonLocal n => n e x -> f -> Fact e f
   forwardEntryLabel :: NonLocal n => n e x -> MaybeC e Label
-  forwardTransfer :: ForwardTransfer n f -> n e x -> f -> Fact x f
+  getForwardTransfer :: ForwardTransfer n f -> n e x -> f -> Fact x f
   forwardRewrite :: ForwardRewrite es n f -> n e x -> f -> Eff es (Maybe (Graph n e x, ForwardRewrite es n f))
   backwardEntryFact :: NonLocal n => Lattice f -> n e x -> Fact e f -> f
-  backwardTransfer :: BackwardTransfer n f -> n e x -> Fact x f -> f
-  backwardRewrite :: BackwardRewrite es n f -> n e x -> Fact x f -> Eff es (Maybe (Graph n e x, BackwardRewrite es n f))
+  getBackwardTransfer :: BackwardTransfer n f -> n e x -> Fact x f -> f
+  getBackwardRewrite :: BackwardRewrite es n f -> n e x -> Fact x f -> Eff es (Maybe (Graph n e x, BackwardRewrite es n f))
 
 instance ShapeLifter C O where
   singletonFactGraph fact node = Graph.exit (FactBlock fact (Block.CO node Block.empty))
   forwardEntryFact node fact = LabelMap.singleton (entryLabel node) fact
   forwardEntryLabel node = JustC $ entryLabel node
-  forwardTransfer = (^. _1)
+  getForwardTransfer (ForwardTransfer3 transfer _ _) = transfer
   forwardRewrite (ForwardRewrite3 rewrite _ _) = rewrite
   backwardEntryFact lattice node factBase = getFact lattice (entryLabel node) factBase
-  backwardTransfer (BackwardTransfer3 transfer _ _) = transfer
-  backwardRewrite (BackwardRewrite3 rewrite _ _) = rewrite
+  getBackwardTransfer (BackwardTransfer3 transfer _ _) = transfer
+  getBackwardRewrite (BackwardRewrite3 rewrite _ _) = rewrite
 
 instance ShapeLifter O O where
   singletonFactGraph fact = Graph.single . FactBlock fact . Block.singleton
   forwardEntryFact _ f = f
   forwardEntryLabel _ = NothingC
-  forwardTransfer = (^. _2)
+  getForwardTransfer (ForwardTransfer3 _ transfer _) = transfer
   forwardRewrite (ForwardRewrite3 _ rewrite _) = rewrite
   backwardEntryFact _ _ fact = fact
-  backwardTransfer (BackwardTransfer3 _ transfer _) = transfer
-  backwardRewrite (BackwardRewrite3 _ rewrite _) = rewrite
+  getBackwardTransfer (BackwardTransfer3 _ transfer _) = transfer
+  getBackwardRewrite (BackwardRewrite3 _ rewrite _) = rewrite
 
 instance ShapeLifter O C where
   singletonFactGraph fact node = Graph.entry (FactBlock fact (Block.OC Block.empty node))
   forwardEntryFact _ fact = fact
   forwardEntryLabel _ = NothingC
-  forwardTransfer = (^. _3)
+  getForwardTransfer (ForwardTransfer3 _ _ transfer) = transfer
   forwardRewrite (ForwardRewrite3 _ _ rewrite) = rewrite
   backwardEntryFact _ _ fact = fact
-  backwardTransfer (BackwardTransfer3 _ _ transfer) = transfer
-  backwardRewrite (BackwardRewrite3 _ _ rewrite) = rewrite
+  getBackwardTransfer (BackwardTransfer3 _ _ transfer) = transfer
+  getBackwardRewrite (BackwardRewrite3 _ _ rewrite) = rewrite
 
 getFact :: Lattice f -> Label -> FactBase f -> f
 getFact lattice label factBase = factBase ^. at label % unwrap lattice.bot
 
-backwardTransfer1 :: (forall e x. n e x -> Fact x f -> f) -> BackwardTransfer n f
-backwardTransfer1 f = BackwardTransfer3 f f f
+mkBackwardRewrite ::
+  Fuel :> es =>
+  (forall e x. n e x -> Fact x f -> Eff es (Maybe (Graph n e x))) ->
+  BackwardRewrite es n f
+mkBackwardRewrite f = mkBackwardRewrite3 f f f
 
-backwardRewrite3 ::
+mkBackwardRewrite3 ::
   forall es n f.
+  Fuel :> es =>
   (n C O -> f -> Eff es (Maybe (Graph n C O))) ->
   (n O O -> f -> Eff es (Maybe (Graph n O O))) ->
   (n O C -> FactBase f -> Eff es (Maybe (Graph n O C))) ->
   BackwardRewrite es n f
-backwardRewrite3 f m l = BackwardRewrite3 (lift f) (lift m) (lift l)
+mkBackwardRewrite3 f m l = BackwardRewrite3 (lift f) (lift m) (lift l)
   where
-    lift ::
-      forall n e x.
-      (n e x -> Fact x f -> Eff es (Maybe (Graph n e x))) ->
-      n e x ->
-      Fact x f ->
-      Eff es (Maybe (Graph n e x, BackwardRewrite es n f))
-    lift rewrite node fact = (fmap . fmap) (,noBackwardRewrite) (rewrite node fact)
+    lift rewrite node fact = (fmap . fmap) (,noBackwardRewrite) (withFuel =<< rewrite node fact)
+
+mkBackwardTransfer :: (forall e x. n e x -> Fact x f -> f) -> BackwardTransfer n f
+mkBackwardTransfer f = BackwardTransfer3 f f f
 
 noBackwardRewrite :: BackwardRewrite es n f
 noBackwardRewrite = BackwardRewrite3 noRewrite noRewrite noRewrite
 
-backwardRewrite1 ::
-  (forall e x. n e x -> Fact x f -> Eff es (Maybe (Graph n e x))) ->
-  BackwardRewrite es n f
-backwardRewrite1 f = backwardRewrite3 f f f
+mkForwardRewrite ::
+  Fuel :> es =>
+  (forall e x. n e x -> f -> Eff es (Maybe (Graph n e x))) ->
+  ForwardRewrite es n f
+mkForwardRewrite f = mkForwardRewrite3 f f f
+
+mkForwardRewrite3 ::
+  forall es n f.
+  Fuel :> es =>
+  (n C O -> f -> Eff es (Maybe (Graph n C O))) ->
+  (n O O -> f -> Eff es (Maybe (Graph n O O))) ->
+  (n O C -> f -> Eff es (Maybe (Graph n O C))) ->
+  ForwardRewrite es n f
+mkForwardRewrite3 f m l = ForwardRewrite3 (lift f) (lift m) (lift l)
+  where
+    lift rewrite node fact = (fmap . fmap) (,noForwardRewrite) (withFuel =<< rewrite node fact)
+
+mkForwardTransfer ::
+  (n C O -> f -> f) ->
+  (n O O -> f -> f) ->
+  (n O C -> f -> FactBase f) ->
+  ForwardTransfer n f
+mkForwardTransfer f m l = ForwardTransfer3 f m l
+
+noForwardRewrite :: ForwardRewrite es n f
+noForwardRewrite = ForwardRewrite3 noRewrite noRewrite noRewrite
 
 noRewrite :: a -> b -> Eff es (Maybe c)
 noRewrite _ _ = pure Nothing
+
+withFuel :: Fuel :> es => Maybe a -> Eff es (Maybe a)
+withFuel Nothing = pure Nothing
+withFuel (Just a) = do
+  has <- hasFuel
+  if has
+    then do useFuel; pure $ Just a
+    else pure Nothing

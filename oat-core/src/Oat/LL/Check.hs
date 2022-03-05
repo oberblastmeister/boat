@@ -116,8 +116,7 @@ inferInst = \case
   LL.Bitcast inst -> inferBitcast inst
   LL.Gep inst -> inferGep inst
   LL.Select inst -> inferSelect inst
-  LL.Zext inst -> inferZext inst
-  LL.Sext inst -> inferSext inst
+  LL.Ext inst -> inferExt inst
 
 checkTerm :: CheckEffs :>> es => LL.Term -> Eff es ()
 checkTerm (LL.Ret LL.RetTerm {ty, arg}) = case arg of
@@ -241,12 +240,9 @@ inferSelect :: CheckEffs :>> es => LL.SelectInst -> Eff es LL.Ty
 inferSelect LL.SelectInst {condTy, ty2} = do
   tyAssert (Just "select") Nothing [LL.I1] condTy
   pure ty2
-  pure ty2
 
-inferZext = undefined
-
-inferSext :: CheckEffs :>> es => LL.SextInst -> Eff es LL.Ty
-inferSext LL.SextInst {ty1, ty2, arg} = do
+inferExt :: CheckEffs :>> es => LL.ExtInst -> Eff es LL.Ty
+inferExt LL.ExtInst {ty1, ty2, arg} = do
   checkOperand arg ty1
   pure ty2
 

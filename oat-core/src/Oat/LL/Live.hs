@@ -7,6 +7,7 @@ import Data.Set qualified as Set
 import Data.Set.Optics qualified as Set
 import Oat.Dataflow (Shape (..))
 import Oat.Dataflow qualified as Dataflow
+import Oat.Dataflow.Fuel (Fuel)
 import Oat.Dataflow.Graph qualified as Graph
 import Oat.LL.Ast qualified as LL
 import Oat.LL.Ir qualified as Ir
@@ -29,7 +30,7 @@ lattice =
         res = new `Set.union` old
 
 transfer :: Dataflow.BackwardTransfer Ir.Inst Live
-transfer = Dataflow.backwardTransfer1 $ \inst f -> case inst of
+transfer = Dataflow.mkBackwardTransfer $ \inst f -> case inst of
   Ir.Label _ -> f
   Ir.Inst inst -> (Set.setOf (LL.instOperands % #_Temp) inst) `Set.union` f
   Ir.Term term -> case term of
@@ -43,8 +44,8 @@ transfer = Dataflow.backwardTransfer1 $ \inst f -> case inst of
     fact :: Dataflow.FactBase Live -> Dataflow.Label -> Live
     fact f l = f ^. at l % unwrap Set.empty
 
-rewrite :: Dataflow.BackwardRewrite es Ir.Inst Live
-rewrite = Dataflow.backwardRewrite1 $ \inst live -> case inst of
+rewrite :: Fuel :> es => Dataflow.BackwardRewrite es Ir.Inst Live
+rewrite = Dataflow.mkBackwardRewrite $ \inst live -> case inst of
   (Ir.Inst inst) -> case inst ^? LL.instName of
     Just name
       | hasn't (ix name) live -> pure $ Just Graph.empty
@@ -52,8 +53,8 @@ rewrite = Dataflow.backwardRewrite1 $ \inst live -> case inst of
     Nothing -> pure Nothing
   _ -> pure Nothing
 
-pass :: Dataflow.BackwardPass es Ir.Inst Live
+pass :: Fuel :> es => Dataflow.BackwardPass es Ir.Inst Live
 pass = Dataflow.BackwardPass {lattice, transfer, rewrite}
 
-run :: Ir.FunBody -> Eff es (Dataflow.FactGraph Live Ir.Inst O O, Live)
+run :: Fuel :> es => Ir.FunBody -> Eff es (Dataflow.FactGraph Live Ir.Inst O O, Live)
 run funBody = Dataflow.runBackward pass Dataflow.NothingC funBody.graph mempty
