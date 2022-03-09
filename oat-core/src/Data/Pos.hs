@@ -10,4 +10,4 @@ data Pos = Pos
   }
   deriving (Show, Eq, Ord, Generic)
 
-makeFieldLabelsNoPrefix ''Pos
+$(makeFieldLabelsNoPrefix ''Pos)

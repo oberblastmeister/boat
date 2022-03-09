@@ -77,7 +77,7 @@ predNot = fmap not
 filterPred :: Pred -> [FilePath] -> [FilePath]
 filterPred = filter
 
-makeFieldLabelsNoPrefix ''Config
+$(makeFieldLabelsNoPrefix ''Config)
 
 spec :: Spec
 spec = do

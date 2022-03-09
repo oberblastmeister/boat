@@ -50,7 +50,7 @@ makeFieldLabelsNoPrefix ''User
 defUser :: User
 defUser = User {stringBuilder = mempty}
 
-makeLexer ''User 'defUser
+$(makeLexer ''User 'defUser)
 
 type Lexeme = Either Text Token
 

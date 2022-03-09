@@ -34,7 +34,7 @@ data BackendState = BackEndState
     allocaMems :: !(HashMap LL.Name X86.Mem)
   }
 
-makeFieldLabelsNoPrefix ''BackendState
+$(makeFieldLabelsNoPrefix ''BackendState)
 
 type BackendEffs =
   '[ Writer (Acc InstLab),
