@@ -65,8 +65,8 @@ emptyBody = mempty
 bodyUnion :: Body' block n -> Body' block n -> Body' block n
 bodyUnion = LabelMap.unionWithKey (\l _ _ -> error $ "duplicate blocks with label " ++ show l)
 
-adFactBlock :: NonLocal thing => thing C C -> LabelMap (thing C C) -> LabelMap (thing C C)
-adFactBlock b body
+addFactBlock :: NonLocal thing => thing C C -> LabelMap (thing C C) -> LabelMap (thing C C)
+addFactBlock b body
   | has (ix l) body = error $ "duplicate label " ++ show l ++ " in graph"
   | otherwise = body & at l ?~ b
   where
@@ -121,7 +121,7 @@ splice' bcat = sp
     sp (Single b) (Single b') = Single $ b `bcat` b'
     sp (Single b) (Many (JustO e) bs x) = Many (JustO (b `bcat` e)) bs x
     sp (Many e bs (JustO x)) (Single b) = Many e bs (JustO (x `bcat` b))
-    sp (Many e bs (JustO x)) (Many (JustO e') bs' x') = Many e ((adFactBlock (x `bcat` e') bs) `bodyUnion` bs') x'
+    sp (Many e bs (JustO x)) (Many (JustO e') bs' x') = Many e ((addFactBlock (x `bcat` e') bs) `bodyUnion` bs') x'
     sp (Many e b NothingO) (Many NothingO b' x) = Many e (b `bodyUnion` b') x
 
 empty :: Graph' block n O O
@@ -146,7 +146,7 @@ instance FromBlock C O block n where
   block b = Many NothingO emptyBody (JustO b)
 
 instance NonLocal (block n) => FromBlock C C block n where
-  block b = Many NothingO (adFactBlock b emptyBody) NothingO
+  block b = Many NothingO (addFactBlock b emptyBody) NothingO
 
 instance FromBlock O O block n where
   block = Single
@@ -158,7 +158,7 @@ exit :: block n C O -> Graph' block n C O
 exit block = Many NothingO emptyBody (JustO block)
 
 middle :: (NonLocal (block n)) => block n C C -> Graph' block n C C
-middle b = Many NothingO (adFactBlock b emptyBody) NothingO
+middle b = Many NothingO (addFactBlock b emptyBody) NothingO
 
 single :: block n 'O 'O -> Graph' block n 'O 'O
 single = Single

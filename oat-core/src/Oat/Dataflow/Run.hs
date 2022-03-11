@@ -196,7 +196,7 @@ runForward pass start = graph
     compose trans trans' = \f -> do
       res1@(_, f1) <- trans f
       res2 <- trans' f1
-      pure $ combine res1 res2
+      pure $! combine res1 res2
     {-# INLINE compose #-}
 
 runBackward ::
@@ -304,7 +304,7 @@ runBackward pass start = graph
     compose trans trans' f = do
       res2@(_, f2) <- trans' f
       res1 <- trans f2
-      pure $ combine res2 res1
+      pure $! combine res2 res1
     {-# INLINE compose #-}
 
 makeFactBase :: Lattice f -> [(Label, f)] -> FactBase f
@@ -400,8 +400,8 @@ fixpoint direction lattice doBlock (entries, maybeExitLabel) body factBase = do
       -- the rewritten graph which gets more and more precise after each iteration
       FactBody f n ->
       Eff es (FactBase f, LabelMap (FactBlock f n C C))
-    loop factBase Seq.Empty newBlocks = pure (factBase, newBlocks)
-    loop factBase (lab Seq.:<| labTodo) newBlocks = do
+    loop !factBase Seq.Empty !newBlocks = pure (factBase, newBlocks)
+    loop !factBase (lab Seq.:<| labTodo) !newBlocks = do
       -- we use the original body here, not the rewritten one
       -- if we do an incorrect rewrite, we can still be okay with the original one
       case body ^. at lab of
