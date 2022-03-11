@@ -29,7 +29,7 @@ import Oat.Error (CompileFail)
 import Oat.LL qualified as LL
 import Oat.LL.AstToIr qualified as LL.AstToIr
 import Oat.LL.Lexer qualified as LL.Lexer
-import Oat.LL.Live qualified as LL.Live
+import Oat.LL.Pass.Live qualified as LL.Pass.Live
 import Oat.Main qualified as Main
 import Oat.Reporter qualified as Reporter
 import Oat.Utils.IO (hPutLnUtf8, listDirectory', readFileUtf8, runErrorIO, writeFileLnUtf8)
@@ -166,7 +166,7 @@ llLiveSpec config = do
                       mempty
                       $ LL.AstToIr.funBodyToIr fun.body
             !_ = dbg irFun
-            res = runPureEff $ Dataflow.Fuel.runFuelInfinite $ LL.Live.run irFun
+            res = runPureEff $ Dataflow.Fuel.runFuelInfinite $ LL.Pass.Live.run irFun
         pure $ LText.toStrict $ pShowNoColor res
     )
     "ll_live"

@@ -165,9 +165,13 @@ library
     -- Oat.Interned.ShortByteString
     Oat.Wrappers.Lexer
     Oat.LL
+    Oat.LL.Pass
+    Oat.LL.Pass.Manager
+    Oat.LL.Pass.Live
+    Oat.LL.Pass.Dom
+    Oat.LL.Pass.ConstProp
     Oat.LL.Ir
     Oat.LL.AstToIr
-    Oat.LL.Live
     Oat.LL.Token
     Oat.LL.Token.Kind
     Oat.LL.Lexer

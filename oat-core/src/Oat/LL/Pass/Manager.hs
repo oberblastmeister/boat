@@ -1,4 +1,4 @@
-module Oat.LL.PassManager where
+module Oat.LL.Pass.Manager where
 
 import Data.Foldable (foldlM)
 import Effectful.Concurrent (Concurrent)

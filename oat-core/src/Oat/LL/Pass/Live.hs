@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
 
-module Oat.LL.Live where
+module Oat.LL.Pass.Live where
 
 import Data.Set (Set)
 import Data.Set qualified as Set

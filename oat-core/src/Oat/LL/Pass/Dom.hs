@@ -1,4 +1,4 @@
-module Oat.LL.Dom where
+module Oat.LL.Pass.Dom where
 
 import Data.Tree (Tree)
 import Oat.Dataflow (Label)
