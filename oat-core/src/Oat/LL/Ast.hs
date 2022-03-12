@@ -155,66 +155,66 @@ data Operand where
   deriving (Show, Eq)
 
 data BinOpInst = BinOpInst
-  { name :: Name,
-    op :: BinOp,
+  { name :: !Name,
+    op :: !BinOp,
     ty :: Ty,
-    arg1 :: Operand,
-    arg2 :: Operand
+    arg1 :: !Operand,
+    arg2 :: !Operand
   }
   deriving (Show, Eq)
 
 data AllocaInst = AllocaInst
-  { name :: Name,
+  { name :: !Name,
     ty :: Ty
   }
   deriving (Show, Eq)
 
 data LoadInst = LoadInst
-  { name :: Name,
+  { name :: !Name,
     ty :: Ty,
     ty' :: Ty,
-    arg :: Operand
+    arg :: !Operand
   }
   deriving (Show, Eq)
 
 data StoreInst = StoreInst
   { ty1 :: Ty,
-    arg1 :: Operand,
+    arg1 :: !Operand,
     ty2 :: Ty,
-    arg2 :: Operand
+    arg2 :: !Operand
   }
   deriving (Show, Eq)
 
 data IcmpInst = IcmpInst
-  { name :: Name,
+  { name :: !Name,
     op :: !CmpOp,
     ty :: Ty,
-    arg1 :: Operand,
-    arg2 :: Operand
+    arg1 :: !Operand,
+    arg2 :: !Operand
   }
   deriving (Show, Eq)
 
 data CallInst = CallInst
   { name :: Maybe Name,
     ty :: Ty,
-    fn :: Operand,
+    fn :: !Operand,
     args :: Vec (Ty, Operand)
   }
   deriving (Show, Eq)
 
 data BitcastInst = BitcastInst
-  { name :: Name,
+  { name :: !Name,
     ty1 :: Ty,
-    arg :: Operand,
+    arg :: !Operand,
     ty2 :: Ty
   }
   deriving (Show, Eq)
 
 data GepInst = GepInst
-  { name :: Name,
+  { name :: !Name,
     ty' :: Ty,
     ty :: Ty,
-    arg :: Operand,
+    arg :: !Operand,
     args :: Vec (Ty, Operand)
   }
   deriving (Show, Eq)
@@ -227,7 +227,7 @@ data RetTerm = RetTerm
 
 data CbrTerm = CbrTerm
   { ty :: Ty,
-    arg :: Operand,
+    arg :: !Operand,
     lab1 :: !Name,
     lab2 :: !Name
   }
@@ -236,11 +236,11 @@ data CbrTerm = CbrTerm
 data SelectInst = SelectInst
   { name :: !Name,
     condTy :: Ty,
-    cond :: Operand,
+    cond :: !Operand,
     ty1 :: Ty,
-    arg1 :: Operand,
+    arg1 :: !Operand,
     ty2 :: Ty,
-    arg2 :: Operand
+    arg2 :: !Operand
   }
   deriving (Show, Eq)
 
@@ -248,7 +248,7 @@ data ExtInst = ExtInst
   { name :: !Name,
     op :: !ExtOp,
     ty1 :: Ty,
-    arg :: Operand,
+    arg :: !Operand,
     ty2 :: Ty
   }
   deriving (Show, Eq)

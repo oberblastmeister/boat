@@ -114,6 +114,7 @@ tokens :-
     
 {
   
+-- make syntax highlighting work
 type Dummy = Void
 
 skip :: AlexAction Lexeme
