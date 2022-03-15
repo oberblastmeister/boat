@@ -2,6 +2,7 @@
 
 module Oat.LL.Ir where
 
+import Data.Some (Some1 (..))
 import Oat.Dataflow (Shape (..))
 import Oat.Dataflow qualified as Dataflow
 import Oat.LL.Ast qualified as LL

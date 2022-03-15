@@ -59,6 +59,35 @@ instance (forall e x. (Show (n e x))) => (Show (Block n e x)) where
       )
         $ toList block
 
+-- data EitherCO :: Shape -> Type -> Type -> Type where
+--   Left :: C
+-- instance LabelOptic "nodes" A_Traversal (Block n e x) (Block n e x) (n e x) (n e x) where
+--   labelOptic = traversalVL $ \f -> \case
+--     CO n b -> do
+--       n <- f n
+--       b <- traverseOf #nodes f b
+--       pure $ undefined
+
+type family PossibleNodes n e x where
+  PossibleNodes n C O = Either (n C O) (n O O)
+
+-- blockNodes :: forall n e x e' x'. Traversal (Block n e x) (Block n e x) (n e' x') (n e' x')
+-- blockNodes = traversalVL go
+--   where
+--     -- go :: _
+--     go :: forall n e x e' x'. TraversalVL (Block n e x) (Block n e x) (n e' x') (n e' x')
+--     go (f) (CO n b) = do
+--       let f' :: forall f n e' x'. (n e' x') -> (f e' x')
+--           f' = f
+--       n <- f n
+--       -- b <- traverseOf blockNodes f b
+--       pure $ undefined
+
+-- CO n b -> do
+--   n <- f n
+--   b <- traverseOf blockNodes f b
+--   pure $ undefined
+
 toList :: forall n e x. Block n e x -> [Some1 n]
 toList = DList.toList . go
   where
