@@ -3,9 +3,11 @@
 module Oat.LL.Ir where
 
 import Data.Some (Some1 (..))
+import Language.Haskell.TH (Q, TExp, examineCode, Code)
 import Oat.Dataflow (Shape (..))
 import Oat.Dataflow qualified as Dataflow
 import Oat.LL.Ast qualified as LL
+import qualified Language.Haskell.TH as TH
 
 type Block = Dataflow.Block Inst
 

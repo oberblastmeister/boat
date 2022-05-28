@@ -22,7 +22,8 @@
             clang-tools
           ];
           buildInputs = with pkgs; [
-            haskell.compiler.ghc921
+            cabal-install
+            haskell.compiler.ghc922
             ormolu
             haskell-language-server
             clang_13

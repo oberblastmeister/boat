@@ -67,6 +67,7 @@ viewShiftFrom args =
           (name, Right n) ->
             X86.Movq :@ [X86.OMem $ X86.MemStackSimple n, X86.OTemp name]
       )
+{-# INLINE viewShiftFrom #-}
 
 prologueEpilogue :: Maybe Int -> Frame.FrameState -> (Acc X86.Inst, Acc X86.Inst)
 prologueEpilogue maybeMaxCall frameState = (prologue, epilogue)

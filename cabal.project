@@ -31,7 +31,7 @@ package oat-core
 package oat-prelude
     ghc-options: -j
 
-with-compiler: ghc-9.2.1
+with-compiler: ghc-9.2.2
 
 tests: True
 jobs: $ncpus

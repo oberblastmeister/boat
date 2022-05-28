@@ -76,11 +76,9 @@ common common-options
     dlist ^>= 1.0,
     acc,
     fgl ^>= 5.7.0.3,
-    -- text ^>= 1.2.5.0,
-    text >=1.2.3.0 && <2.0,
+    text ^>= 2.0,
     text-builder ^>= 0.6.6.3,
-    -- relude bound
-    hashable >= 1.2 && <1.4,
+    hashable ^>= 1.4.0.0,
     bytestring >=0.10.4.0 && <0.12,
     filepath ^>= 1.4.2.1,
     directory ^>= 1.3.6.2,
