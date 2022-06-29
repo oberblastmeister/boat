@@ -17,7 +17,7 @@
             "command": "cabal",
             "args": [
                 "repl",
-                "oat-core-test",
+                "boat-core-test",
                 "--repl-options",
                 "-ghci-script=./dataspec.ghci"
             ]
@@ -28,7 +28,7 @@
             "command": "cabal",
             "args": [
                 "test",
-                "oat-core-test"
+                "boat-core-test"
             ],
             "group": "build"
         },
@@ -38,14 +38,14 @@
             "command": "cabal",
             "args": [
                 "repl",
-                "oat-core-test"
+                "boat-core-test"
             ],
             "problemMatcher": []
         },
         {
             "label": "ghcid app",
             "type": "shell",
-            "command": "ghcid --target='oat:exe:oat'"
+            "command": "ghcid --target='boat:exe:boat'"
         },
         {
             "label": "ghcid lib",
@@ -56,7 +56,7 @@
         {
             "label": "ghcid test",
             "type": "shell",
-            "command": "ghcid --target='oat:test:oat-test' --warnings --run='Main.main'"
+            "command": "ghcid --target='boat:test:boat-test' --warnings --run='Main.main'"
         }
     ]
 }

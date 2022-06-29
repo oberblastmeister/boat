@@ -1,4 +1,4 @@
 dist-newstyle/
 .direnv/
 a.out
-oat-core/test_data/asm_compile/*
+boat-core/test_data/asm_compile/*

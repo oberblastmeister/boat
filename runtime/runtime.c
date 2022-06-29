@@ -28,28 +28,28 @@ int64_t ll_ltoa(int64_t i, int8_t *dst) {
 }
 
 
-/* Oat Internal Functions --------------------------------------------------- */
+/* Boat Internal Functions --------------------------------------------------- */
 
 // this just leaks memory for now
-int64_t *oat_malloc(int64_t size) {
+int64_t *boat_malloc(int64_t size) {
     return (int64_t *)calloc(size, sizeof(char));
 }
 
-int64_t *oat_alloc_array(int64_t size) {
+int64_t *boat_alloc_array(int64_t size) {
     assert(size >= 0);
     int64_t *arr = (int64_t *)malloc(sizeof(int64_t) * (size + 1));
     arr[0] = size;
     return arr;
 }
 
-void oat_assert_not_null(int8_t *ptr) {
+void boat_assert_not_null(int8_t *ptr) {
     if (ptr == NULL) {
         fprintf(stderr, "Attempted to dereference null pointer");
         exit(1);
     }
 }
 
-void oat_assert_array_length(int64_t *array, int64_t ind) {
+void boat_assert_array_length(int64_t *array, int64_t ind) {
     if (array == NULL) {
         fprintf(stderr, "Attempted to index null array");
         exit(1);
@@ -60,7 +60,7 @@ void oat_assert_array_length(int64_t *array, int64_t ind) {
     }
 }
 
-/* Oat Builtin Functions ---------------------------------------------------- */
+/* Boat Builtin Functions ---------------------------------------------------- */
 
 int64_t *array_of_string(char *str) {
     int64_t len, i, *arr;
@@ -142,17 +142,17 @@ void print_bool(int64_t i) {
 extern int64_t /* MANGLED_PROGRAM_NAME */(int64_t argc, int64_t *oargv);
 
 /*
- * Convert the argv array into an Oat array of
+ * Convert the argv array into an Boat array of
  * type string[]
- * Invoke the Oat 'program' entry point after
+ * Invoke the Boat 'program' entry point after
  * initializing the global variables.
- * Prints the results of the Oat program call
+ * Prints the results of the Boat program call
  * to the terminal.
  */
 int main(int argc, char *argv[]) {
     int64_t *oargv, i, result;
 
-    oargv = oat_alloc_array(argc);
+    oargv = boat_alloc_array(argc);
 
     /* Copy the string pointers to the correct places. */
     for (i = 0; i < argc; i++) {

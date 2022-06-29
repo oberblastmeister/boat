@@ -21,14 +21,14 @@ source-repository-package
     tag: 8146be52837f4914b08765734b55bef24a13c9d7
 
 packages:
-    oat-core/
-    oat-prelude/
+    boat-core/
+    boat-prelude/
     /home/brian/projects/effectful-contrib/effectful-optics/
     
-package oat-core
+package boat-core
     ghc-options: -j
     
-package oat-prelude
+package boat-prelude
     ghc-options: -j
 
 with-compiler: ghc-9.2.2

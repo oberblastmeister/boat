@@ -1,0 +1,229 @@
+cabal-version:      3.6
+name:               boat-core
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             brian
+maintainer:         littlebubu.shu@gmail.com
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+common common-options
+  default-language: GHC2021
+  default-extensions:
+    LambdaCase,
+    OverloadedStrings,
+    DuplicateRecordFields,
+    OverloadedRecordDot,
+    NoFieldSelectors,
+    DataKinds,
+    GADTs,
+    ViewPatterns,
+    PatternSynonyms,
+    TypeFamilies,
+    TypeFamilyDependencies,
+    FunctionalDependencies,
+    OverloadedLabels,
+    ImpredicativeTypes,
+    LexicalNegation,
+    NoStarIsType,
+    NoGeneralizedNewtypeDeriving,
+    DerivingVia,
+    PartialTypeSignatures,
+  ghc-options:
+    -Wall
+    -Wredundant-constraints
+    -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
+    -- until OverloadedRecordUpdate stabilizes
+    -Wno-ambiguous-fields
+    -Werror=incomplete-patterns
+    -Werror=incomplete-uni-patterns
+    -Werror=missing-methods
+    -Werror=incomplete-record-updates
+    -Wcpp-undef
+    -- Prevents useless numerical conversions like e.g. `fromIntegral :: Int -> Int`
+    -Widentities
+
+  build-depends:
+    base >= 4.12 && <5,
+    boat-prelude,
+    template-haskell >= 2.16.0.0 && < 2.19.0.0,
+    optics,
+    optics-extra,
+    mtl >=2.2.2 && <2.3,
+    effectful,
+    effectful-core,
+    effectful-th,
+    effectful-optics,
+    effectful-typed-process,
+    containers >=0.5.10.2 && <0.7,
+    unordered-containers >=0.2.6 && <0.3,
+    deepseq >=1.2 && <1.5,
+    dlist ^>= 1.0,
+    acc,
+    fgl ^>= 5.7.0.3,
+    text ^>= 2.0,
+    text-builder ^>= 0.6.6.3,
+    hashable ^>= 1.4.0.0,
+    bytestring >=0.10.4.0 && <0.12,
+    filepath ^>= 1.4.2.1,
+    directory ^>= 1.3.6.2,
+    -- needed for alex
+    array ^>= 0.5.4.0,
+    vector ^>= 0.12.3.1,
+    vector-algorithms ^>= 0.8.0.4,
+    nonempty-vector ^>= 0.2.1.0,
+    primitive ^>= 0.7.3.0,
+    foldl ^>= 1.4.12,
+    split ^>= 0.2.3.4,
+    conduit ^>= 1.3.4.2,
+    recursion-schemes ^>= 5.2.2.2,
+    prettyprinter ^>= 1.7.1,
+    prettyprinter-ansi-terminal ^>= 1.1.3,
+    pretty-simple ^>= 4.0.0.0,
+    typed-process ^>= 0.2.8.0,
+    optparse-applicative ^>= 0.16.1.0,
+    parallel ^>= 3.2.2.0,
+    file-embed ^>= 0.0.15.0,
+    unliftio ^>= 0.2.21.0,
+  build-tool-depends:
+    hspec-discover:hspec-discover,
+    alex:alex,
+    happy:happy
+  mixins:
+    base (Prelude as OldPrelude),
+    base hiding (Prelude),
+    boat-prelude (BoatPrelude as Prelude),
+    boat-prelude
+
+library
+  import: common-options
+  hs-source-dirs: src
+  exposed-modules:
+    Data.Pair
+    Data.Some
+    Data.Pos
+    Data.IdSet
+    Data.IdMap
+    Data.MapList
+    Data.Span
+    Data.Range
+    Data.Infinite
+    -- Data.Acc
+    -- Data.NeAcc
+    Boat
+    Boat.Dataflow
+    Boat.Dataflow.Shape
+    Boat.Dataflow.Pointed
+    Boat.Dataflow.Block
+    Boat.Dataflow.LabelMap
+    Boat.Dataflow.LabelSet
+    Boat.Dataflow.Label
+    Boat.Dataflow.Graph
+    Boat.Dataflow.Run
+    Boat.Dataflow.FactGraph
+    Boat.Dataflow.TreeUtils
+    Boat.Dataflow.Fuel
+    Boat.Dataflow.Utils
+    Boat.Utils.OnLeft
+    Boat.Utils.Source
+    Boat.Utils.Misc
+    Boat.Utils.IO
+    Boat.Utils.Impossible
+    Boat.Utils.Monad
+    Boat.Utils.CallStack
+    Boat.Utils.Optics
+    Boat.Utils.Families
+    Boat.Utils.Pretty
+    Boat.Driver
+    Boat.Reporter
+    Boat.RunReporter
+    Boat.Error
+    Boat.TH
+    Boat.Command
+    Boat.Main
+    Boat.Cli
+    -- Boat.Interned
+    -- Boat.Interned.Internal
+    -- Boat.Interned.Text
+    -- Boat.Interned.ShortByteString
+    Boat.Wrappers.Lexer
+    Boat.LL
+    Boat.LL.Pass
+    Boat.LL.Pass.Manager
+    Boat.LL.Pass.Live
+    Boat.LL.Pass.Dom
+    Boat.LL.Pass.ConstProp
+    Boat.LL.Ir
+    Boat.LL.AstToIr
+    Boat.LL.Token
+    Boat.LL.Token.Kind
+    Boat.LL.Lexer
+    Boat.LL.Parser
+    Boat.LL.Ast
+    Boat.LL.LowerGep
+    Boat.LL.Combine
+    Boat.LL.LexerWrapper
+    Boat.LL.Check
+    Boat.LL.ParserWrapper
+    Boat.LL.Name
+    Boat.Backend.Frame
+    Boat.Backend.X86.Frame
+    Boat.Backend.X86.Pretty
+    Boat.Backend.X86.X86
+    Boat.Backend.X86.Munch
+    Boat.Backend.X86.Codegen
+    Boat.Backend.X86.RegAlloc
+
+common rtsopts
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+executable boatc
+  import: common-options, rtsopts
+  main-is: Main.hs
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+  build-depends:
+    boat-core
+  hs-source-dirs: app
+  
+test-suite boat-core-test
+  import: common-options, rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+    DataSpec
+    Boat.InternedSpec
+  build-depends:
+    boat-core,
+    hspec ^>= 2.9.4,
+    hspec-core ^>= 2.9.4,
+    QuickCheck ^>= 2.14.2,
+    quickcheck-instances ^>= 0.3.27
+
+benchmark boat-core-bench
+  import: common-options, rtsopts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Main.hs
+  build-depends:
+    boat-core,
+    criterion ^>= 1.5.13.0
